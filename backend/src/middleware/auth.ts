@@ -118,10 +118,11 @@ export function generateToken(userId: number): string {
 export function setAuthCookie(res: Response, token: string): void {
   res.cookie('reportops_token', token, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true,
+    sameSite: 'none',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
+    domain: '.automatedprogram.app',
   });
 }
 
@@ -131,8 +132,9 @@ export function setAuthCookie(res: Response, token: string): void {
 export function clearAuthCookie(res: Response): void {
   res.clearCookie('reportops_token', {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: true,
+    sameSite: 'none',
     path: '/',
+    domain: '.automatedprogram.app',
   });
 }
