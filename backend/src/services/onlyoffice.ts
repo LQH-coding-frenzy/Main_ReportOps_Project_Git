@@ -46,6 +46,7 @@ interface EditorConfigParams {
   userName: string;
   sectionId: number;
   canEdit: boolean;
+  updatedAt: string;
 }
 
 /**
@@ -54,11 +55,11 @@ interface EditorConfigParams {
  * @see https://api.onlyoffice.com/editors/config
  */
 export function generateEditorConfig(params: EditorConfigParams): OnlyOfficeConfig {
-  const { fileUrl, fileKey, fileName, userId, userName, sectionId, canEdit } = params;
+  const { fileUrl, fileKey, fileName, userId, userName, sectionId, canEdit, updatedAt } = params;
 
-  // Unique document key — must change when document content changes.
-  // ONLYOFFICE uses this to manage caching.
-  const documentKey = `${fileKey}-${uuidv4().substring(0, 8)}`;
+  // Unique document key — MUST change only when document content changes.
+  // Using random UUIDs breaks co-editing and causes permission errors if fetched twice.
+  const documentKey = `${fileKey.replace(/[^a-zA-Z0-9.-]/g, '_')}-${updatedAt}`;
 
   const config: OnlyOfficeConfig = {
     document: {

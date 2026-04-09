@@ -60,6 +60,7 @@ router.get(
         userName: user.displayName || user.githubUsername,
         sectionId: section.id,
         canEdit,
+        updatedAt: doc.updatedAt.getTime().toString(),
       });
 
       res.json({
