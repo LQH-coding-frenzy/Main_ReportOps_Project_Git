@@ -55,27 +55,27 @@ jobs:
             
             # Pull latest code
             echo "📦 Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
+            sudo git fetch origin main
+            sudo git reset --hard origin/main
             
             # Install & build backend
             echo "🔨 Building backend..."
             cd backend
-            npm ci --production=false
-            npx prisma generate
-            npx prisma db push --accept-data-loss || true
-            npm run build
+            sudo npm ci --production=false
+            sudo npx prisma generate
+            sudo npx prisma db push --accept-data-loss || true
+            sudo npm run build
             
             # Restart backend via PM2
             echo "♻️ Restarting API server..."
-            pm2 restart reportops-api || pm2 start dist/index.js --name reportops-api
-            pm2 save
+            sudo pm2 restart reportops-api || sudo pm2 start dist/index.js --name reportops-api
+            sudo pm2 save
             
             # Restart ONLYOFFICE if docker-compose changed
             echo "🐳 Checking ONLYOFFICE stack..."
             cd ../infra/onlyoffice
-            docker compose pull --quiet
-            docker compose up -d --remove-orphans
+            sudo docker compose pull --quiet
+            sudo docker compose up -d --remove-orphans
             
             echo "✅ Deployment complete!"
 
