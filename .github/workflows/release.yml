@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ── Build Frontend ──
+      - name: Install & Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ── Build Backend ──
+      - name: Install & Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npm run build
+
+      # ── Package artifacts ──
+      - name: Package backend
+        run: |
+          mkdir -p release-artifacts
+          cd backend
+          tar -czf ../release-artifacts/backend-${{ github.ref_name }}.tar.gz \
+            dist/ package.json package-lock.json prisma/
+          cd ..
+
+      - name: Package infrastructure
+        run: |
+          tar -czf release-artifacts/infra-${{ github.ref_name }}.tar.gz \
+            infra/ .github/workflows/
+
+      # ── Create GitHub Release ──
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
+          files: |
+            release-artifacts/*
+          body: |
+            ## ReportOps ${{ github.ref_name }}
+
+            ### 📦 Artifacts
+            - `backend-${{ github.ref_name }}.tar.gz` — Compiled backend (dist + prisma)
+            - `infra-${{ github.ref_name }}.tar.gz` — Infrastructure configs
+
+            ### 🚀 Deploy
+            ```bash
+            # On GCP VM:
+            cd /opt/reportops
+            tar -xzf backend-${{ github.ref_name }}.tar.gz -C backend/
+            cd backend && npm ci --production && pm2 restart reportops-api
+            ```

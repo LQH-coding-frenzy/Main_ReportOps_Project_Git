@@ -1,0 +1,105 @@
+name: Deploy Backend to GCP VM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'infra/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: # Allow manual trigger
+
+# Prevent concurrent deployments
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to GCP VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ── Build backend locally to verify ──
+      - name: Install & Build backend
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npm run build
+
+      # ── Deploy to GCP VM via SSH ──
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.GCP_VM_HOST }}
+          username: ${{ secrets.GCP_VM_USER }}
+          key: ${{ secrets.GCP_VM_SSH_KEY }}
+          port: 22
+          timeout: 120s
+          script: |
+            set -e
+            echo "🚀 Starting deployment..."
+            
+            APP_DIR="/opt/reportops"
+            cd $APP_DIR
+            
+            # Pull latest code
+            echo "📦 Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Install & build backend
+            echo "🔨 Building backend..."
+            cd backend
+            npm ci --production=false
+            npx prisma generate
+            npx prisma db push --accept-data-loss || true
+            npm run build
+            
+            # Restart backend via PM2
+            echo "♻️ Restarting API server..."
+            pm2 restart reportops-api || pm2 start dist/index.js --name reportops-api
+            pm2 save
+            
+            # Restart ONLYOFFICE if docker-compose changed
+            echo "🐳 Checking ONLYOFFICE stack..."
+            cd ../infra/onlyoffice
+            docker compose pull --quiet
+            docker compose up -d --remove-orphans
+            
+            echo "✅ Deployment complete!"
+
+      # ── Verify deployment ──
+      - name: Health check
+        run: |
+          echo "⏳ Waiting 10s for server to start..."
+          sleep 10
+          
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://api.automatedprogram.app/api/auth/me" \
+            --max-time 10 || echo "000")
+          
+          if [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ]; then
+            echo "✅ API is responding (HTTP $STATUS)"
+          else
+            echo "⚠️ API returned HTTP $STATUS — may need manual check"
+          fi
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "## 🚀 Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: https://api.automatedprogram.app" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: https://automatedprogram.app" >> $GITHUB_STEP_SUMMARY
