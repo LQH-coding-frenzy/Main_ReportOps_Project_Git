@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  LEADER
+  MEMBER
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  githubId      String   @unique
+  githubUsername String   @unique
+  displayName   String?
+  email         String?
+  avatarUrl     String?
+  role          Role     @default(MEMBER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignments      SectionAssignment[]
+  documentVersions DocumentVersion[]
+  auditLogs        AuditLog[]
+  reportBuilds     ReportBuild[]
+}
+
+model Section {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // "M1", "M2", "M3", "M4"
+  title       String
+  description String?
+  cisChapters String[] // ["1.1", "1.2", "1.4", ...]
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assignments SectionAssignment[]
+  documents   Document[]
+}
+
+model SectionAssignment {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  sectionId  Int
+  assignedAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sectionId])
+}
+
+model Document {
+  id                Int       @id @default(autoincrement())
+  sectionId         Int       @unique
+  currentStorageKey String // "sections/M1/current.docx"
+  fileName          String
+  fileSize          Int?
+  wordCount         Int?
+  lastEditedAt      DateTime?
+  lastEditedBy      Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  section  Section           @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  versions DocumentVersion[]
+}
+
+model DocumentVersion {
+  id           Int      @id @default(autoincrement())
+  documentId   Int
+  storageKey   String // "sections/M1/versions/2026-04-09T123456.docx"
+  versionLabel String? // "v1", "auto-save", etc.
+  fileSize     Int?
+  editedById   Int
+  createdAt    DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  editedBy User     @relation(fields: [editedById], references: [id])
+}
+
+model ReportBuild {
+  id             Int       @id @default(autoincrement())
+  buildType      String // "preview" | "final"
+  storageKeyDocx String?
+  storageKeyPdf  String?
+  status         String    @default("pending") // "pending" | "building" | "completed" | "failed"
+  buildLog       String?
+  triggeredById  Int
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  triggeredBy User     @relation(fields: [triggeredById], references: [id])
+  release     Release?
+}
+
+model Release {
+  id               Int      @id @default(autoincrement())
+  reportBuildId    Int      @unique
+  version          String // "v1.0.0"
+  githubReleaseUrl String?
+  checksum         String?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  reportBuild ReportBuild @relation(fields: [reportBuildId], references: [id])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String // "login", "edit_section", "save_document", "generate_report", "release"
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
