@@ -135,10 +135,22 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.12), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(139, 92, 246, 0.08), transparent);
+    radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08), transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.08), transparent 45%);
   pointer-events: none;
   z-index: -1;
+  animation: bg-pulse 15s ease-in-out infinite alternate;
+}
+
+@keyframes bg-pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 1; }
+}
+
+/* Base keyframes for page transitions */
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(20px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
 a {
@@ -270,10 +282,17 @@ p {
   border-radius: var(--radius-xl);
   padding: var(--space-6);
   backdrop-filter: blur(20px);
-  transition: all var(--transition-base);
+  transition: all var(--transition-spring);
   position: relative;
   overflow: hidden;
+  animation: slide-up-fade 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+.card:nth-child(1) { animation-delay: 50ms; }
+.card:nth-child(2) { animation-delay: 100ms; }
+.card:nth-child(3) { animation-delay: 150ms; }
+.card:nth-child(4) { animation-delay: 200ms; }
+.card:nth-child(5) { animation-delay: 250ms; }
 
 .card::before {
   content: '';
@@ -287,8 +306,9 @@ p {
 
 .card:hover {
   border-color: var(--color-border-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 15px 40px -10px rgba(99, 102, 241, 0.2);
+  z-index: 10;
 }
 
 .card:hover::before {
@@ -404,18 +424,20 @@ p {
 }
 
 .page-title {
-  font-size: var(--text-3xl);
+  font-size: clamp(2rem, 5vw, var(--text-3xl));
   font-weight: 700;
   background: var(--gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin-bottom: var(--space-2);
+  animation: slide-up-fade 0.8s ease-out;
 }
 
 .page-subtitle {
   font-size: var(--text-base);
   color: var(--color-text-tertiary);
+  animation: slide-up-fade 0.8s ease-out 100ms both;
 }
 
 .grid {
@@ -526,6 +548,12 @@ p {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: var(--space-2);
+  transition: color var(--transition-fast);
+}
+
+.section-card:hover .section-code {
+  color: #fff;
+  text-shadow: 0 0 10px var(--color-accent-primary);
 }
 
 .section-card .section-title {
