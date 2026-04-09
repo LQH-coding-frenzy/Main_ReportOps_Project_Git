@@ -416,7 +416,7 @@ p {
 
 .page {
   min-height: calc(100vh - 64px);
-  padding: var(--space-8) 0;
+  padding-block: var(--space-8);
 }
 
 .page-header {
