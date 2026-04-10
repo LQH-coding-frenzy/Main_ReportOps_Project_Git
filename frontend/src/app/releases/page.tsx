@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { getCurrentUser, getReleases, freezeRelease } from '../../lib/api';
 import type { User, Release } from '../../lib/types';
-
-import { Suspense } from 'react';
-// ... Existing imports ...
 
 function ReleasesContent() {
   const searchParams = useSearchParams();
@@ -90,7 +88,16 @@ function ReleasesContent() {
               <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
                 {user.displayName || user.githubUsername}
               </span>
-              {user.avatarUrl && <img src={user.avatarUrl} alt="" className="navbar-avatar" />}
+              {user.avatarUrl && (
+                <Image 
+                  src={user.avatarUrl} 
+                  alt="" 
+                  className="navbar-avatar" 
+                  width={32} 
+                  height={32}
+                  unoptimized
+                />
+              )}
             </>
           )}
         </div>

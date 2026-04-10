@@ -33,7 +33,7 @@ jobs:
       - name: Install & Build backend
         working-directory: backend
         run: |
-          npm ci
+          npm ci --legacy-peer-deps
           npx prisma generate
           npm run build
 
@@ -61,7 +61,7 @@ jobs:
             # Install & build backend
             echo "🔨 Building backend..."
             cd backend
-            sudo npm ci --production=false
+            sudo npm ci --legacy-peer-deps --production=false
             sudo npx prisma generate
             sudo npx prisma db push --accept-data-loss || true
             sudo npm run build

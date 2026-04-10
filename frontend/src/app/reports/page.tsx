@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { getCurrentUser, getReports, triggerPreviewBuild, getReport } from '../../lib/api';
 import type { User, ReportBuild } from '../../lib/types';
 
@@ -84,7 +85,16 @@ export default function ReportsPage() {
               <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
                 {user.displayName || user.githubUsername}
               </span>
-              {user.avatarUrl && <img src={user.avatarUrl} alt="" className="navbar-avatar" />}
+              {user.avatarUrl && (
+                <Image 
+                  src={user.avatarUrl} 
+                  alt="" 
+                  className="navbar-avatar" 
+                  width={32} 
+                  height={32}
+                  unoptimized
+                />
+              )}
             </>
           )}
         </div>

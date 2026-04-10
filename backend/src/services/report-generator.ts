@@ -144,9 +144,10 @@ export async function buildPreviewReport(triggeredById: number): Promise<ReportB
     }
 
     const validSections = sectionBuffers.filter((s) => {
-      // Skip placeholders that are known to be corrupted (approx 1005 bytes)
+      // Skip placeholders that are known to be corrupted or empty
+      // A standard minimal docx is ~1005 bytes. We block everything under 2000 to be safe.
       if (s.buffer.length < 2000) {
-        logs.push(`ℹ️ Section ${s.code}: Skipped merging (placeholder or too small)`);
+        logs.push(`ℹ️ Section ${s.code}: Skipped merging. File size (${s.buffer.length} bytes) is below the 2KB threshold (likely an empty placeholder).`);
         return false;
       }
       return true;

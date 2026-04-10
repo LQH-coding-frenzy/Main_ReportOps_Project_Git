@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { getCurrentUser, getSections, logout } from '../../lib/api';
 import type { User, Section } from '../../lib/types';
 
@@ -80,7 +81,14 @@ export default function DashboardPage() {
             {isLeader ? 'Leader' : 'Member'}
           </span>
           {user.avatarUrl && (
-            <img src={user.avatarUrl} alt="Avatar" className="navbar-avatar" />
+            <Image 
+              src={user.avatarUrl} 
+              alt="Avatar" 
+              className="navbar-avatar" 
+              width={32} 
+              height={32}
+              unoptimized
+            />
           )}
           <button onClick={handleLogout} className="btn btn-ghost btn-sm">
             Logout
@@ -211,7 +219,14 @@ export default function DashboardPage() {
                 <div className="section-meta">
                   <div className="section-assignee">
                     {section.assignees[0]?.avatarUrl && (
-                      <img src={section.assignees[0].avatarUrl} alt="" />
+                      <Image 
+                        src={section.assignees[0].avatarUrl} 
+                        alt="" 
+                        width={24} 
+                        height={24} 
+                        className="rounded-full"
+                        unoptimized
+                      />
                     )}
                     {section.assignees[0]?.displayName || section.assignees[0]?.githubUsername || 'Chưa gán'}
                   </div>

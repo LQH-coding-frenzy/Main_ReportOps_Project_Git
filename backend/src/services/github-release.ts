@@ -50,7 +50,10 @@ export async function createGitHubRelease(
     let githubReleaseUrl: string | null = null;
 
     // Create GitHub Release if token is configured
-    if (env.GITHUB_TOKEN && env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
+    if (env.GITHUB_TOKEN) {
+      if (!env.GITHUB_REPO_OWNER || !env.GITHUB_REPO_NAME) {
+        throw new Error('GITHUB_REPO_OWNER and GITHUB_REPO_NAME must be configured to create a GitHub Release');
+      }
       const releaseResponse = await fetch(
         `https://api.github.com/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/releases`,
         {

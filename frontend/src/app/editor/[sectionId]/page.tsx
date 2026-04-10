@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { getCurrentUser, getEditorConfig } from '../../../lib/api';
 import type { User, EditorConfigResponse } from '../../../lib/types';
 
@@ -130,7 +131,14 @@ export default function EditorPage() {
                 {isLeader ? 'Leader' : 'Member'}
               </span>
               {user.avatarUrl && (
-                <img src={user.avatarUrl} alt="" className="navbar-avatar" />
+                <Image 
+                  src={user.avatarUrl} 
+                  alt="" 
+                  className="navbar-avatar" 
+                  width={32} 
+                  height={32}
+                  unoptimized
+                />
               )}
             </>
           )}
