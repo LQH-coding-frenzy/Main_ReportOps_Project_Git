@@ -6,39 +6,72 @@
 
 ## ✨ Features
 
-- 🔐 **GitHub OAuth** — Đăng nhập bằng tài khoản GitHub
-- ✏️ **ONLYOFFICE Editor** — Chỉnh sửa tài liệu .docx ngay trên web (gần Word)
-- 🛡️ **RBAC** — Mỗi thành viên chỉ sửa được section của mình
-- 📊 **Auto Report Generation** — Tự động merge các sections thành báo cáo tổng
-- 🚀 **GitHub Releases** — Đẩy artifact chính thức lên GitHub Releases
-- 📝 **Version History** — Lưu lịch sử chỉnh sửa, audit log đầy đủ
+- 🔐 **GitHub OAuth** — Đăng nhập bảo mật qua GitHub
+- ✏️ **ONLYOFFICE Editor** — Chỉnh sửa `.docx` trực tiếp, trải nghiệm như Microsoft Word
+- 🛡️ **Hạ tầng bảo mật** — RLS (Supabase), Secret Scanning, Pre-commit Hooks
+- 🤖 **CI/CD Automatied** — Tự động build & deploy khi push code lên GitHub
+- 📊 **Auto Report Generation** — Tự động hợp nhất các section thành báo cáo tổng quát
+- 🚀 **GitHub Releases** — Quản lý phiên bản và lưu trữ artifact chuyên nghiệp
+- 🕵️ **Audit Logs** — Truy vết mọi hành động chỉnh sửa của người dùng
 
 ## 🏗️ Architecture
 
-```
-┌──────────────────┐     ┌─────────────────────────────────┐
-│  Vercel (Free)   │     │  GCP VM (e2-micro / e2-small)   │
-│                  │     │                                 │
-│  ┌────────────┐  │     │  ┌───────┐  ┌──────────────┐   │
-│  │  Next.js   │──┼─────┼──│Express│  │  ONLYOFFICE  │   │
-│  │  Frontend  │  │     │  │  API  │  │  Doc Server  │   │
-│  └────────────┘  │     │  └───┬───┘  └──────────────┘   │
-│                  │     │      │           (Docker)       │
-│  automatedprogram│     │  ┌───┴──────────┐               │
-│  .app            │     │  │    Nginx     │               │
-└──────────────────┘     │  │  Reverse     │               │
-                         │  │  Proxy       │               │
-┌──────────────────┐     │  └──────────────┘               │
-│  Supabase (Free) │     │  api.automatedprogram.app       │
-│                  │     │  docs.automatedprogram.app      │
-│  ┌──────────┐    │     └─────────────────────────────────┘
-│  │ Postgres │    │
-│  │ Storage  │    │     ┌─────────────────────────────────┐
-│  └──────────┘    │     │  GitHub                         │
-└──────────────────┘     │  OAuth + Releases + CI/CD       │
-                         └─────────────────────────────────┘
+```mermaid
+graph TD
+    %% Nodes
+    User(("🌐 Users<br/>(Browsers/Mobile)"))
+    
+    subgraph Vercel ["▲ Vercel (Frontend)"]
+        Next["Next.js 16 App Router<br/>(automatedprogram.app)"]
+    end
+    
+    subgraph GCP ["☁️ Google Cloud Platform (Backend)"]
+        direction TB
+        Nginx["Nginx Reverse Proxy"]
+        Express["Express.js API<br/>(api.automatedprogram.app)"]
+        OO["ONLYOFFICE DocServer<br/>(docs.automatedprogram.app)"]
+        
+        Nginx --> Express
+        Nginx --> OO
+    end
+    
+    subgraph Supabase ["⚡ Supabase (Data & Storage)"]
+        DB[("PostgreSQL<br/>(RLS Enabled)")]
+        Storage[("Object Storage<br/>(Private Bucket)")]
+    end
+    
+    subgraph GitHub ["🐙 GitHub Ecosystem"]
+        Auth["GitHub OAuth"]
+        CICD["GitHub Actions<br/>(CI/CD Pipeline)"]
+        Rel["GitHub Releases"]
+    end
+
+    %% Connections
+    User -->|HTTPS| Next
+    Next -->|API Calls| Nginx
+    Express -->|ORM / Auth| DB
+    Express -->|File I/O| Storage
+    Express -->|Auth Verify| Auth
+    Express -->|Trigger| Rel
+    User -.->|Commit Code| CICD
+    CICD -.->|Deploy| GCP
+    CICD -.->|Deploy| Vercel
+
+    %% Styles
+    style Next fill:#000,color:#fff,stroke:#333
+    style Express fill:#404137,color:#fff,stroke:#333
+    style DB fill:#3ecf8e,color:#fff,stroke:#333
+    style Storage fill:#3ecf8e,color:#fff,stroke:#333
+    style CICD fill:#2088ff,color:#fff,stroke:#333
 ```
 
+## 🌐 Live Production
+
+- **Website**: [https://automatedprogram.app](https://automatedprogram.app)
+- **API Endpoint**: `https://api.automatedprogram.app`
+- **Document Server**: `https://docs.automatedprogram.app`
+
+---
 ## 🚀 Quick Start (Development)
 
 ### Prerequisites
@@ -149,6 +182,20 @@ docker compose up -d   # Start Document Server on http://localhost:8080
 | POST | `/api/releases/freeze` | 👑 | Freeze release |
 | GET | `/api/audit-logs` | 👑 | Audit logs |
 
+## 🛠️ Infrastructure & Security
+
+### CI/CD Pipeline
+Dự án được triển khai tự động qua **GitHub Actions**:
+- **Frontend**: Tự động build và deploy lên Vercel.
+- **Backend**: SSH Deployment qua chuẩn `ed25519` bảo mật, tự động cập nhật Code, Restart PM2 và Docker Stack trên GCP VM.
+
+### Security Meaures
+- **Row Level Security (RLS)**: Cấu hình trên Supabase để chặn mọi truy cập trái phép từ Client.
+- **Git Hooks**: Pre-commit hook ngăn chặn vô tình commit file `.env` hoặc Private Key.
+- **Secret Scanning**: Tự động quét và bảo vệ các chuỗi nhạy cảm trong Repo.
+
 ## 📜 License
 
-Private — UIT IoT Team Project
+Private — UIT IoT Team Project (Báo cáo Đồ Án)
+- **Giảng viên hướng dẫn**: [Tên Giảng Viên]
+- **Năm thực hiện**: {new Date().getFullYear()}

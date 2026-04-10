@@ -6,19 +6,28 @@ Collaborative CIS Benchmark report editing platform. Members edit their assigned
 
 ```
 /
-├── frontend/          # Next.js 14 (App Router) → Deploy to Vercel
-├── backend/           # Express API + Prisma ORM → Deploy to GCP VM
+├── frontend/          # Next.js 16 (Turbopack) → Deploy to Vercel
+├── backend/           # Express API + Prisma ORM (Node 20) → Deploy to GCP VM
 ├── infra/             # Docker Compose (ONLYOFFICE + Nginx) → GCP VM
-├── .github/workflows/ # CI/CD (lint, security, release)
+├── .github/workflows/ # CI/CD (lint, security, release, deploy)
 └── AGENTS.md          # This file
 ```
 
 ### Deployment Architecture
-- **Frontend**: `automatedprogram.app` → Vercel (Hobby)
-- **Backend API**: `api.automatedprogram.app` → GCP Compute Engine VM
-- **ONLYOFFICE**: `docs.automatedprogram.app` → GCP Compute Engine VM (Docker)
-- **Database**: Supabase Postgres (free tier)
-- **Storage**: Supabase Storage (free tier, .docx files)
+- **Frontend**: [automatedprogram.app](https://automatedprogram.app) → Vercel (Production)
+- **Backend API**: [api.automatedprogram.app](https://api.automatedprogram.app) → GCP Compute Engine VM (Ubuntu)
+- **ONLYOFFICE**: [docs.automatedprogram.app](https://docs.automatedprogram.app) → GCP Compute Engine VM (Docker)
+- **Database**: Supabase Postgres (RLS Enabled)
+- **Storage**: Supabase Storage (Private Bucket, .docx files)
+- **CI/CD**: GitHub Actions (SSH `ed25519` based deployment)
+
+### CI/CD Secrets (GitHub)
+- `GCP_VM_HOST`: VM Public IP
+- `GCP_VM_USER`: `jach9`
+- `GCP_VM_SSH_KEY`: Private `ed25519` key
+- `VERCEL_TOKEN`: CLI Deployment token
+- `SUPABASE_SERVICE_ROLE_KEY`: Admin key for backend access
+- `ONLYOFFICE_JWT_SECRET`: Shared secret for document security
 
 ## Commands
 
