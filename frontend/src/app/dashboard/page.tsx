@@ -137,6 +137,44 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Writing Guide Banner */}
+        <div style={{ marginBottom: 'var(--space-8)' }}>
+          <a href="/guide" style={{ textDecoration: 'none' }}>
+            <div className="card" style={{ 
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.15) 100%)',
+              borderColor: 'rgba(139, 92, 246, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-6)',
+              padding: 'var(--space-5) var(--space-8)'
+            }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'var(--gradient-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '2rem',
+                flexShrink: 0,
+                boxShadow: 'var(--shadow-glow)'
+              }}>
+                📖
+              </div>
+              <div>
+                <h3 style={{ fontSize: 'var(--text-xl)', color: 'white', marginBottom: '4px' }}>Hướng dẫn Viết Report Quy chuẩn</h3>
+                <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', margin: 0 }}>
+                  Dành 1 phút đọc guide này để đảm bảo file của bạn khi Leader ấn Build Preview sẽ không bị lỗi cấu trúc nhoe! Mẹo format đúng chuẩn để ăn điểm.
+                </p>
+              </div>
+              <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                <span className="btn btn-primary" style={{ pointerEvents: 'none' }}>Xem Guide ngay →</span>
+              </div>
+            </div>
+          </a>
+        </div>
+
         {/* Section Cards */}
         <div className="grid grid-2">
           {sections.map((section) => (

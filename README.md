@@ -177,6 +177,9 @@ docker compose up -d   # Start Document Server on http://localhost:8080
 # Wait ~2 minutes for initialization
 ```
 
+## 📘 Tài liệu Hướng dẫn (Member Resources)
+Tất cả các thành viên trong nhóm **bắt buộc** phải đọc [Hướng dẫn Trình bày Báo cáo (Writing Guide)](./WRITING_GUIDE.md) trước khi bắt đầu soát thảo.
+
 ## 👥 Team
 
 | Thành viên | Vai trò | Nhóm section | CIS Chapters |

@@ -54,6 +54,7 @@ docker compose logs -f onlyoffice              # View logs
 
 ## Conventions
 
+- **Writing Format**: Must strictly follow [WRITING_GUIDE.md](./WRITING_GUIDE.md) to ensure `.docx` merging stability.
 - API base URL: `http://localhost:4000/api` (dev) / `https://api.automatedprogram.app/api` (prod)
 - Frontend proxy: `/api` → backend via `next.config.js` rewrites
 - Env files: `.env.local` (frontend), `.env` (backend)
