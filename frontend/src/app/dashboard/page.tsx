@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { usePolling } from '../../hooks/usePolling';
-import { getCurrentUser, getSections, logout } from '../../lib/api';
+import { getCurrentUser, getSections } from '../../lib/api';
 import type { User, Section } from '../../lib/types';
 
 export default function DashboardPage() {
@@ -40,11 +40,6 @@ export default function DashboardPage() {
 
   // Global polling for Dashboard: refresh sections every 10s
   usePolling(fetchSections, 10000);
-
-  const handleLogout = useCallback(async () => {
-    await logout();
-    window.location.href = '/';
-  }, []);
 
   if (loading) {
     return (
@@ -220,6 +215,5 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-    </>
   );
 }

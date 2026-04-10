@@ -175,7 +175,7 @@ export default function ReportsPage() {
                       )}
                       {r.status === 'failed' && (
                         <button 
-                          onClick={() => setSelectedLog(r.buildLog)} 
+                          onClick={() => setSelectedLog(r.buildLog ?? null)} 
                           className="text-[10px] text-accent-danger hover:underline text-left mt-1"
                         >
                           Xem chi tiết lỗi →

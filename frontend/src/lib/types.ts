@@ -106,6 +106,7 @@ export interface ReportBuild {
   id: number;
   buildType: string;
   status: 'pending' | 'building' | 'completed' | 'failed';
+  buildLog?: string | null;
   storageKeyDocx: string | null;
   storageKeyPdf: string | null;
   triggeredBy: {
@@ -118,6 +119,24 @@ export interface ReportBuild {
   completedAt: string | null;
   downloadUrlDocx?: string | null;
   downloadUrlPdf?: string | null;
+}
+
+export interface PerformanceUser {
+  id: number;
+  displayName: string | null;
+  githubUsername: string;
+  avatarUrl: string | null;
+  role: Role;
+  stats: {
+    assignedSections: number;
+    totalEdits: number;
+    lastActive: string | null;
+  };
+}
+
+export interface PerformanceData {
+  users: PerformanceUser[];
+  totalSections: number;
 }
 
 export interface Release {
