@@ -1,16 +1,23 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Image from 'next/image';
 import { usePolling } from '../../hooks/usePolling';
-import { getCurrentUser, getReports, triggerPreviewBuild, getReport, deleteReport } from '../../lib/api';
+import { getCurrentUser, getReports, triggerPreviewBuild, getReport, deleteReport, getSections } from '../../lib/api';
 import type { User, ReportBuild } from '../../lib/types';
+import { useToast } from '../../components/ui/Toast';
+import { Modal } from '../../components/ui/Modal';
+import { ProgressBar } from '../../components/ui/ProgressBar';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 export default function ReportsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [reports, setReports] = useState<ReportBuild[]>([]);
+  const [totalSections, setTotalSections] = useState(0);
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const { showToast } = useToast();
 
   const fetchReports = useCallback(async () => {
     try {
@@ -23,45 +30,53 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function init() {
-      const u = await getCurrentUser();
-      if (!u || u.role !== 'LEADER') {
-        window.location.href = '/dashboard';
-        return;
+      try {
+        const u = await getCurrentUser();
+        if (!u || u.role !== 'LEADER') {
+          window.location.href = '/dashboard';
+          return;
+        }
+        setUser(u);
+        
+        const [r, s] = await Promise.all([getReports(), getSections()]);
+        setReports(r);
+        setTotalSections(s.length);
+        setLoading(false);
+      } catch (err) {
+        console.error('Init reports page failed:', err);
+        window.location.href = '/';
       }
-      setUser(u);
-      await fetchReports();
-      setLoading(false);
     }
-    init().catch(() => {
-      window.location.href = '/';
-    });
-  }, [fetchReports]);
+    init();
+  }, []);
 
   // Use the shared hook for polling when a build is active
   const hasActiveBuild = reports.some(r => r.status === 'building' || r.status === 'pending');
-  usePolling(fetchReports, 5000, hasActiveBuild);
+  usePolling(fetchReports, 3000, hasActiveBuild);
 
   const handleBuildPreview = useCallback(async () => {
     setBuilding(true);
     try {
       await triggerPreviewBuild();
-      // Refresh list immediately to show the "building" state
+      showToast('Đang bắt đầu build preview...', 'info');
       await fetchReports();
     } catch (err) {
-      alert(`Build failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      showToast(`Build thất bại: ${err instanceof Error ? err.message : 'Lỗi hệ thống'}`, 'error');
     }
     setBuilding(false);
-  }, [fetchReports]);
+  }, [fetchReports, showToast]);
 
-  const handleDelete = useCallback(async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa bản build này? Hành động này cũng sẽ xóa file trên storage.')) return;
+  const confirmDelete = useCallback(async () => {
+    if (!deleteId) return;
     try {
-      await deleteReport(id);
+      await deleteReport(deleteId);
+      showToast('Đã xóa bản build thành công', 'success');
       await fetchReports();
     } catch (err) {
-      alert(`Xóa thất bại: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      showToast(`Xóa thất bại: ${err instanceof Error ? err.message : 'Lỗi hệ thống'}`, 'error');
     }
-  }, [fetchReports]);
+    setDeleteId(null);
+  }, [deleteId, fetchReports, showToast]);
 
   const handleDownload = useCallback(async (buildId: number) => {
     try {
@@ -69,12 +84,22 @@ export default function ReportsPage() {
       if (detail.downloadUrlDocx) {
         window.open(detail.downloadUrlDocx, '_blank');
       } else {
-        alert('Không có file để tải xuống');
+        showToast('Không có file để tải xuống', 'error');
       }
     } catch (err) {
-      alert(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      showToast(`Download failed: ${err instanceof Error ? err.message : 'Lỗi hệ thống'}`, 'error');
     }
-  }, []);
+  }, [showToast]);
+
+  const calculateProgress = (build: ReportBuild) => {
+    if (build.status === 'completed') return 100;
+    if (build.status === 'failed') return 0;
+    if (!build.buildLog || totalSections === 0) return 5;
+    
+    const matches = (build.buildLog.match(/✅ Section .*: Downloaded/g) || []).length;
+    const sectionProgress = (matches / totalSections) * 90; 
+    return Math.min(95, 5 + sectionProgress);
+  };
 
   if (loading) {
     return (
@@ -85,89 +110,53 @@ export default function ReportsPage() {
     );
   }
 
-  const isLeader = user?.role === 'LEADER';
-
   return (
-    <>
-      {/* Navbar */}
-      <nav className="navbar">
-        <a href="/dashboard" className="navbar-brand">
-          <span className="navbar-brand-icon">📋</span>
-          ReportOps
-        </a>
-        <ul className="navbar-nav">
-          <li><a href="/dashboard" className="navbar-link">Dashboard</a></li>
-          <li><a href="/reports" className="navbar-link active">Reports</a></li>
-          <li><a href="/releases" className="navbar-link">Releases</a></li>
-        </ul>
-        <div className="navbar-user">
-          {user && (
+    <div className="container page">
+      <div className="page-header flex justify-between items-center">
+        <div>
+          <h1 className="page-title">Report Builds</h1>
+          <p className="page-subtitle">Tạo preview và quản lý các bản build báo cáo</p>
+        </div>
+        <button
+          onClick={handleBuildPreview}
+          disabled={building}
+          className="btn btn-primary btn-lg"
+        >
+          {building ? (
             <>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                {user.displayName || user.githubUsername}
-              </span>
-              {user.avatarUrl && (
-                <Image 
-                  src={user.avatarUrl} 
-                  alt="" 
-                  className="navbar-avatar" 
-                  width={32} 
-                  height={32}
-                  unoptimized
-                />
-              )}
+              <div className="spinner" /> Đang build...
             </>
+          ) : (
+            '🔨 Build Preview'
           )}
-        </div>
-      </nav>
+        </button>
+      </div>
 
-      {/* Page */}
-      <div className="container page">
-        <div className="page-header flex justify-between items-center">
-          <div>
-            <h1 className="page-title">Report Builds</h1>
-            <p className="page-subtitle">Tạo preview và quản lý các bản build báo cáo</p>
-          </div>
-          <button
-            onClick={handleBuildPreview}
-            disabled={building}
-            className="btn btn-primary btn-lg"
-          >
-            {building ? (
-              <>
-                <div className="spinner" /> Đang build...
-              </>
-            ) : (
-              '🔨 Build Preview'
-            )}
-          </button>
-        </div>
-
-        {/* Reports Table */}
-        {reports.length > 0 ? (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Loại</th>
-                  <th>Trạng thái</th>
-                  <th>Tạo bởi</th>
-                  <th>Thời gian</th>
-                  <th>Release</th>
-                  <th>Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reports.map((r) => (
-                  <tr key={r.id}>
-                    <td className="font-mono">#{r.id}</td>
-                    <td>
-                      <span className={`badge ${r.buildType === 'final' ? 'badge-success' : 'badge-info'}`}>
-                        {r.buildType}
-                      </span>
-                    </td>
-                    <td>
+      {reports.length > 0 ? (
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Loại</th>
+                <th>Trạng thái / Tiến độ</th>
+                <th>Tạo bởi</th>
+                <th>Thời gian</th>
+                <th>Release</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.map((r) => (
+                <tr key={r.id}>
+                  <td className="font-mono">#{r.id}</td>
+                  <td>
+                    <span className={`badge ${r.buildType === 'final' ? 'badge-success' : 'badge-info'}`}>
+                      {r.buildType}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="flex flex-col gap-1" style={{ minWidth: '150px' }}>
                       <span
                         className={`badge ${
                           r.status === 'completed'
@@ -181,73 +170,107 @@ export default function ReportsPage() {
                       >
                         {r.status}
                       </span>
-                    </td>
-                    <td>{r.triggeredBy?.displayName || r.triggeredBy?.githubUsername}</td>
-                    <td className="text-sm text-muted">
-                      {new Date(r.createdAt).toLocaleString('vi-VN')}
-                    </td>
-                    <td>
-                      {r.release ? (
-                        <span className="badge badge-primary">{r.release.version}</span>
-                      ) : (
-                        <span className="text-muted text-xs">—</span>
+                      {r.status === 'building' && (
+                        <ProgressBar progress={calculateProgress(r)} showPerc={true} />
                       )}
-                    </td>
-                    <td>
-                      <div className="flex gap-2">
-                        {r.status === 'completed' && (
-                          <>
-                            <button
-                              onClick={() => handleDownload(r.id)}
-                              className="btn btn-ghost btn-sm"
-                            >
-                              ⬇ Download
-                            </button>
-                            {!r.release && (
-                              <>
-                                <a
-                                  href={`/releases?buildId=${r.id}`}
-                                  className="btn btn-secondary btn-sm"
-                                >
-                                  🚀 Release
-                                </a>
-                                <button
-                                  onClick={() => handleDelete(r.id)}
-                                  className="btn btn-ghost btn-danger btn-sm"
-                                  title="Xóa bản build"
-                                >
-                                  🗑️
-                                </button>
-                              </>
-                            )}
-                          </>
-                        )}
-                        {r.status === 'failed' && (
+                      {r.status === 'failed' && (
+                        <button 
+                          onClick={() => setSelectedLog(r.buildLog)} 
+                          className="text-[10px] text-accent-danger hover:underline text-left mt-1"
+                        >
+                          Xem chi tiết lỗi →
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td>{r.triggeredBy?.displayName || r.triggeredBy?.githubUsername}</td>
+                  <td className="text-sm text-muted">
+                    {new Date(r.createdAt).toLocaleString('vi-VN')}
+                  </td>
+                  <td>
+                    {r.release ? (
+                      <span className="badge badge-primary">{r.release.version}</span>
+                    ) : (
+                      <span className="text-muted text-xs">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="flex gap-2">
+                      {r.status === 'completed' && (
+                        <>
                           <button
-                            onClick={() => handleDelete(r.id)}
-                            className="btn btn-ghost btn-danger btn-sm"
-                            title="Xóa bản build lỗi"
+                            onClick={() => handleDownload(r.id)}
+                            className="btn btn-ghost btn-sm"
                           >
-                            🗑️
+                            ⬇ Download
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {!r.release && (
+                            <>
+                              <a
+                                href={`/releases?buildId=${r.id}`}
+                                className="btn btn-secondary btn-sm"
+                              >
+                                🚀 Release
+                              </a>
+                              <button
+                                onClick={() => setDeleteId(r.id)}
+                                className="btn btn-ghost btn-danger btn-sm"
+                                title="Xóa bản build"
+                              >
+                                🗑️
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                      {r.status === 'failed' && (
+                        <button
+                          onClick={() => setDeleteId(r.id)}
+                          className="btn btn-ghost btn-danger btn-sm"
+                          title="Xóa bản build lỗi"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-state-icon">📦</div>
+          <div className="empty-state-title">Chưa có report build nào</div>
+          <div className="empty-state-desc">
+            Bấm &quot;Build Preview&quot; để tạo bản preview đầu tiên từ các section documents.
           </div>
-        ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">📦</div>
-            <div className="empty-state-title">Chưa có report build nào</div>
-            <div className="empty-state-desc">
-              Bấm &quot;Build Preview&quot; để tạo bản preview đầu tiên từ các section documents.
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+
+      <Modal 
+        isOpen={!!selectedLog} 
+        onClose={() => setSelectedLog(null)} 
+        title="⚠️ Build Error Log"
+      >
+        <div className="bg-black/80 p-4 rounded-lg font-mono text-xs overflow-auto max-h-[400px] whitespace-pre-wrap text-accent-danger border border-border">
+          {selectedLog || 'Không có log chi tiết.'}
+        </div>
+        <div className="modal-actions">
+          <button onClick={() => setSelectedLog(null)} className="btn btn-primary">Đóng</button>
+        </div>
+      </Modal>
+
+      <ConfirmModal 
+        isOpen={!!deleteId} 
+        onClose={() => setDeleteId(null)} 
+        onConfirm={confirmDelete}
+        title="Xóa bản build"
+        message="Bạn có chắc chắn muốn xóa bản build này? Hành động này cũng sẽ xóa file trên storage và không thể hoàn tác."
+        type="danger"
+        confirmText="Xóa bản build"
+      />
+    </div>
   );
 }

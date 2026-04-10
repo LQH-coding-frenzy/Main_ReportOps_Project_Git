@@ -5,23 +5,8 @@ import { Suspense } from 'react';
 function GuidePageContent() {
   return (
     <>
-      {/* Navbar Minimal for Guide Page */}
-      <nav className="navbar" style={{ position: 'fixed', width: '100%' }}>
-        <a href="/dashboard" className="navbar-brand">
-          <span className="navbar-brand-icon">📋</span>
-          ReportOps
-        </a>
-        <ul className="navbar-nav">
-          <li>
-            <a href="/dashboard" className="btn btn-secondary btn-sm">
-              ← Về Dashboard
-            </a>
-          </li>
-        </ul>
-      </nav>
-
       {/* Main Guide Content */}
-      <div className="page" style={{ paddingTop: '80px' }}>
+      <div className="page">
         <div className="container">
           {/* Header Section */}
           <div style={{ textAlign: 'center', marginBottom: 'var(--space-12)', animation: 'slide-up-fade 0.8s ease-out' }}>

@@ -60,60 +60,8 @@ export default function DashboardPage() {
   const isLeader = user.role === 'LEADER';
 
   return (
-    <>
-      {/* Navbar */}
-      <nav className="navbar">
-        <a href="/dashboard" className="navbar-brand">
-          <span className="navbar-brand-icon">📋</span>
-          ReportOps
-        </a>
-        <ul className="navbar-nav">
-          <li>
-            <a href="/dashboard" className="navbar-link active">
-              Dashboard
-            </a>
-          </li>
-          {isLeader && (
-            <>
-              <li>
-                <a href="/reports" className="navbar-link">
-                  Reports
-                </a>
-              </li>
-              <li>
-                <a href="/releases" className="navbar-link">
-                  Releases
-                </a>
-              </li>
-            </>
-          )}
-        </ul>
-        <div className="navbar-user">
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {user.displayName || user.githubUsername}
-          </span>
-          <span className={`badge ${isLeader ? 'badge-primary' : 'badge-info'}`}>
-            {isLeader ? 'Leader' : 'Member'}
-          </span>
-          {user.avatarUrl && (
-            <Image 
-              src={user.avatarUrl} 
-              alt="Avatar" 
-              className="navbar-avatar" 
-              width={32} 
-              height={32}
-              unoptimized
-            />
-          )}
-          <button onClick={handleLogout} className="btn btn-ghost btn-sm">
-            Logout
-          </button>
-        </div>
-      </nav>
-
-      {/* Page Content */}
-      <div className="container page">
-        <div className="page-header">
+    <div className="container page">
+      <div className="page-header">
           <h1 className="page-title">
             {isLeader ? 'Tổng quan dự án' : 'Sections của bạn'}
           </h1>

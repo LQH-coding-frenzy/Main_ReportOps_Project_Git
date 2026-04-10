@@ -14,6 +14,8 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
 });
 
+import { ClientLayout } from '../components/ClientLayout';
+
 export const metadata: Metadata = {
   title: 'CIS Benchmark Report Platform - Built based on ReportOps structure',
   description:
@@ -30,7 +32,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <ClientLayout>
+          {children}
+        </ClientLayout>
+      </body>
     </html>
   );
 }

@@ -110,3 +110,10 @@ export async function deleteRelease(id: number): Promise<void> {
 export async function getAuditLogs(page: number = 1, limit: number = 50): Promise<PaginatedResponse<AuditLogEntry>> {
   return apiFetch<PaginatedResponse<AuditLogEntry>>(`/api/audit-logs?page=${page}&limit=${limit}`);
 }
+
+// ── Performance ──
+
+export async function getPerformance(): Promise<{ users: any[], totalSections: number }> {
+  const res = await apiFetch<ApiResponse<{ users: any[], totalSections: number }>>('/api/reports/performance');
+  return res.data;
+}

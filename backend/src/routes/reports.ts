@@ -151,4 +151,53 @@ router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Resp
   }
 });
 
+/**
+ * GET /api/reports/performance
+ * Get performance metrics for leaders.
+ */
+router.get('/performance', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      include: {
+        assignments: true,
+        auditLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        },
+      },
+    });
+
+    const totalSectionsCount = await prisma.section.count();
+
+    const performance = users.map((u) => {
+      const editLogs = u.auditLogs.filter(l => l.action === 'save_document' || l.action === 'edit_section');
+      const lastActive = u.auditLogs[0]?.createdAt || null;
+      
+      return {
+        id: u.id,
+        displayName: u.displayName,
+        githubUsername: u.githubUsername,
+        avatarUrl: u.avatarUrl,
+        role: u.role,
+        stats: {
+          assignedSections: u.assignments.length,
+          totalEdits: editLogs.length,
+          lastActive,
+        }
+      };
+    });
+
+    res.json({
+      data: {
+        users: performance,
+        totalSections: totalSectionsCount,
+      },
+      status: 200,
+    });
+  } catch (error) {
+    console.error('Performance analytics error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
 export default router;
