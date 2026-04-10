@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
+import { usePolling } from '../../hooks/usePolling';
 import { getCurrentUser, getReports, triggerPreviewBuild, getReport } from '../../lib/api';
 import type { User, ReportBuild } from '../../lib/types';
 
@@ -36,18 +37,9 @@ export default function ReportsPage() {
     });
   }, [fetchReports]);
 
-  // Polling for builds in progress
-  useEffect(() => {
-    const hasActiveBuild = reports.some(r => r.status === 'building' || r.status === 'pending');
-    
-    if (!hasActiveBuild) return;
-
-    const interval = setInterval(() => {
-      fetchReports();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [reports, fetchReports]);
+  // Use the shared hook for polling when a build is active
+  const hasActiveBuild = reports.some(r => r.status === 'building' || r.status === 'pending');
+  usePolling(fetchReports, 5000, hasActiveBuild);
 
   const handleBuildPreview = useCallback(async () => {
     setBuilding(true);

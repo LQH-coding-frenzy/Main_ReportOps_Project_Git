@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import { usePolling } from '../../hooks/usePolling';
 import { getCurrentUser, getReleases, freezeRelease } from '../../lib/api';
 import type { User, Release } from '../../lib/types';
 
@@ -19,6 +20,15 @@ function ReleasesContent() {
     notes: '',
   });
 
+  const fetchReleases = useCallback(async () => {
+    try {
+      const r = await getReleases();
+      setReleases(r);
+    } catch (err) {
+      console.error('Failed to fetch releases:', err);
+    }
+  }, []);
+
   useEffect(() => {
     async function init() {
       const u = await getCurrentUser();
@@ -28,8 +38,7 @@ function ReleasesContent() {
       }
       setUser(u);
 
-      const r = await getReleases();
-      setReleases(r);
+      await fetchReleases();
       setLoading(false);
 
       const buildId = searchParams.get('buildId');
@@ -41,7 +50,10 @@ function ReleasesContent() {
     init().catch(() => {
       window.location.href = '/';
     });
-  }, [searchParams]);
+  }, [searchParams, fetchReleases]);
+
+  // Global polling for Releases: refresh every 30s
+  usePolling(fetchReleases, 30000);
 
   const handleFreeze = useCallback(async () => {
     if (!formData.buildId || !formData.version) {

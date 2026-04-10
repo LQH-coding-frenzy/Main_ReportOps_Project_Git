@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
+import { usePolling } from '../../hooks/usePolling';
 import { getCurrentUser, getSections, logout } from '../../lib/api';
 import type { User, Section } from '../../lib/types';
 
@@ -10,21 +11,35 @@ export default function DashboardPage() {
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchSections = useCallback(async () => {
+    try {
+      const s = await getSections();
+      setSections(s);
+    } catch (err) {
+      console.error('Failed to fetch sections:', err);
+    }
+  }, []);
+
   useEffect(() => {
-    Promise.all([getCurrentUser(), getSections()])
-      .then(([u, s]) => {
+    async function init() {
+      try {
+        const u = await getCurrentUser();
         if (!u) {
           window.location.href = '/';
           return;
         }
         setUser(u);
-        setSections(s);
+        await fetchSections();
         setLoading(false);
-      })
-      .catch(() => {
+      } catch {
         window.location.href = '/';
-      });
-  }, []);
+      }
+    }
+    init();
+  }, [fetchSections]);
+
+  // Global polling for Dashboard: refresh sections every 10s
+  usePolling(fetchSections, 10000);
 
   const handleLogout = useCallback(async () => {
     await logout();
