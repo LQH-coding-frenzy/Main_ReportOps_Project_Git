@@ -11,6 +11,15 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
 
+  const fetchReports = useCallback(async () => {
+    try {
+      const r = await getReports();
+      setReports(r);
+    } catch (err) {
+      console.error('Failed to fetch reports:', err);
+    }
+  }, []);
+
   useEffect(() => {
     async function init() {
       const u = await getCurrentUser();
@@ -19,28 +28,38 @@ export default function ReportsPage() {
         return;
       }
       setUser(u);
-
-      const r = await getReports();
-      setReports(r);
+      await fetchReports();
       setLoading(false);
     }
     init().catch(() => {
       window.location.href = '/';
     });
-  }, []);
+  }, [fetchReports]);
+
+  // Polling for builds in progress
+  useEffect(() => {
+    const hasActiveBuild = reports.some(r => r.status === 'building' || r.status === 'pending');
+    
+    if (!hasActiveBuild) return;
+
+    const interval = setInterval(() => {
+      fetchReports();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [reports, fetchReports]);
 
   const handleBuildPreview = useCallback(async () => {
     setBuilding(true);
     try {
       await triggerPreviewBuild();
-      // Refresh list
-      const r = await getReports();
-      setReports(r);
+      // Refresh list immediately to show the "building" state
+      await fetchReports();
     } catch (err) {
       alert(`Build failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
     setBuilding(false);
-  }, []);
+  }, [fetchReports]);
 
   const handleDownload = useCallback(async (buildId: number) => {
     try {

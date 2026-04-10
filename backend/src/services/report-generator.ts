@@ -35,7 +35,7 @@ interface ReportBuildResult {
   buildId: number;
   storageKeyDocx: string | null;
   storageKeyPdf: string | null;
-  status: 'completed' | 'failed';
+  status: 'building' | 'completed' | 'failed';
   log: string;
 }
 
@@ -75,18 +75,16 @@ async function ensureDocumentForSection(section: {
 /**
  * Build a preview report by collecting all section documents.
  */
-export async function buildPreviewReport(triggeredById: number): Promise<ReportBuildResult> {
-  const build = await prisma.reportBuild.create({
-    data: {
-      buildType: 'preview',
-      status: 'building',
-      triggeredById,
-    },
-  });
-
+/**
+ * Background task to process the report merging logic.
+ */
+async function processReportBuild(buildId: number): Promise<void> {
   const logs: string[] = [];
-
+  
   try {
+    const build = await prisma.reportBuild.findUnique({ where: { id: buildId } });
+    if (!build) return;
+
     // Get all sections ordered by sortOrder
     const sections = await prisma.section.findMany({
       orderBy: { sortOrder: 'asc' },
@@ -145,7 +143,6 @@ export async function buildPreviewReport(triggeredById: number): Promise<ReportB
 
     const validSections = sectionBuffers.filter((s) => {
       // Skip placeholders that are known to be corrupted or empty
-      // A standard minimal docx is ~1005 bytes. We block everything under 2000 to be safe.
       if (s.buffer.length < 2000) {
         logs.push(`ℹ️ Section ${s.code}: Skipped merging. File size (${s.buffer.length} bytes) is below the 2KB threshold (likely an empty placeholder).`);
         return false;
@@ -164,8 +161,8 @@ export async function buildPreviewReport(triggeredById: number): Promise<ReportB
 
     await uploadFile(previewKey, mergedBuffer);
 
-    const result = await prisma.reportBuild.update({
-      where: { id: build.id },
+    await prisma.reportBuild.update({
+      where: { id: buildId },
       data: {
         status: 'completed',
         storageKeyDocx: previewKey,
@@ -173,33 +170,45 @@ export async function buildPreviewReport(triggeredById: number): Promise<ReportB
         completedAt: new Date(),
       },
     });
-
-    return {
-      buildId: result.id,
-      storageKeyDocx: previewKey,
-      storageKeyPdf: null,
-      status: 'completed',
-      log: logs.join('\n'),
-    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Build #${buildId}] Failed:`, errorMsg);
     logs.push(`❌ Build failed: ${errorMsg}`);
 
     await prisma.reportBuild.update({
-      where: { id: build.id },
+      where: { id: buildId },
       data: {
         status: 'failed',
         buildLog: logs.join('\n'),
         completedAt: new Date(),
       },
     });
-
-    return {
-      buildId: build.id,
-      storageKeyDocx: null,
-      storageKeyPdf: null,
-      status: 'failed',
-      log: logs.join('\n'),
-    };
   }
+}
+
+/**
+ * Build a preview report by collecting all section documents.
+ * This function is now asynchronous and returns the initial build record immediately.
+ */
+export async function buildPreviewReport(triggeredById: number): Promise<ReportBuildResult> {
+  const build = await prisma.reportBuild.create({
+    data: {
+      buildType: 'preview',
+      status: 'building',
+      triggeredById,
+    },
+  });
+
+  // Start background process without awaiting it
+  processReportBuild(build.id).catch((err) => {
+    console.error(`Fatal background build error for #${build.id}:`, err);
+  });
+
+  return {
+    buildId: build.id,
+    storageKeyDocx: null,
+    storageKeyPdf: null,
+    status: 'building', // Return current status
+    log: 'Build initialized...',
+  };
 }
