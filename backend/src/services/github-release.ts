@@ -37,6 +37,16 @@ export async function createGitHubRelease(
       throw new Error('Completed build has no DOCX artifact to release');
     }
 
+    // Sanitize tag name (GitHub doesn't allow spaces or special chars in tags)
+    const sanitizedTag = version
+      .trim()
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/[^a-zA-Z0-9._-]/g, ''); // Remove other special chars except . and _
+
+    if (!sanitizedTag) {
+      throw new Error('Invalid version format: tag name cannot be empty after sanitization');
+    }
+
     let githubReleaseUrl: string | null = null;
 
     // Create GitHub Release if token is configured
@@ -53,7 +63,7 @@ export async function createGitHubRelease(
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            tag_name: version,
+            tag_name: sanitizedTag,
             name: `CIS Benchmark Report ${version}`,
             body: notes || `Report released at ${new Date().toISOString()}`,
             draft: false,
