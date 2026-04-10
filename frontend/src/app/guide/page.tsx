@@ -126,7 +126,7 @@ function GuidePageContent() {
                   <h3 className="card-title" style={{ fontSize: 'var(--text-2xl)', color: 'var(--color-accent-warning)', paddingBottom: '0.5rem' }}>Các lỗi gây "chết" Report Build cần tránh</h3>
                   <ul style={{ paddingLeft: '1.5rem', color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <li><b>Copy Paste từ web:</b> Lấy nguyên CSS ẩn hoặc Bảng HTML lồng nhau từ các trang web (ví dụ copy từ PDF/HTML trực tiếp) sẽ làm hỏng file DOCX. Hãy <i>Paste as Plain Text</i> (Ctrl+Shift+V) và dùng công cụ format của editor.</li>
-                    <li><b>Lạm dụng Enter:</b> Không dùng phím Enter > 5 lần liền nhau để sang trang. Hãy dùng tính năng <i>Page Break</i>.</li>
+                    <li><b>Lạm dụng Enter:</b> Không dùng phím Enter &gt; 5 lần liền nhau để sang trang. Hãy dùng tính năng <i>Page Break</i>.</li>
                     <li><b>Kích thước Ảnh Khổng Lồ:</b> Đừng dán thẳng ảnh nặng 10MB vào doc. Screenshot vừa đủ (tối đa chiều rộng 16cm) để file Build ra nhẹ nhàng.</li>
                   </ul>
                 </div>
