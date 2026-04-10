@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { usePolling } from '../../hooks/usePolling';
 import { getCurrentUser, getSections } from '../../lib/api';
 import type { User, Section } from '../../lib/types';
@@ -105,7 +106,7 @@ export default function DashboardPage() {
 
         {/* Writing Guide Banner */}
         <div style={{ marginBottom: 'var(--space-8)' }}>
-          <a href="/guide" style={{ textDecoration: 'none' }}>
+          <Link href="/guide" style={{ textDecoration: 'none' }}>
             <div className="card" style={{ 
               background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.15) 100%)',
               borderColor: 'rgba(139, 92, 246, 0.3)',
@@ -138,13 +139,13 @@ export default function DashboardPage() {
                 <span className="btn btn-primary" style={{ pointerEvents: 'none' }}>Xem Guide ngay →</span>
               </div>
             </div>
-          </a>
+          </Link>
         </div>
 
         {/* Section Cards */}
         <div className="grid grid-2">
           {sections.map((section) => (
-            <a
+            <Link
               key={section.id}
               href={`/editor/${section.id}`}
               style={{ textDecoration: 'none' }}
@@ -201,7 +202,7 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-            </a>
+            </Link>
           ))}
         </div>
 

@@ -44,31 +44,33 @@ export function Navbar({ user }: NavbarProps) {
               Dashboard
             </Link>
           </li>
-          <li>
-            <Link 
-              href="/reports" 
-              className={`navbar-link ${pathname === '/reports' ? 'active' : ''}`}
-            >
-              Reports
-            </Link>
-          </li>
-          <li>
-            <Link 
-              href="/releases" 
-              className={`navbar-link ${pathname === '/releases' ? 'active' : ''}`}
-            >
-              Releases
-            </Link>
-          </li>
           {isLeader && (
-            <li>
-              <Link 
-                href="/performance" 
-                className={`navbar-link ${pathname === '/performance' ? 'active' : ''}`}
-              >
-                Performance
-              </Link>
-            </li>
+            <>
+              <li>
+                <Link 
+                  href="/reports" 
+                  className={`navbar-link ${pathname === '/reports' ? 'active' : ''}`}
+                >
+                  Reports
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  href="/releases" 
+                  className={`navbar-link ${pathname === '/releases' ? 'active' : ''}`}
+                >
+                  Releases
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  href="/performance" 
+                  className={`navbar-link ${pathname === '/performance' ? 'active' : ''}`}
+                >
+                  Performance
+                </Link>
+              </li>
+            </>
           )}
         </ul>
       </div>
@@ -78,6 +80,9 @@ export function Navbar({ user }: NavbarProps) {
           <>
             <span className="text-sm text-secondary-text hidden sm:inline">
               {user.displayName || user.githubUsername}
+            </span>
+            <span className={`badge ${isLeader ? 'badge-primary' : 'badge-info'}`}>
+              {isLeader ? 'Leader' : 'Member'}
             </span>
             {user.avatarUrl && (
               <Image 

@@ -4,9 +4,20 @@ import { useEffect, useState } from 'react';
 import { getCurrentUser, getLoginUrl } from '../lib/api';
 import type { User } from '../lib/types';
 
+function getAuthErrorFromQuery(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const err = params.get('error');
+  if (!err) return null;
+
+  if (err === 'auth_failed') return 'Đăng nhập thất bại. Vui lòng thử lại.';
+  if (err === 'invalid_state') return 'Phiên đăng nhập không hợp lệ. Vui lòng thử lại.';
+  return 'Có lỗi xảy ra. Vui lòng thử lại.';
+}
+
 export default function LoginPage() {
   const [checking, setChecking] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(getAuthErrorFromQuery);
 
   useEffect(() => {
     // Check if already logged in
@@ -19,19 +30,6 @@ export default function LoginPage() {
         }
       })
       .catch(() => setChecking(false));
-
-    // Check for error in URL
-    const params = new URLSearchParams(window.location.search);
-    const err = params.get('error');
-    if (err) {
-      setError(
-        err === 'auth_failed'
-          ? 'Đăng nhập thất bại. Vui lòng thử lại.'
-          : err === 'invalid_state'
-            ? 'Phiên đăng nhập không hợp lệ. Vui lòng thử lại.'
-            : 'Có lỗi xảy ra. Vui lòng thử lại.'
-      );
-    }
   }, []);
 
   if (checking) {

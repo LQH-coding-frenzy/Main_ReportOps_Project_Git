@@ -9,11 +9,15 @@ import { usePathname } from 'next/navigation';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const pathname = usePathname();
 
   useEffect(() => {
     // Only fetch if not on login page
-    if (pathname === '/') return;
+    if (pathname === '/') {
+      setLoadingUser(false);
+      return;
+    }
     
     async function fetchUser() {
       try {
@@ -21,10 +25,21 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         setUser(u);
       } catch (err) {
         console.error('Failed to fetch user in layout:', err);
+      } finally {
+        setLoadingUser(false);
       }
     }
     fetchUser();
   }, [pathname]);
+
+  if (pathname !== '/' && loadingUser) {
+    return (
+      <div className="loading-page">
+        <div className="spinner" />
+        <span>Đang tải...</span>
+      </div>
+    );
+  }
 
   return (
     <ToastProvider>
