@@ -107,7 +107,7 @@ router.get(
  */
 router.post('/callback', async (req: Request, res: Response) => {
   try {
-    const { status, url, key, users } = req.body;
+    const { status, url } = req.body;
     const sectionId = parseInt(req.query.sectionId as string, 10);
 
     if (env.ONLYOFFICE_JWT_SECRET) {

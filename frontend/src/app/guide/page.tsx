@@ -75,7 +75,7 @@ function GuidePageContent() {
 
                 <div style={{ padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-glass)', border: '1px solid var(--color-accent-danger-soft)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                    <span className="badge badge-danger">SAI - DON'T</span>
+                    <span className="badge badge-danger">SAI - DON&apos;T</span>
                     <span style={{ fontSize: 'var(--text-2xl)' }}>❌</span>
                   </div>
                   <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: 'gray' }}>Heading 2: Tên Mục (Vô tình làm mờ tên mục)</h2>
@@ -123,7 +123,7 @@ function GuidePageContent() {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem' }}>
                 <div style={{ fontSize: '3rem' }}>⚠️</div>
                 <div>
-                  <h3 className="card-title" style={{ fontSize: 'var(--text-2xl)', color: 'var(--color-accent-warning)', paddingBottom: '0.5rem' }}>Các lỗi gây "chết" Report Build cần tránh</h3>
+                  <h3 className="card-title" style={{ fontSize: 'var(--text-2xl)', color: 'var(--color-accent-warning)', paddingBottom: '0.5rem' }}>Các lỗi gây &quot;chết&quot; Report Build cần tránh</h3>
                   <ul style={{ paddingLeft: '1.5rem', color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <li><b>Copy Paste từ web:</b> Lấy nguyên CSS ẩn hoặc Bảng HTML lồng nhau từ các trang web (ví dụ copy từ PDF/HTML trực tiếp) sẽ làm hỏng file DOCX. Hãy <i>Paste as Plain Text</i> (Ctrl+Shift+V) và dùng công cụ format của editor.</li>
                     <li><b>Lạm dụng Enter:</b> Không dùng phím Enter &gt; 5 lần liền nhau để sang trang. Hãy dùng tính năng <i>Page Break</i>.</li>

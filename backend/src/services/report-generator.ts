@@ -1,11 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import { createEmptyDocx, downloadFile, fileExists, uploadFile } from './storage';
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const DocxMerger: {
-  new (options: Record<string, unknown>, files: any[]): {
-    save: (type: 'nodebuffer', callback: (data: any) => void) => void;
+  new (options: Record<string, unknown>, files: unknown[]): {
+    save: (type: 'nodebuffer', callback: (data: unknown) => void) => void;
   };
 } = require('docx-merger');
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 const prisma = new PrismaClient();
 
@@ -20,8 +22,8 @@ async function mergeDocxBuffers(buffers: Buffer[]): Promise<Buffer> {
 
   return new Promise<Buffer>((resolve, reject) => {
     try {
-      merger.save('nodebuffer', (data: any) => {
-        resolve(Buffer.isBuffer(data) ? data : Buffer.from(data, 'binary'));
+      merger.save('nodebuffer', (data: unknown) => {
+        resolve(Buffer.isBuffer(data) ? data : Buffer.from(data as string, 'binary'));
       });
     } catch (error) {
       reject(error);
