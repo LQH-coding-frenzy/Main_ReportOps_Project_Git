@@ -47,7 +47,9 @@ export async function createGitHubRelease(
           method: 'POST',
           headers: {
             Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-            Accept: 'application/vnd.github.v3+json',
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'ReportOps-App',
+            'X-GitHub-Api-Version': '2022-11-28',
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -73,6 +75,8 @@ export async function createGitHubRelease(
             method: 'POST',
             headers: {
               Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+              'User-Agent': 'ReportOps-App',
+              Accept: 'application/vnd.github+json',
               'Content-Type':
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             },
@@ -92,6 +96,11 @@ export async function createGitHubRelease(
         }
       } else {
         const errorBody = await releaseResponse.text();
+        if (releaseResponse.status === 403) {
+          throw new Error(
+            `GitHub Release failed (403): Missing 'repo' scope or 'Contents:Write' permission on the token.`
+          );
+        }
         throw new Error(`GitHub Release creation failed: ${errorBody}`);
       }
     }
