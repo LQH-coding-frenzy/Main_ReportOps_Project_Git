@@ -2,8 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import { createEmptyDocx, downloadFile, fileExists, uploadFile } from './storage';
 
 const DocxMerger: {
-  new (options: Record<string, unknown>, files: string[]): {
-    save: (type: 'nodebuffer', callback: (data: Buffer) => void) => void;
+  new (options: Record<string, unknown>, files: any[]): {
+    save: (type: 'nodebuffer', callback: (data: any) => void) => void;
   };
 } = require('docx-merger');
 
@@ -14,13 +14,14 @@ async function mergeDocxBuffers(buffers: Buffer[]): Promise<Buffer> {
     return buffers[0];
   }
 
+  // Convert buffers to binary strings for docx-merger compatibility
   const binaryFiles = buffers.map((buffer) => buffer.toString('binary'));
   const merger = new DocxMerger({}, binaryFiles);
 
   return new Promise<Buffer>((resolve, reject) => {
     try {
-      merger.save('nodebuffer', (data: Buffer) => {
-        resolve(Buffer.isBuffer(data) ? data : Buffer.from(data));
+      merger.save('nodebuffer', (data: any) => {
+        resolve(Buffer.isBuffer(data) ? data : Buffer.from(data, 'binary'));
       });
     } catch (error) {
       reject(error);
@@ -140,9 +141,22 @@ export async function buildPreviewReport(triggeredById: number): Promise<ReportB
       logs.push(`📁 Uploaded section ${code} to preview bundle`);
     }
 
-    const mergedBuffer = await mergeDocxBuffers(sectionBuffers.map((s) => s.buffer));
+    const validSections = sectionBuffers.filter((s) => {
+      // Skip placeholders that are known to be corrupted (approx 1005 bytes)
+      if (s.buffer.length < 2000) {
+        logs.push(`ℹ️ Section ${s.code}: Skipped merging (placeholder or too small)`);
+        return false;
+      }
+      return true;
+    });
+
+    if (validSections.length === 0) {
+      throw new Error('No valid section documents available to merge');
+    }
+
+    const mergedBuffer = await mergeDocxBuffers(validSections.map((s) => s.buffer));
     logs.push(
-      `🧩 Merged ${sectionBuffers.length} sections into preview document (${mergedBuffer.length} bytes)`
+      `🧩 Merged ${validSections.length} sections into preview document (${mergedBuffer.length} bytes)`
     );
 
     await uploadFile(previewKey, mergedBuffer);
