@@ -82,6 +82,10 @@ export async function triggerPreviewBuild(): Promise<ReportBuild> {
   return res.data;
 }
 
+export async function deleteReport(id: number): Promise<void> {
+  await apiFetch(`/api/reports/${id}`, { method: 'DELETE' });
+}
+
 // ── Releases ──
 
 export async function getReleases(): Promise<Release[]> {
@@ -95,6 +99,10 @@ export async function freezeRelease(reportBuildId: number, version: string, note
     body: JSON.stringify({ reportBuildId, version, notes }),
   });
   return res.data;
+}
+
+export async function deleteRelease(id: number): Promise<void> {
+  await apiFetch(`/api/releases/${id}`, { method: 'DELETE' });
 }
 
 // ── Audit Logs ──

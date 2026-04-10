@@ -123,4 +123,32 @@ router.get('/:id', requireAuth, requireLeader, async (req: Request, res: Respons
   }
 });
 
+/**
+ * DELETE /api/reports/:id
+ * Delete a report build (leader only).
+ */
+router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const buildId = parseInt(req.params.id, 10);
+    const { deleteReportBuild } = await import('../services/report-generator');
+    
+    await deleteReportBuild(buildId);
+
+    // Audit Log
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'delete_report',
+        details: { buildId },
+      },
+    });
+
+    res.json({ data: { success: true }, status: 200 });
+  } catch (error) {
+    console.error('Delete report error:', error);
+    const msg = error instanceof Error ? error.message : 'Failed to delete report';
+    res.status(400).json({ error: msg, status: 400 });
+  }
+});
+
 export default router;

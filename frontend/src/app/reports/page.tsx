@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { usePolling } from '../../hooks/usePolling';
-import { getCurrentUser, getReports, triggerPreviewBuild, getReport } from '../../lib/api';
+import { getCurrentUser, getReports, triggerPreviewBuild, getReport, deleteReport } from '../../lib/api';
 import type { User, ReportBuild } from '../../lib/types';
 
 export default function ReportsPage() {
@@ -51,6 +51,16 @@ export default function ReportsPage() {
       alert(`Build failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
     setBuilding(false);
+  }, [fetchReports]);
+
+  const handleDelete = useCallback(async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa bản build này? Hành động này cũng sẽ xóa file trên storage.')) return;
+    try {
+      await deleteReport(id);
+      await fetchReports();
+    } catch (err) {
+      alert(`Xóa thất bại: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   }, [fetchReports]);
 
   const handleDownload = useCallback(async (buildId: number) => {
@@ -194,14 +204,32 @@ export default function ReportsPage() {
                               ⬇ Download
                             </button>
                             {!r.release && (
-                              <a
-                                href={`/releases?buildId=${r.id}`}
-                                className="btn btn-secondary btn-sm"
-                              >
-                                🚀 Release
-                              </a>
+                              <>
+                                <a
+                                  href={`/releases?buildId=${r.id}`}
+                                  className="btn btn-secondary btn-sm"
+                                >
+                                  🚀 Release
+                                </a>
+                                <button
+                                  onClick={() => handleDelete(r.id)}
+                                  className="btn btn-ghost btn-danger btn-sm"
+                                  title="Xóa bản build"
+                                >
+                                  🗑️
+                                </button>
+                              </>
                             )}
                           </>
+                        )}
+                        {r.status === 'failed' && (
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            className="btn btn-ghost btn-danger btn-sm"
+                            title="Xóa bản build lỗi"
+                          >
+                            🗑️
+                          </button>
                         )}
                       </div>
                     </td>

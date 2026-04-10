@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { usePolling } from '../../hooks/usePolling';
-import { getCurrentUser, getReleases, freezeRelease } from '../../lib/api';
+import { getCurrentUser, getReleases, freezeRelease, deleteRelease } from '../../lib/api';
 import type { User, Release } from '../../lib/types';
 
 function ReleasesContent() {
@@ -63,15 +63,24 @@ function ReleasesContent() {
     setFreezing(true);
     try {
       await freezeRelease(parseInt(formData.buildId, 10), formData.version, formData.notes);
-      const r = await getReleases();
-      setReleases(r);
+      await fetchReleases();
       setShowModal(false);
       setFormData({ buildId: '', version: '', notes: '' });
     } catch (err) {
       alert(`Release failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
     setFreezing(false);
-  }, [formData]);
+  }, [formData, fetchReleases]);
+
+  const handleDelete = useCallback(async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa bản release này khỏi hệ thống? (Hành động này không xóa trên GitHub)')) return;
+    try {
+      await deleteRelease(id);
+      await fetchReleases();
+    } catch (err) {
+      alert(`Xóa thất bại: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, [fetchReleases]);
 
   if (loading) {
     return (
@@ -145,9 +154,19 @@ function ReleasesContent() {
                     </span>
                     <span className="badge badge-success">Released</span>
                   </div>
-                  <span className="text-sm text-muted">
-                    {new Date(r.createdAt).toLocaleString('vi-VN')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted">
+                      {new Date(r.createdAt).toLocaleString('vi-VN')}
+                    </span>
+                    <button
+                      onClick={() => handleDelete(r.id)}
+                      className="btn btn-ghost btn-danger btn-sm"
+                      title="Xóa release khỏi hệ thống"
+                      style={{ padding: '4px 8px' }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
                 <div className="card-body">
                   {r.notes && (

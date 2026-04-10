@@ -81,9 +81,32 @@ async function ensureDocumentForSection(section: {
 async function processReportBuild(buildId: number): Promise<void> {
   const logs: string[] = [];
   
+  const updateLogs = async (newLog: string) => {
+    logs.push(newLog);
+    await prisma.reportBuild.update({
+      where: { id: buildId },
+      data: { buildLog: logs.join('\n') },
+    });
+  };
+  
+  // 5 minute timeout for the entire process
+  const timeout = setTimeout(async () => {
+    console.error(`[Build #${buildId}] Timed out after 5 minutes`);
+    await prisma.reportBuild.update({
+      where: { id: buildId },
+      data: {
+        status: 'failed',
+        buildLog: logs.join('\n') + '\n❌ Error: Build timed out after 5 minutes.',
+        completedAt: new Date(),
+      },
+    }).catch(console.error);
+  }, 5 * 60 * 1000);
+
   try {
     const build = await prisma.reportBuild.findUnique({ where: { id: buildId } });
     if (!build) return;
+
+    await updateLogs('🚀 Starting report generation process...');
 
     // Get all sections ordered by sortOrder
     const sections = await prisma.section.findMany({
@@ -102,20 +125,20 @@ async function processReportBuild(buildId: number): Promise<void> {
         if (!exists) {
           const emptyDocx = createEmptyDocx();
           await uploadFile(storageKey, emptyDocx);
-          logs.push(`🧱 Section ${section.code}: initialized missing document in storage`);
+          await updateLogs(`🧱 Section ${section.code}: initialized missing document in storage`);
         }
 
         const buffer = await downloadFile(storageKey);
         sectionBuffers.push({ code: section.code, buffer });
-        logs.push(`✅ Section ${section.code}: Downloaded (${buffer.length} bytes)`);
+        await updateLogs(`✅ Section ${section.code}: Downloaded (${buffer.length} bytes)`);
       } catch (error) {
         try {
           const emptyDocx = createEmptyDocx();
           await uploadFile(storageKey, emptyDocx);
           sectionBuffers.push({ code: section.code, buffer: emptyDocx });
-          logs.push(`⚠️ Section ${section.code}: recovered with empty document after download failure`);
+          await updateLogs(`⚠️ Section ${section.code}: recovered with empty document after download failure`);
         } catch {
-          logs.push(
+          await updateLogs(
             `❌ Section ${section.code}: Download failed - ${error instanceof Error ? error.message : 'Unknown error'}`
           );
           missingSections.push(section.code);
@@ -138,13 +161,13 @@ async function processReportBuild(buildId: number): Promise<void> {
     for (const { code, buffer } of sectionBuffers) {
       const sectionKey = `reports/previews/${timestamp}/section-${code}.docx`;
       await uploadFile(sectionKey, buffer);
-      logs.push(`📁 Uploaded section ${code} to preview bundle`);
     }
+    await updateLogs(`📁 Uploaded ${sectionBuffers.length} sections to preview bundle metadata`);
 
     const validSections = sectionBuffers.filter((s) => {
       // Skip placeholders that are known to be corrupted or empty
       if (s.buffer.length < 2000) {
-        logs.push(`ℹ️ Section ${s.code}: Skipped merging. File size (${s.buffer.length} bytes) is below the 2KB threshold (likely an empty placeholder).`);
+        logs.push(`ℹ️ Section ${s.code}: Skipped merging. File size (${s.buffer.length} bytes) is below the 2KB threshold.`);
         return false;
       }
       return true;
@@ -155,11 +178,10 @@ async function processReportBuild(buildId: number): Promise<void> {
     }
 
     const mergedBuffer = await mergeDocxBuffers(validSections.map((s) => s.buffer));
-    logs.push(
-      `🧩 Merged ${validSections.length} sections into preview document (${mergedBuffer.length} bytes)`
-    );
+    await updateLogs(`🧩 Merged ${validSections.length} sections into preview document (${mergedBuffer.length} bytes)`);
 
     await uploadFile(previewKey, mergedBuffer);
+    await updateLogs('📤 Uploaded final merged document to storage.');
 
     await prisma.reportBuild.update({
       where: { id: buildId },
@@ -182,8 +204,35 @@ async function processReportBuild(buildId: number): Promise<void> {
         buildLog: logs.join('\n'),
         completedAt: new Date(),
       },
-    });
+    }).catch(console.error);
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+/**
+ * Delete a report build and its associated storage files.
+ */
+export async function deleteReportBuild(id: number): Promise<void> {
+  const build = await prisma.reportBuild.findUnique({
+    where: { id },
+    include: { release: true },
+  });
+
+  if (!build) throw new Error('Report build not found');
+  if (build.release) throw new Error('Cannot delete a build that is linked to a release');
+
+  // Delete from storage
+  const { deleteFile } = await import('./storage');
+  if (build.storageKeyDocx) {
+    await deleteFile(build.storageKeyDocx).catch(console.error);
+  }
+  if (build.storageKeyPdf) {
+    await deleteFile(build.storageKeyPdf).catch(console.error);
+  }
+
+  // Delete from DB
+  await prisma.reportBuild.delete({ where: { id } });
 }
 
 /**

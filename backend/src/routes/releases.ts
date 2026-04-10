@@ -109,4 +109,32 @@ router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) 
   }
 });
 
+/**
+ * DELETE /api/releases/:id
+ * Delete a release record (leader only).
+ */
+router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const releaseId = parseInt(req.params.id, 10);
+    
+    await prisma.release.delete({
+      where: { id: releaseId },
+    });
+
+    // Audit Log
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'delete_release',
+        details: { releaseId },
+      },
+    });
+
+    res.json({ data: { success: true }, status: 200 });
+  } catch (error) {
+    console.error('Delete release error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
 export default router;

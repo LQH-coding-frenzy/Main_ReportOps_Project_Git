@@ -60,11 +60,35 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: 'Internal server error', status: 500 });
 });
 
+// ── Startup Cleanup ──
+async function cleanupOrphanedBuilds() {
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
+  try {
+    const orphaned = await prisma.reportBuild.updateMany({
+      where: { status: 'building' },
+      data: {
+        status: 'failed',
+        buildLog: 'Build interrupted: Server restarted during processing.',
+        completedAt: new Date(),
+      },
+    });
+    if (orphaned.count > 0) {
+      console.log(`🧹 Cleaned up ${orphaned.count} orphaned builds.`);
+    }
+  } catch (error) {
+    console.error('Failed to cleanup orphaned builds:', error);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // ── Start Server ──
 async function start() {
   // Initialize Supabase storage bucket
   try {
     await initStorage();
+    await cleanupOrphanedBuilds();
   } catch (error) {
     console.warn('⚠️ Storage initialization skipped:', error);
   }
