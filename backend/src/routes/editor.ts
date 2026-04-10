@@ -2,12 +2,29 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireSectionAccess } from '../middleware/rbac';
-import { generateEditorConfig, CallbackStatus } from '../services/onlyoffice';
+import { generateEditorConfig, CallbackStatus, verifyCallbackToken } from '../services/onlyoffice';
 import { getSignedUrl, downloadFromUrl, uploadFile, fileExists, createEmptyDocx } from '../services/storage';
 import { env } from '../config/env';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+function extractCallbackToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice('Bearer '.length).trim();
+  }
+
+  if (typeof req.body?.token === 'string') {
+    return req.body.token;
+  }
+
+  if (typeof req.query?.token === 'string') {
+    return req.query.token;
+  }
+
+  return null;
+}
 
 /**
  * GET /api/editor/config/:sectionId
@@ -93,6 +110,15 @@ router.post('/callback', async (req: Request, res: Response) => {
     const { status, url, key, users } = req.body;
     const sectionId = parseInt(req.query.sectionId as string, 10);
 
+    if (env.ONLYOFFICE_JWT_SECRET) {
+      const token = extractCallbackToken(req);
+      if (!token || !verifyCallbackToken(token)) {
+        console.warn('ONLYOFFICE callback rejected: invalid or missing JWT token');
+        res.status(403).json({ error: 1 });
+        return;
+      }
+    }
+
     if (isNaN(sectionId)) {
       // ONLYOFFICE expects { error: 0 } for success
       res.json({ error: 0 });
@@ -122,7 +148,32 @@ router.post('/callback', async (req: Request, res: Response) => {
       }
 
       // Determine who edited (from ONLYOFFICE users array)
-      const editorUserId = users && users.length > 0 ? parseInt(users[0], 10) : null;
+      const candidateEditorUserId = users && users.length > 0 ? parseInt(users[0], 10) : null;
+      let editorUserId: number | null =
+        candidateEditorUserId && !Number.isNaN(candidateEditorUserId) ? candidateEditorUserId : null;
+
+      if (editorUserId) {
+        const editorUser = await prisma.user.findUnique({
+          where: { id: editorUserId },
+          select: {
+            role: true,
+            assignments: {
+              where: { sectionId },
+              select: { id: true },
+            },
+          },
+        });
+
+        const hasSectionAccess =
+          !!editorUser && (editorUser.role === 'LEADER' || editorUser.assignments.length > 0);
+
+        if (!hasSectionAccess) {
+          console.warn(
+            `ONLYOFFICE callback: user ${editorUserId} is not allowed to edit section ${sectionId}, skipping editor attribution`
+          );
+          editorUserId = null;
+        }
+      }
 
       // Create version snapshot before overwriting
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

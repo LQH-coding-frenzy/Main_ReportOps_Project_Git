@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { env } from '../config/env';
-import { downloadFile, getSignedUrl } from './storage';
+import { downloadFile } from './storage';
 
 const prisma = new PrismaClient();
 
@@ -27,6 +27,14 @@ export async function createGitHubRelease(
 
     if (!build || build.status !== 'completed') {
       throw new Error('Report build not found or not completed');
+    }
+
+    if (build.buildType !== 'preview') {
+      throw new Error('Only preview builds can be frozen into a release');
+    }
+
+    if (!build.storageKeyDocx) {
+      throw new Error('Completed build has no DOCX artifact to release');
     }
 
     let githubReleaseUrl: string | null = null;
@@ -57,61 +65,54 @@ export async function createGitHubRelease(
         githubReleaseUrl = releaseData.html_url;
 
         // Upload the .docx artifact to the release
-        if (build.storageKeyDocx) {
-          try {
-            const fileBuffer = await downloadFile(build.storageKeyDocx);
-            const uploadUrl = releaseData.upload_url.replace('{?name,label}', '');
+        try {
+          const fileBuffer = await downloadFile(build.storageKeyDocx);
+          const uploadUrl = releaseData.upload_url.replace('{?name,label}', '');
 
-            await fetch(`${uploadUrl}?name=CIS-Report-${version}.docx`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-                'Content-Type':
-                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              },
-              body: new Uint8Array(fileBuffer),
-            });
-          } catch (uploadError) {
-            console.error('Failed to upload artifact to GitHub Release:', uploadError);
+          const uploadResponse = await fetch(`${uploadUrl}?name=CIS-Report-${version}.docx`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+              'Content-Type':
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            },
+            body: new Uint8Array(fileBuffer),
+          });
+
+          if (!uploadResponse.ok) {
+            const uploadErrorBody = await uploadResponse.text();
+            throw new Error(`Failed to upload release artifact: ${uploadErrorBody}`);
           }
+        } catch (uploadError) {
+          throw new Error(
+            uploadError instanceof Error
+              ? uploadError.message
+              : 'Failed to upload DOCX artifact to GitHub Release'
+          );
         }
       } else {
         const errorBody = await releaseResponse.text();
-        console.error('GitHub Release creation failed:', errorBody);
+        throw new Error(`GitHub Release creation failed: ${errorBody}`);
       }
     }
 
     // Generate checksum
     const crypto = await import('crypto');
-    let checksum: string | null = null;
-    if (build.storageKeyDocx) {
-      try {
-        const buffer = await downloadFile(build.storageKeyDocx);
-        checksum = crypto.createHash('sha256').update(buffer).digest('hex');
-      } catch {
-        // Non-critical — continue without checksum
-      }
-    }
+    const buffer = await downloadFile(build.storageKeyDocx);
+    const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
 
     // Copy preview to final
-    if (build.storageKeyDocx) {
-      const finalKey = build.storageKeyDocx.replace('previews', 'final').replace('preview', 'final');
-      try {
-        const buffer = await downloadFile(build.storageKeyDocx);
-        const { uploadFile } = await import('./storage');
-        await uploadFile(finalKey, buffer);
+    const finalKey = build.storageKeyDocx.replace('previews', 'final').replace('preview', 'final');
+    const { uploadFile } = await import('./storage');
+    await uploadFile(finalKey, buffer);
 
-        await prisma.reportBuild.update({
-          where: { id: build.id },
-          data: {
-            buildType: 'final',
-            storageKeyDocx: finalKey,
-          },
-        });
-      } catch {
-        // Continue with original key
-      }
-    }
+    await prisma.reportBuild.update({
+      where: { id: build.id },
+      data: {
+        buildType: 'final',
+        storageKeyDocx: finalKey,
+      },
+    });
 
     const release = await prisma.release.create({
       data: {

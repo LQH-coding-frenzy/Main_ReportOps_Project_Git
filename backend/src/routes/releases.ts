@@ -37,23 +37,29 @@ router.post('/freeze', requireAuth, requireLeader, async (req: Request, res: Res
 
     const result = await createGitHubRelease(reportBuildId, version, notes || '');
 
-    if (result.success) {
-      await prisma.auditLog.create({
-        data: {
-          userId: req.user!.id,
-          action: 'release',
-          details: {
-            releaseId: result.releaseId,
-            version: result.version,
-            githubReleaseUrl: result.githubReleaseUrl,
-          },
-        },
+    if (!result.success) {
+      res.status(500).json({
+        error: result.error || 'Failed to create release',
+        status: 500,
       });
+      return;
     }
 
-    res.json({
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'release',
+        details: {
+          releaseId: result.releaseId,
+          version: result.version,
+          githubReleaseUrl: result.githubReleaseUrl,
+        },
+      },
+    });
+
+    res.status(200).json({
       data: result,
-      status: result.success ? 200 : 500,
+      status: 200,
     });
   } catch (error) {
     console.error('Freeze release error:', error);
@@ -63,9 +69,9 @@ router.post('/freeze', requireAuth, requireLeader, async (req: Request, res: Res
 
 /**
  * GET /api/releases
- * List all releases.
+ * List all releases (leader only).
  */
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) => {
   try {
     const releases = await prisma.release.findMany({
       orderBy: { createdAt: 'desc' },
