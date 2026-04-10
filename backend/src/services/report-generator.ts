@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { downloadFile, uploadFile } from './storage';
+import { createEmptyDocx, downloadFile, fileExists, uploadFile } from './storage';
 
 const DocxMerger: {
   new (options: Record<string, unknown>, files: string[]): {
@@ -36,6 +36,39 @@ interface ReportBuildResult {
   log: string;
 }
 
+async function ensureDocumentForSection(section: {
+  id: number;
+  code: string;
+  title: string;
+  documents: Array<{ id: number; currentStorageKey: string; fileName: string }>;
+}): Promise<{ storageKey: string; fileName: string }> {
+  const existing = section.documents[0];
+
+  if (existing) {
+    return {
+      storageKey: existing.currentStorageKey,
+      fileName: existing.fileName,
+    };
+  }
+
+  const fallbackFileName = `${section.code}-${section.title.split(',')[0].trim()}.docx`;
+  const fallbackStorageKey = `sections/${section.code}/current.docx`;
+
+  const created = await prisma.document.create({
+    data: {
+      sectionId: section.id,
+      currentStorageKey: fallbackStorageKey,
+      fileName: fallbackFileName,
+      fileSize: 0,
+    },
+  });
+
+  return {
+    storageKey: created.currentStorageKey,
+    fileName: created.fileName,
+  };
+}
+
 /**
  * Build a preview report by collecting all section documents.
  */
@@ -61,21 +94,31 @@ export async function buildPreviewReport(triggeredById: number): Promise<ReportB
     const missingSections: string[] = [];
 
     for (const section of sections) {
-      const doc = section.documents[0];
-      if (!doc) {
-        const msg = `Section ${section.code}: No document found`;
-        logs.push(`❌ ${msg}`);
-        missingSections.push(section.code);
-        continue;
-      }
+      const { storageKey } = await ensureDocumentForSection(section);
 
       try {
-        const buffer = await downloadFile(doc.currentStorageKey);
+        const exists = await fileExists(storageKey);
+        if (!exists) {
+          const emptyDocx = createEmptyDocx();
+          await uploadFile(storageKey, emptyDocx);
+          logs.push(`🧱 Section ${section.code}: initialized missing document in storage`);
+        }
+
+        const buffer = await downloadFile(storageKey);
         sectionBuffers.push({ code: section.code, buffer });
         logs.push(`✅ Section ${section.code}: Downloaded (${buffer.length} bytes)`);
       } catch (error) {
-        logs.push(`❌ Section ${section.code}: Download failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
-        missingSections.push(section.code);
+        try {
+          const emptyDocx = createEmptyDocx();
+          await uploadFile(storageKey, emptyDocx);
+          sectionBuffers.push({ code: section.code, buffer: emptyDocx });
+          logs.push(`⚠️ Section ${section.code}: recovered with empty document after download failure`);
+        } catch {
+          logs.push(
+            `❌ Section ${section.code}: Download failed - ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
+          missingSections.push(section.code);
+        }
       }
     }
 
