@@ -1,6 +1,15 @@
 import { supabase } from '../config/supabase';
 import { env } from '../config/env';
 
+/* eslint-disable @typescript-eslint/no-require-imports */
+const JSZip: {
+  new (): {
+    file: (path: string, content: string | Uint8Array | Buffer) => void;
+    generate: (options: { type: 'nodebuffer' }) => Buffer;
+  };
+} = require('jszip');
+/* eslint-enable @typescript-eslint/no-require-imports */
+
 const bucket = env.SUPABASE_STORAGE_BUCKET;
 
 /**
@@ -124,27 +133,88 @@ export async function downloadFromUrl(url: string): Promise<Buffer> {
  * Create an initial empty .docx file for a section.
  * This is a minimal valid .docx (just enough to open in ONLYOFFICE).
  */
-export function createEmptyDocx(): Buffer {
-  // Minimal valid OOXML .docx — verified valid ZIP structure
-  const base64 =
-    'UEsDBBQAAAAIAAAAIQCpT38AAADnAAAACwAAAF9yZWxzLy5yZWxzjZDNCoMwEITvgu8Q9h5tfUCh' +
-    '7WMQ9Cr1AZZk2wY3S7IVfXsjVqX04vncYIazs8t9qRMm8swKKOISGByrYAs7A8fzdrcAlQTZ4BQY' +
-    'DeYpwaY6XfK0kjqUj5JXaVYpGLA1RtbAmKT7FQR8NPUhJOMv6AOYZ9Ur9I6fdiI8+H92Uj0DAAD/' +
-    '/wMAUEsDBBQAAAAIAAAAIQCfX80h3gAAACQBAAARAAAAd29yZC9kb2N1bWVudC54bWyMkE1OwzAQ' +
-    'hfeVugeyv03SAtVREpW66AKuEOfmYmwa9Y9sZ6Gn4UFYVBIlYvfyvXkz72Xz9WvI6A0icQYVTPME' +
-    'FIaKGx+aCubz9v4OFIWSzhR5mEAFUzzBx8f5UscKkpa4ORZOJFQJBXTGxBpYo3xtc9NofNSvOOn' +
-    '8HcCvpH0IeAnjTfYV8wV8FL6p99n9VsoXqTb+vKnn1oDAAD//wMAUEsDBBQAAAAIAAAAIQBzqGIQ' +
-    'hwAAAOIAAAARAAAAd29yZC9fcmVscy8ucmVsc42OywrCMBBF94L/EGYv7UKEInat+AAfSPOxDbYT' +
-    'MUnVvzdioQoOu5t7mGGeS9mZisZJBccRmrUKDL6KrrM1cL8979dBZUB2eAoGDSYpwaw6X+VlZk2m' +
-    'XqUnLSu1U6hpzMJUdL3T6Upg1R7U6mTkR1Nl+qlp3ZovwNQHAAAA//8DAFBLAwQUAAAACAAAACEA' +
-    'Wd2vu28AAAC8AAAAEwAAAFtDb250ZW50X1R5cGVzXS54bWydkc8KwjAQhO+C7xDmbi2BIPZ6UXwCP' +
-    '0Ab7BpsNpKs1bc3Kgrice/lzfBnNpvfI6eonFmBRbeCBXmRG2DvnIHL6fk8BpEEReMSGAbulWDTv' +
-    '9zNqHUonxG6I7I38ChJY4jcEqmoeYq6f600S7iSrzSkX/E/NvR5fGxF7KuAn+nfus5HAI8vAAD//w' +
-    'MAUEsBAi0AFAAAAAgAAAAhAKlPfwAAAOcAAAALAAAAAAAAAAAAAAAAAAAAAABfcmVscy8ucmVsc1' +
-    'BLAQItABQAAAAIAAAAIQCfX80h3gAAACQBAAARAAAAAAAAAAAAAAAAACkBAAB3b3JkL2RvY3VtZW' +
-    '50LnhtbFBLAQItABQAAAAIAAAAIQBzqGIQhwAAAOIAAAARAAAAAAAAAAAAAAAAAK0CAAB3b3JkL1' +
-    '9yZWxzLy5yZWxzUEsBAi0AFAAAAAgAAAAhAFndr7tvAAAAvAAAABMAAAAAAAAAAAAAAAAA5wMAAF' +
-    'tDb250ZW50X1R5cGVzXS54bWxQSwUGAAAAAAQABADuAAAALwQAAAAA';
+let cachedEmptyDocx: Buffer | null = null;
 
-  return Buffer.from(base64, 'base64');
+export function createEmptyDocx(): Buffer {
+  if (cachedEmptyDocx) {
+    return Buffer.from(cachedEmptyDocx);
+  }
+
+  const zip = new JSZip();
+
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
+      '</Types>'
+  );
+
+  zip.file(
+    '_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>'
+  );
+
+  zip.file(
+    'word/document.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:body>' +
+      '<w:p><w:r><w:t></w:t></w:r></w:p>' +
+      '<w:sectPr>' +
+      '<w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>' +
+      '<w:cols w:space="708"/>' +
+      '<w:docGrid w:linePitch="360"/>' +
+      '</w:sectPr>' +
+      '</w:body>' +
+      '</w:document>'
+  );
+
+  zip.file(
+    'word/styles.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">' +
+      '<w:name w:val="Normal"/>' +
+      '<w:qFormat/>' +
+      '</w:style>' +
+      '</w:styles>'
+  );
+
+  zip.file(
+    'word/numbering.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:abstractNum w:abstractNumId="0">' +
+      '<w:nsid w:val="00000001"/>' +
+      '<w:multiLevelType w:val="singleLevel"/>' +
+      '<w:tmpl w:val="00000001"/>' +
+      '<w:lvl w:ilvl="0">' +
+      '<w:start w:val="1"/>' +
+      '<w:numFmt w:val="decimal"/>' +
+      '<w:lvlText w:val="%1."/>' +
+      '<w:lvlJc w:val="left"/>' +
+      '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>' +
+      '</w:lvl>' +
+      '</w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+      '</w:numbering>'
+  );
+
+  zip.file(
+    'word/_rels/document.xml.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
+  );
+
+  cachedEmptyDocx = zip.generate({ type: 'nodebuffer' });
+  return Buffer.from(cachedEmptyDocx);
 }

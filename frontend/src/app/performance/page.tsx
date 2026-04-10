@@ -3,42 +3,65 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { getCurrentUser, getPerformance } from '../../lib/api';
-import type { User } from '../../lib/types';
+import type { User, PerformanceData } from '../../lib/types';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 
 export default function PerformancePage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [data, setData] = useState<{ users: any[], totalSections: number } | null>(null);
+  const [, setUser] = useState<User | null>(null);
+  const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPerformance = useCallback(async () => {
     try {
       const res = await getPerformance();
       setData(res);
+      setError(null);
     } catch (err) {
       console.error('Failed to fetch performance:', err);
+      setError(err instanceof Error ? err.message : 'Không thể tải dữ liệu hiệu suất');
     }
   }, []);
 
   useEffect(() => {
     async function init() {
-      const u = await getCurrentUser();
-      if (!u || u.role !== 'LEADER') {
+      try {
+        const u = await getCurrentUser();
+        if (!u || u.role !== 'LEADER') {
+          window.location.href = '/dashboard';
+          return;
+        }
+        setUser(u);
+        await fetchPerformance();
+      } catch {
         window.location.href = '/dashboard';
-        return;
+      } finally {
+        setLoading(false);
       }
-      setUser(u);
-      await fetchPerformance();
-      setLoading(false);
     }
     init();
   }, [fetchPerformance]);
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="loading-page">
         <div className="spinner" />
         <span>Đang tính toán hiệu suất...</span>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="container page">
+        <div className="empty-state">
+          <div className="empty-state-icon">⚠️</div>
+          <div className="empty-state-title">Không thể tải dữ liệu hiệu suất</div>
+          <div className="empty-state-desc">{error || 'Dữ liệu chưa sẵn sàng, vui lòng thử lại.'}</div>
+          <div className="mt-6">
+            <button className="btn btn-primary" onClick={fetchPerformance}>Thử lại</button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -50,7 +73,7 @@ export default function PerformancePage() {
         <p className="page-subtitle">Theo dõi tiến độ đóng góp và hoạt động của các thành viên</p>
       </div>
 
-      <div className="grid grid-3">
+      <div className="grid grid-2">
         {data.users.map((member) => (
           <div key={member.id} className="card">
             <div className="card-header">
@@ -80,7 +103,7 @@ export default function PerformancePage() {
                     <span className="font-bold">{member.stats.assignedSections} / {data.totalSections}</span>
                   </div>
                   <ProgressBar 
-                    progress={(member.stats.assignedSections / data.totalSections) * 100} 
+                    progress={data.totalSections > 0 ? (member.stats.assignedSections / data.totalSections) * 100 : 0} 
                     showPerc={false}
                   />
                 </div>

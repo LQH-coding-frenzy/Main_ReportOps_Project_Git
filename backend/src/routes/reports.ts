@@ -60,6 +60,7 @@ router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) 
         id: b.id,
         buildType: b.buildType,
         status: b.status,
+        buildLog: b.buildLog,
         storageKeyDocx: b.storageKeyDocx,
         storageKeyPdf: b.storageKeyPdf,
         triggeredBy: b.triggeredBy,
@@ -76,12 +77,65 @@ router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) 
 });
 
 /**
+ * GET /api/reports/performance
+ * Get performance metrics for leaders.
+ */
+router.get('/performance', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      include: {
+        assignments: true,
+        auditLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        },
+      },
+    });
+
+    const totalSectionsCount = await prisma.section.count();
+
+    const performance = users.map((u) => {
+      const editLogs = u.auditLogs.filter((l) => l.action === 'save_document' || l.action === 'edit_section');
+      const lastActive = u.auditLogs[0]?.createdAt || null;
+
+      return {
+        id: u.id,
+        displayName: u.displayName,
+        githubUsername: u.githubUsername,
+        avatarUrl: u.avatarUrl,
+        role: u.role,
+        stats: {
+          assignedSections: u.assignments.length,
+          totalEdits: editLogs.length,
+          lastActive,
+        },
+      };
+    });
+
+    res.json({
+      data: {
+        users: performance,
+        totalSections: totalSectionsCount,
+      },
+      status: 200,
+    });
+  } catch (error) {
+    console.error('Performance analytics error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
  * GET /api/reports/:id
  * Get a report build detail with download link.
  */
 router.get('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
   try {
     const buildId = parseInt(req.params.id, 10);
+    if (Number.isNaN(buildId)) {
+      res.status(400).json({ error: 'Invalid report build id', status: 400 });
+      return;
+    }
 
     const build = await prisma.reportBuild.findUnique({
       where: { id: buildId },
@@ -148,55 +202,6 @@ router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Resp
     console.error('Delete report error:', error);
     const msg = error instanceof Error ? error.message : 'Failed to delete report';
     res.status(400).json({ error: msg, status: 400 });
-  }
-});
-
-/**
- * GET /api/reports/performance
- * Get performance metrics for leaders.
- */
-router.get('/performance', requireAuth, requireLeader, async (req: Request, res: Response) => {
-  try {
-    const users = await prisma.user.findMany({
-      include: {
-        assignments: true,
-        auditLogs: {
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        },
-      },
-    });
-
-    const totalSectionsCount = await prisma.section.count();
-
-    const performance = users.map((u) => {
-      const editLogs = u.auditLogs.filter(l => l.action === 'save_document' || l.action === 'edit_section');
-      const lastActive = u.auditLogs[0]?.createdAt || null;
-      
-      return {
-        id: u.id,
-        displayName: u.displayName,
-        githubUsername: u.githubUsername,
-        avatarUrl: u.avatarUrl,
-        role: u.role,
-        stats: {
-          assignedSections: u.assignments.length,
-          totalEdits: editLogs.length,
-          lastActive,
-        }
-      };
-    });
-
-    res.json({
-      data: {
-        users: performance,
-        totalSections: totalSectionsCount,
-      },
-      status: 200,
-    });
-  } catch (error) {
-    console.error('Performance analytics error:', error);
-    res.status(500).json({ error: 'Internal server error', status: 500 });
   }
 });
 

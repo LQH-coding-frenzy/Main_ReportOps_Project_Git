@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { createEmptyDocx, downloadFile, fileExists, uploadFile } from './storage';
+import { createEmptyDocx, deleteFile, downloadFile, fileExists, uploadFile } from './storage';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const DocxMerger: {
@@ -10,6 +10,28 @@ const DocxMerger: {
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const prisma = new PrismaClient();
+
+const BUILD_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_PARALLEL_SECTION_IO = 4;
+
+async function runWithConcurrencyLimit<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<void>
+): Promise<void> {
+  if (items.length === 0) return;
+
+  let cursor = 0;
+  const slots = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(items[index], index);
+    }
+  });
+
+  await Promise.all(slots);
+}
 
 async function mergeDocxBuffers(buffers: Buffer[]): Promise<Buffer> {
   if (buffers.length === 1) {
@@ -80,6 +102,11 @@ async function ensureDocumentForSection(section: {
  */
 async function processReportBuild(buildId: number): Promise<void> {
   const logs: string[] = [];
+  let timedOut = false;
+  let finalPreviewKey: string | null = null;
+  const perSectionSnapshotKeys: string[] = [];
+  const startedAt = Date.now();
+  const buildTag = `[Build #${buildId}]`;
   
   const updateLogs = async (newLog: string) => {
     logs.push(newLog);
@@ -91,7 +118,8 @@ async function processReportBuild(buildId: number): Promise<void> {
   
   // 5 minute timeout for the entire process
   const timeout = setTimeout(async () => {
-    console.error(`[Build #${buildId}] Timed out after 5 minutes`);
+    timedOut = true;
+    console.error(`${buildTag} Timed out after 5 minutes`);
     await prisma.reportBuild.update({
       where: { id: buildId },
       data: {
@@ -100,7 +128,7 @@ async function processReportBuild(buildId: number): Promise<void> {
         completedAt: new Date(),
       },
     }).catch(console.error);
-  }, 5 * 60 * 1000);
+  }, BUILD_TIMEOUT_MS);
 
   try {
     const build = await prisma.reportBuild.findUnique({ where: { id: buildId } });
@@ -114,28 +142,31 @@ async function processReportBuild(buildId: number): Promise<void> {
       include: { documents: true },
     });
 
-    const sectionBuffers: Array<{ code: string; buffer: Buffer }> = [];
+    const sectionBuffers: Array<{ code: string; buffer: Buffer } | undefined> = [];
     const missingSections: string[] = [];
 
-    for (const section of sections) {
+    const indexedSections = sections.map((section, index) => ({ section, index }));
+
+    await runWithConcurrencyLimit(indexedSections, MAX_PARALLEL_SECTION_IO, async ({ section, index }) => {
+      if (timedOut) return;
+
       const { storageKey } = await ensureDocumentForSection(section);
+      const localEmptyDoc = createEmptyDocx();
 
       try {
         const exists = await fileExists(storageKey);
         if (!exists) {
-          const emptyDocx = createEmptyDocx();
-          await uploadFile(storageKey, emptyDocx);
+          await uploadFile(storageKey, localEmptyDoc);
           await updateLogs(`🧱 Section ${section.code}: initialized missing document in storage`);
         }
 
         const buffer = await downloadFile(storageKey);
-        sectionBuffers.push({ code: section.code, buffer });
+        sectionBuffers[index] = { code: section.code, buffer };
         await updateLogs(`✅ Section ${section.code}: Downloaded (${buffer.length} bytes)`);
       } catch (error) {
         try {
-          const emptyDocx = createEmptyDocx();
-          await uploadFile(storageKey, emptyDocx);
-          sectionBuffers.push({ code: section.code, buffer: emptyDocx });
+          await uploadFile(storageKey, localEmptyDoc);
+          sectionBuffers[index] = { code: section.code, buffer: localEmptyDoc };
           await updateLogs(`⚠️ Section ${section.code}: recovered with empty document after download failure`);
         } catch {
           await updateLogs(
@@ -144,58 +175,96 @@ async function processReportBuild(buildId: number): Promise<void> {
           missingSections.push(section.code);
         }
       }
+    });
+
+    if (timedOut) {
+      return;
     }
+
+    const orderedSectionBuffers = sectionBuffers.filter(
+      (item): item is { code: string; buffer: Buffer } => Boolean(item)
+    );
 
     if (missingSections.length > 0) {
       throw new Error(`Missing or unreadable documents for sections: ${missingSections.join(', ')}`);
     }
 
-    if (sectionBuffers.length === 0) {
+    if (orderedSectionBuffers.length === 0) {
       throw new Error('No section documents available for report generation');
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const previewKey = `reports/previews/report-preview-${timestamp}.docx`;
+    finalPreviewKey = `reports/previews/report-preview-${timestamp}.docx`;
 
     // Upload each section individually to the reports directory
-    for (const { code, buffer } of sectionBuffers) {
+    for (const { code, buffer } of orderedSectionBuffers) {
       const sectionKey = `reports/previews/${timestamp}/section-${code}.docx`;
       await uploadFile(sectionKey, buffer);
+      perSectionSnapshotKeys.push(sectionKey);
     }
-    await updateLogs(`📁 Uploaded ${sectionBuffers.length} sections to preview bundle metadata`);
+    await updateLogs(`📁 Uploaded ${orderedSectionBuffers.length} sections to preview bundle metadata`);
 
-    const validSections = sectionBuffers.filter((s) => {
+    const validSections = orderedSectionBuffers.filter((s) => {
       // Skip placeholders that are known to be corrupted or empty
       if (s.buffer.length < 2000) {
-        logs.push(`ℹ️ Section ${s.code}: Skipped merging. File size (${s.buffer.length} bytes) is below the 2KB threshold.`);
+        logs.push(
+          `ℹ️ Section ${s.code}: Skipped merging. File size (${s.buffer.length} bytes) is below the 2KB threshold.`
+        );
         return false;
       }
       return true;
     });
 
     if (validSections.length === 0) {
-      throw new Error('No valid section documents available to merge');
+      const fallbackDoc = createEmptyDocx();
+      await uploadFile(finalPreviewKey, fallbackDoc);
+      await updateLogs('ℹ️ All sections are currently empty. Published an empty preview template.');
+
+      await prisma.reportBuild.update({
+        where: { id: buildId },
+        data: {
+          status: 'completed',
+          storageKeyDocx: finalPreviewKey,
+          buildLog: logs.join('\n'),
+          completedAt: new Date(),
+        },
+      });
+      return;
     }
 
     const mergedBuffer = await mergeDocxBuffers(validSections.map((s) => s.buffer));
     await updateLogs(`🧩 Merged ${validSections.length} sections into preview document (${mergedBuffer.length} bytes)`);
 
-    await uploadFile(previewKey, mergedBuffer);
+    await uploadFile(finalPreviewKey, mergedBuffer);
     await updateLogs('📤 Uploaded final merged document to storage.');
+
+    const durationMs = Date.now() - startedAt;
+    await updateLogs(`⏱️ Completed in ${(durationMs / 1000).toFixed(1)}s.`);
 
     await prisma.reportBuild.update({
       where: { id: buildId },
       data: {
         status: 'completed',
-        storageKeyDocx: previewKey,
+        storageKeyDocx: finalPreviewKey,
         buildLog: logs.join('\n'),
         completedAt: new Date(),
       },
     });
   } catch (error) {
+    if (timedOut) {
+      return;
+    }
+
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[Build #${buildId}] Failed:`, errorMsg);
+    console.error(`${buildTag} Failed:`, errorMsg);
     logs.push(`❌ Build failed: ${errorMsg}`);
+
+    if (finalPreviewKey) {
+      await deleteFile(finalPreviewKey).catch(() => undefined);
+    }
+    if (perSectionSnapshotKeys.length > 0) {
+      await Promise.all(perSectionSnapshotKeys.map((key) => deleteFile(key).catch(() => undefined)));
+    }
 
     await prisma.reportBuild.update({
       where: { id: buildId },

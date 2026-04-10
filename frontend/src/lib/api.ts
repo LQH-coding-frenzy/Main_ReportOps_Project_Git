@@ -1,4 +1,14 @@
-import type { ApiResponse, User, Section, EditorConfigResponse, ReportBuild, Release, PaginatedResponse, AuditLogEntry } from './types';
+import type {
+  ApiResponse,
+  User,
+  Section,
+  EditorConfigResponse,
+  ReportBuild,
+  Release,
+  PaginatedResponse,
+  AuditLogEntry,
+  PerformanceData,
+} from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -113,7 +123,7 @@ export async function getAuditLogs(page: number = 1, limit: number = 50): Promis
 
 // ── Performance ──
 
-export async function getPerformance(): Promise<{ users: any[], totalSections: number }> {
-  const res = await apiFetch<ApiResponse<{ users: any[], totalSections: number }>>('/api/reports/performance');
+export async function getPerformance(): Promise<PerformanceData> {
+  const res = await apiFetch<ApiResponse<PerformanceData>>('/api/reports/performance');
   return res.data;
 }

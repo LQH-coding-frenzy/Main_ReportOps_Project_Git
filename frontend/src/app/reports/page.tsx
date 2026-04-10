@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { getCurrentUser, getReports, triggerPreviewBuild, getReport, deleteReport, getSections } from '../../lib/api';
 import type { User, ReportBuild } from '../../lib/types';
 import { useToast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
-import { ProgressBar } from '../../components/ui/ProgressBar';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 export default function ReportsPage() {
@@ -101,6 +101,17 @@ export default function ReportsPage() {
     return Math.min(95, 5 + sectionProgress);
   };
 
+  const getStatusPillClass = (status: ReportBuild['status']) => {
+    if (status === 'completed') return 'build-status-pill is-completed';
+    if (status === 'failed') return 'build-status-pill is-failed';
+    if (status === 'building') return 'build-status-pill is-building';
+    return 'build-status-pill is-pending';
+  };
+
+  const getBuildingPillStyle = (progress: number): CSSProperties => {
+    return { '--pill-progress': `${Math.round(progress)}%` } as CSSProperties;
+  };
+
   if (loading) {
     return (
       <div className="loading-page">
@@ -157,22 +168,27 @@ export default function ReportsPage() {
                   </td>
                   <td>
                     <div className="flex flex-col gap-1" style={{ minWidth: '150px' }}>
+                      {(() => {
+                        const progress = calculateProgress(r);
+                        if (r.status === 'building') {
+                          return (
+                            <span className={getStatusPillClass(r.status)} style={getBuildingPillStyle(progress)}>
+                              <span>
+                                building
+                                <span className="font-mono">{Math.round(progress)}%</span>
+                              </span>
+                            </span>
+                          );
+                        }
+
+                        return (
                       <span
-                        className={`badge ${
-                          r.status === 'completed'
-                            ? 'badge-success'
-                            : r.status === 'failed'
-                              ? 'badge-danger'
-                              : r.status === 'building'
-                                ? 'badge-warning'
-                                : 'badge-info'
-                        }`}
+                        className={getStatusPillClass(r.status)}
                       >
-                        {r.status}
+                        <span>{r.status}</span>
                       </span>
-                      {r.status === 'building' && (
-                        <ProgressBar progress={calculateProgress(r)} showPerc={true} />
-                      )}
+                        );
+                      })()}
                       {r.status === 'failed' && (
                         <button 
                           onClick={() => setSelectedLog(r.buildLog ?? null)} 
