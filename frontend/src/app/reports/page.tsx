@@ -222,7 +222,7 @@ export default function ReportsPage() {
                     )}
                   </td>
                   <td>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" style={{ flexWrap: 'wrap', rowGap: '6px' }}>
                       {r.status === 'completed' && (
                         <>
                           <a
@@ -259,11 +259,12 @@ export default function ReportsPage() {
                         Log
                       </button>
 
-                      {r.status === 'failed' && (
+                      {((r.buildType === 'preview' && !r.release && r.status !== 'building' && r.status !== 'pending') ||
+                        r.status === 'failed') && (
                         <button
                           onClick={() => setDeleteId(r.id)}
                           className="btn btn-ghost btn-danger btn-sm"
-                          title="Xóa bản build lỗi"
+                          title="Xóa bản preview"
                         >
                           🗑️
                         </button>
