@@ -239,6 +239,15 @@ export default function ReportsPage() {
                           >
                             <span>⬇️</span> DOCX
                           </button>
+                          {!r.release && r.buildType === 'preview' && (
+                            <a
+                              href={`/releases?buildId=${r.id}`}
+                              className="btn btn-secondary btn-sm flex items-center gap-1"
+                              title="Freeze preview thành release"
+                            >
+                              <span>🚀</span> Release
+                            </a>
+                          )}
                         </>
                       )}
                       
