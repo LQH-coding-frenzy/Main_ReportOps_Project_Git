@@ -4,6 +4,7 @@ import type {
   Section,
   EditorConfigResponse,
   ReportBuild,
+  PreviewBuildTriggerResult,
   Release,
   PaginatedResponse,
   AuditLogEntry,
@@ -85,8 +86,8 @@ export async function getReport(id: number): Promise<ReportBuild> {
   return res.data;
 }
 
-export async function triggerPreviewBuild(): Promise<ReportBuild> {
-  const res = await apiFetch<ApiResponse<ReportBuild>>('/api/reports/preview', {
+export async function triggerPreviewBuild(): Promise<PreviewBuildTriggerResult> {
+  const res = await apiFetch<ApiResponse<PreviewBuildTriggerResult>>('/api/reports/preview', {
     method: 'POST',
   });
   return res.data;

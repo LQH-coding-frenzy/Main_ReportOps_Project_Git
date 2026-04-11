@@ -121,6 +121,15 @@ export interface ReportBuild {
   downloadUrlPdf?: string | null;
 }
 
+export interface PreviewBuildTriggerResult {
+  buildId: number;
+  storageKeyDocx: string | null;
+  storageKeyPdf: string | null;
+  status: 'pending' | 'building' | 'completed' | 'failed';
+  log: string;
+  reusedExisting: boolean;
+}
+
 export interface PerformanceUser {
   id: number;
   displayName: string | null;

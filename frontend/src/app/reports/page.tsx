@@ -52,13 +52,18 @@ export default function ReportsPage() {
 
   // Use the shared hook for polling when a build is active
   const hasActiveBuild = reports.some(r => r.status === 'building' || r.status === 'pending');
+  const buildButtonBusy = building || hasActiveBuild;
   usePolling(fetchReports, 3000, hasActiveBuild);
 
   const handleBuildPreview = useCallback(async () => {
     setBuilding(true);
     try {
-      await triggerPreviewBuild();
-      showToast('Đang bắt đầu build preview...', 'info');
+      const result = await triggerPreviewBuild();
+      if (result.reusedExisting) {
+        showToast(`Build #${result.buildId} đang xử lý. Đang theo dõi tiến độ hiện tại...`, 'info');
+      } else {
+        showToast(`Đã xếp hàng build preview #${result.buildId}.`, 'info');
+      }
       await fetchReports();
     } catch (err) {
       showToast(`Build thất bại: ${err instanceof Error ? err.message : 'Lỗi hệ thống'}`, 'error');
@@ -130,12 +135,12 @@ export default function ReportsPage() {
         </div>
         <button
           onClick={handleBuildPreview}
-          disabled={building}
+          disabled={buildButtonBusy}
           className="btn btn-primary btn-lg"
         >
-          {building ? (
+          {buildButtonBusy ? (
             <>
-              <div className="spinner" /> Đang build...
+              <div className="spinner" /> {hasActiveBuild ? 'Build đang chạy...' : 'Đang build...'}
             </>
           ) : (
             '🔨 Build Preview'
@@ -190,11 +195,11 @@ export default function ReportsPage() {
                         );
                       })()}
                       {r.status === 'failed' && (
-                        <button 
-                          onClick={() => setSelectedLog(r.buildLog ?? null)} 
-                          className="text-[10px] text-accent-danger hover:underline text-left mt-1"
+                        <button
+                          onClick={() => setSelectedLog(r.buildLog ?? null)}
+                          className="btn btn-ghost btn-sm report-error-log-btn mt-1"
                         >
-                          Xem chi tiết lỗi →
+                          ⚠ Xem chi tiết lỗi
                         </button>
                       )}
                     </div>

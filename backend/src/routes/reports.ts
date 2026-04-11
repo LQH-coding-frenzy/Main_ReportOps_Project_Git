@@ -16,17 +16,19 @@ router.post('/preview', requireAuth, requireLeader, async (req: Request, res: Re
   try {
     const result = await buildPreviewReport(req.user!.id);
 
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user!.id,
-        action: 'generate_report',
-        details: {
-          buildId: result.buildId,
-          buildType: 'preview',
-          status: result.status,
+    if (!result.reusedExisting) {
+      await prisma.auditLog.create({
+        data: {
+          userId: req.user!.id,
+          action: 'generate_report',
+          details: {
+            buildId: result.buildId,
+            buildType: 'preview',
+            status: result.status,
+          },
         },
-      },
-    });
+      });
+    }
 
     res.json({
       data: result,

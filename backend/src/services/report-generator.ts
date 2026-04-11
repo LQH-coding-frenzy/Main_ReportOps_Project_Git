@@ -13,6 +13,26 @@ const prisma = new PrismaClient();
 
 const BUILD_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_PARALLEL_SECTION_IO = 4;
+const ACTIVE_PREVIEW_BUILD_STATUSES = ['pending', 'building'] as const;
+const PREVIEW_BUILD_LOCK_KEY = 47261591;
+
+type ActivePreviewBuildStatus = (typeof ACTIVE_PREVIEW_BUILD_STATUSES)[number];
+
+const buildQueue: number[] = [];
+let queueWorkerRunning = false;
+let activeBuildId: number | null = null;
+
+function splitBuildLog(buildLog: string | null): string[] {
+  if (!buildLog) return [];
+  return buildLog
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
+}
+
+function serializeBuildLog(lines: string[]): string | null {
+  return lines.length > 0 ? lines.join('\n') : null;
+}
 
 async function runWithConcurrencyLimit<T>(
   items: T[],
@@ -57,8 +77,9 @@ interface ReportBuildResult {
   buildId: number;
   storageKeyDocx: string | null;
   storageKeyPdf: string | null;
-  status: 'building' | 'completed' | 'failed';
+  status: ActivePreviewBuildStatus | 'completed' | 'failed';
   log: string;
+  reusedExisting: boolean;
 }
 
 async function ensureDocumentForSection(section: {
@@ -94,6 +115,81 @@ async function ensureDocumentForSection(section: {
   };
 }
 
+function enqueueBuild(buildId: number): void {
+  if (activeBuildId === buildId || buildQueue.includes(buildId)) {
+    return;
+  }
+
+  buildQueue.push(buildId);
+  void drainBuildQueue();
+}
+
+async function drainBuildQueue(): Promise<void> {
+  if (queueWorkerRunning) {
+    return;
+  }
+
+  queueWorkerRunning = true;
+
+  try {
+    while (buildQueue.length > 0) {
+      const nextBuildId = buildQueue.shift();
+      if (typeof nextBuildId !== 'number') {
+        continue;
+      }
+
+      activeBuildId = nextBuildId;
+
+      try {
+        await processReportBuild(nextBuildId);
+      } catch (error) {
+        console.error(`[Build #${nextBuildId}] Queue worker failed:`, error);
+      } finally {
+        activeBuildId = null;
+      }
+    }
+  } finally {
+    queueWorkerRunning = false;
+
+    if (buildQueue.length > 0) {
+      void drainBuildQueue();
+    }
+  }
+}
+
+export async function resumeInFlightPreviewBuilds(): Promise<number> {
+  const restartMessage = '♻️ Server restart detected. Re-queued preview build.';
+
+  const activeBuilds = await prisma.reportBuild.findMany({
+    where: {
+      buildType: 'preview',
+      status: {
+        in: [...ACTIVE_PREVIEW_BUILD_STATUSES],
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  for (const build of activeBuilds) {
+    const logs = splitBuildLog(build.buildLog);
+    if (logs[logs.length - 1] !== restartMessage) {
+      logs.push(restartMessage);
+    }
+
+    await prisma.reportBuild.update({
+      where: { id: build.id },
+      data: {
+        status: 'pending',
+        buildLog: serializeBuildLog(logs),
+      },
+    });
+
+    enqueueBuild(build.id);
+  }
+
+  return activeBuilds.length;
+}
+
 /**
  * Build a preview report by collecting all section documents.
  */
@@ -107,32 +203,48 @@ async function processReportBuild(buildId: number): Promise<void> {
   const perSectionSnapshotKeys: string[] = [];
   const startedAt = Date.now();
   const buildTag = `[Build #${buildId}]`;
+  let timeout: NodeJS.Timeout | null = null;
   
   const updateLogs = async (newLog: string) => {
     logs.push(newLog);
     await prisma.reportBuild.update({
       where: { id: buildId },
-      data: { buildLog: logs.join('\n') },
+      data: { buildLog: serializeBuildLog(logs) },
     });
   };
-  
-  // 5 minute timeout for the entire process
-  const timeout = setTimeout(async () => {
-    timedOut = true;
-    console.error(`${buildTag} Timed out after 5 minutes`);
-    await prisma.reportBuild.update({
-      where: { id: buildId },
-      data: {
-        status: 'failed',
-        buildLog: logs.join('\n') + '\n❌ Error: Build timed out after 5 minutes.',
-        completedAt: new Date(),
-      },
-    }).catch(console.error);
-  }, BUILD_TIMEOUT_MS);
 
   try {
     const build = await prisma.reportBuild.findUnique({ where: { id: buildId } });
-    if (!build) return;
+    if (!build || build.status === 'completed' || build.status === 'failed') {
+      return;
+    }
+
+    logs.push(...splitBuildLog(build.buildLog));
+
+    await prisma.reportBuild.update({
+      where: { id: buildId },
+      data: {
+        status: 'building',
+        completedAt: null,
+        buildLog: serializeBuildLog(logs),
+      },
+    });
+
+    // 5 minute timeout for the entire process
+    timeout = setTimeout(async () => {
+      timedOut = true;
+      console.error(`${buildTag} Timed out after 5 minutes`);
+      await prisma.reportBuild
+        .update({
+          where: { id: buildId },
+          data: {
+            status: 'failed',
+            buildLog: serializeBuildLog([...logs, '❌ Error: Build timed out after 5 minutes.']),
+            completedAt: new Date(),
+          },
+        })
+        .catch(console.error);
+    }, BUILD_TIMEOUT_MS);
 
     await updateLogs('🚀 Starting report generation process...');
 
@@ -204,16 +316,17 @@ async function processReportBuild(buildId: number): Promise<void> {
     }
     await updateLogs(`📁 Uploaded ${orderedSectionBuffers.length} sections to preview bundle metadata`);
 
-    const validSections = orderedSectionBuffers.filter((s) => {
-      // Skip placeholders that are known to be corrupted or empty
-      if (s.buffer.length < 2000) {
-        logs.push(
-          `ℹ️ Section ${s.code}: Skipped merging. File size (${s.buffer.length} bytes) is below the 2KB threshold.`
+    const validSections: Array<{ code: string; buffer: Buffer }> = [];
+    for (const sectionBuffer of orderedSectionBuffers) {
+      if (sectionBuffer.buffer.length < 2000) {
+        await updateLogs(
+          `ℹ️ Section ${sectionBuffer.code}: Skipped merging. File size (${sectionBuffer.buffer.length} bytes) is below the 2KB threshold.`
         );
-        return false;
+        continue;
       }
-      return true;
-    });
+
+      validSections.push(sectionBuffer);
+    }
 
     if (validSections.length === 0) {
       const fallbackDoc = createEmptyDocx();
@@ -225,7 +338,7 @@ async function processReportBuild(buildId: number): Promise<void> {
         data: {
           status: 'completed',
           storageKeyDocx: finalPreviewKey,
-          buildLog: logs.join('\n'),
+          buildLog: serializeBuildLog(logs),
           completedAt: new Date(),
         },
       });
@@ -246,7 +359,7 @@ async function processReportBuild(buildId: number): Promise<void> {
       data: {
         status: 'completed',
         storageKeyDocx: finalPreviewKey,
-        buildLog: logs.join('\n'),
+        buildLog: serializeBuildLog(logs),
         completedAt: new Date(),
       },
     });
@@ -270,12 +383,14 @@ async function processReportBuild(buildId: number): Promise<void> {
       where: { id: buildId },
       data: {
         status: 'failed',
-        buildLog: logs.join('\n'),
+        buildLog: serializeBuildLog(logs),
         completedAt: new Date(),
       },
     }).catch(console.error);
   } finally {
-    clearTimeout(timeout);
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 }
 
@@ -309,24 +424,56 @@ export async function deleteReportBuild(id: number): Promise<void> {
  * This function is now asynchronous and returns the initial build record immediately.
  */
 export async function buildPreviewReport(triggeredById: number): Promise<ReportBuildResult> {
-  const build = await prisma.reportBuild.create({
-    data: {
-      buildType: 'preview',
-      status: 'building',
-      triggeredById,
-    },
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PREVIEW_BUILD_LOCK_KEY})`;
+
+    const activeBuild = await tx.reportBuild.findFirst({
+      where: {
+        buildType: 'preview',
+        status: {
+          in: [...ACTIVE_PREVIEW_BUILD_STATUSES],
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        status: true,
+        storageKeyDocx: true,
+        storageKeyPdf: true,
+        buildLog: true,
+      },
+    });
+
+    if (activeBuild) {
+      return {
+        buildId: activeBuild.id,
+        storageKeyDocx: activeBuild.storageKeyDocx,
+        storageKeyPdf: activeBuild.storageKeyPdf,
+        status: activeBuild.status as ActivePreviewBuildStatus,
+        log: activeBuild.buildLog || 'A preview build is already in progress.',
+        reusedExisting: true,
+      } satisfies ReportBuildResult;
+    }
+
+    const build = await tx.reportBuild.create({
+      data: {
+        buildType: 'preview',
+        status: 'pending',
+        triggeredById,
+        buildLog: '🕒 Build queued. Waiting for processing...',
+      },
+    });
+
+    return {
+      buildId: build.id,
+      storageKeyDocx: null,
+      storageKeyPdf: null,
+      status: 'pending',
+      log: build.buildLog ?? 'Build queued.',
+      reusedExisting: false,
+    } satisfies ReportBuildResult;
   });
 
-  // Start background process without awaiting it
-  processReportBuild(build.id).catch((err) => {
-    console.error(`Fatal background build error for #${build.id}:`, err);
-  });
-
-  return {
-    buildId: build.id,
-    storageKeyDocx: null,
-    storageKeyPdf: null,
-    status: 'building', // Return current status
-    log: 'Build initialized...',
-  };
+  enqueueBuild(result.buildId);
+  return result;
 }
