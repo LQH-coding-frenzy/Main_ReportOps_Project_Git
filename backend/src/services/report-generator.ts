@@ -72,7 +72,10 @@ async function mergeDocxBuffers(
 
     worker.on('message', (message) => {
       if (message.status === 'success') {
-        resolve({ buffer: message.data, recovered: message.recovered || [] });
+        // Explicitly reconstruct the Buffer from the Uint8Array sent by the worker
+        // to ensure bit-perfect binary integrity for MS Word compatibility.
+        const finalBuffer = Buffer.from(message.data);
+        resolve({ buffer: finalBuffer, recovered: message.recovered || [] });
       } else {
         reject(new Error(message.error || 'Unknown worker error'));
       }
@@ -365,6 +368,8 @@ async function processReportBuild(buildId: number): Promise<void> {
     const fallback = createEmptyDocx();
     await updateLogs('🧩 Merging documents (this may take a few minutes for large reports)...');
     const { buffer: mergedBuffer, recovered } = await mergeDocxBuffers(orderedSectionBuffers, fallback);
+    
+    await updateLogs(`🧩 Document merge complete. Final size: ${mergedBuffer.length} bytes.`);
     
     if (recovered.length > 0) {
       await updateLogs(`⚠️ Warning: Recovered ${recovered.length} corrupt sections with blank pages: ${recovered.join(', ')}`);
