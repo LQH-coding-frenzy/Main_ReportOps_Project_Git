@@ -47,14 +47,12 @@ async function runWithConcurrencyLimit<T>(
   await Promise.all(slots);
 }
 
-async function mergeDocxBuffers(buffers: Buffer[]): Promise<Buffer> {
-  if (buffers.length === 1) {
-    return buffers[0];
+async function mergeDocxBuffers(sections: Array<{ code: string; buffer: Buffer }>): Promise<Buffer> {
+  if (sections.length === 1) {
+    return sections[0].buffer;
   }
 
   return new Promise<Buffer>((resolve, reject) => {
-    // Determine the path to the worker file. 
-    // In dev (ts-node), we use the .ts file. In prod (tsc), we use the .js file.
     const isTsNode = process.argv.some(arg => arg.includes('ts-node'));
     const workerPath = path.resolve(
       __dirname, 
@@ -62,7 +60,7 @@ async function mergeDocxBuffers(buffers: Buffer[]): Promise<Buffer> {
     );
 
     const worker = new Worker(workerPath, {
-      workerData: { buffers },
+      workerData: { sections },
       execArgv: isTsNode ? ['-r', 'ts-node/register'] : undefined 
     });
 
@@ -326,37 +324,8 @@ async function processReportBuild(buildId: number): Promise<void> {
     }
     await updateLogs(`📁 Uploaded ${orderedSectionBuffers.length} sections to preview bundle metadata`);
 
-    const validSections: Array<{ code: string; buffer: Buffer }> = [];
-    for (const sectionBuffer of orderedSectionBuffers) {
-      if (sectionBuffer.buffer.length < 2000) {
-        await updateLogs(
-          `ℹ️ Section ${sectionBuffer.code}: Skipped merging. File size (${sectionBuffer.buffer.length} bytes) is below the 2KB threshold.`
-        );
-        continue;
-      }
-
-      validSections.push(sectionBuffer);
-    }
-
-    if (validSections.length === 0) {
-      const fallbackDoc = createEmptyDocx();
-      await uploadFile(finalPreviewKey, fallbackDoc);
-      await updateLogs('ℹ️ All sections are currently empty. Published an empty preview template.');
-
-      await prisma.reportBuild.update({
-        where: { id: buildId },
-        data: {
-          status: 'completed',
-          storageKeyDocx: finalPreviewKey,
-          buildLog: serializeBuildLog(logs),
-          completedAt: new Date(),
-        },
-      });
-      return;
-    }
-
-    const mergedBuffer = await mergeDocxBuffers(validSections.map((s) => s.buffer));
-    await updateLogs(`🧩 Merged ${validSections.length} sections into preview document (${mergedBuffer.length} bytes)`);
+    const mergedBuffer = await mergeDocxBuffers(orderedSectionBuffers);
+    await updateLogs(`🧩 Merged ${orderedSectionBuffers.length} sections into preview document (${mergedBuffer.length} bytes)`);
 
     await uploadFile(finalPreviewKey, mergedBuffer);
     await updateLogs('📤 Uploaded final merged document to storage.');
