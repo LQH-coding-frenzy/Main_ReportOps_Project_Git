@@ -1,13 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { createEmptyDocx, deleteFile, downloadFile, fileExists, uploadFile } from './storage';
-
-/* eslint-disable @typescript-eslint/no-require-imports */
-const DocxMerger: {
-  new (options: Record<string, unknown>, files: unknown[]): {
-    save: (type: 'nodebuffer', callback: (data: unknown) => void) => void;
-  };
-} = require('docx-merger');
-/* eslint-enable @typescript-eslint/no-require-imports */
+import { Worker } from 'worker_threads';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -58,18 +52,34 @@ async function mergeDocxBuffers(buffers: Buffer[]): Promise<Buffer> {
     return buffers[0];
   }
 
-  // Convert buffers to binary strings for docx-merger compatibility
-  const binaryFiles = buffers.map((buffer) => buffer.toString('binary'));
-  const merger = new DocxMerger({}, binaryFiles);
-
   return new Promise<Buffer>((resolve, reject) => {
-    try {
-      merger.save('nodebuffer', (data: unknown) => {
-        resolve(Buffer.isBuffer(data) ? data : Buffer.from(data as string, 'binary'));
-      });
-    } catch (error) {
-      reject(error);
-    }
+    // Determine the path to the worker file. 
+    // In dev (ts-node), we use the .ts file. In prod (tsc), we use the .js file.
+    const isTsNode = process.argv.some(arg => arg.includes('ts-node'));
+    const workerPath = path.resolve(
+      __dirname, 
+      isTsNode ? 'report-merger-worker.ts' : 'report-merger-worker.js'
+    );
+
+    const worker = new Worker(workerPath, {
+      workerData: { buffers },
+      execArgv: isTsNode ? ['-r', 'ts-node/register'] : undefined 
+    });
+
+    worker.on('message', (message) => {
+      if (message.status === 'success') {
+        resolve(message.data);
+      } else {
+        reject(new Error(message.error || 'Unknown worker error'));
+      }
+    });
+
+    worker.on('error', reject);
+    worker.on('exit', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Worker stopped with exit code ${code}`));
+      }
+    });
   });
 }
 
