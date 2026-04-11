@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { createEmptyDocx, deleteFile, downloadFile, fileExists, uploadFile } from './storage';
 import { Worker } from 'worker_threads';
 import path from 'path';
+import { env } from '../config/env';
 
 const prisma = new PrismaClient();
 
@@ -64,11 +65,11 @@ async function mergeDocxBuffers(
 
     const worker = new Worker(workerPath, {
       workerData: { sections, fallbackBuffer },
-      execArgv: isTsNode ? ['-r', 'ts-node/register'] : undefined,
+      execArgv: isTsNode ? ['-r', 'ts-node/register/transpile-only'] : [],
       resourceLimits: {
-        maxOldSpaceSizeMb: 4096 // 4GB RAM limit
-      }
-    } as any);
+        maxOldGenerationSizeMb: env.REPORT_MERGE_WORKER_MAX_OLD_GENERATION_MB,
+      },
+    });
 
     worker.on('message', (message) => {
       if (message.status === 'success') {

@@ -31,9 +31,9 @@ npm run build
 # 3. Restart API
 echo "♻️ [3/5] Restarting API server..."
 if pm2 describe reportops-api > /dev/null 2>&1; then
-    pm2 restart reportops-api
+    pm2 reload ecosystem.config.js --only reportops-api --update-env
 else
-    pm2 start ecosystem.config.js
+    pm2 start ecosystem.config.js --only reportops-api --update-env
 fi
 pm2 save
 

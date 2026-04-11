@@ -68,7 +68,11 @@ jobs:
             
             # Restart backend via PM2
             echo "♻️ Restarting API server..."
-            sudo pm2 restart reportops-api || sudo pm2 start ecosystem.config.js --only reportops-api
+            if sudo pm2 describe reportops-api > /dev/null 2>&1; then
+              sudo pm2 reload ecosystem.config.js --only reportops-api --update-env
+            else
+              sudo pm2 start ecosystem.config.js --only reportops-api --update-env
+            fi
             sudo pm2 save
             
             # Restart ONLYOFFICE if docker-compose changed
