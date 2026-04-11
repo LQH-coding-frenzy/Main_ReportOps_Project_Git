@@ -195,6 +195,9 @@ function ReleasesContent() {
         <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-sm)', marginBottom: 'var(--space-6)' }}>
           Freeze một preview build thành phiên bản chính thức và đẩy lên GitHub Releases.
         </p>
+        <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-4)' }}>
+          Lưu ý: Build phải được tải DOCX qua ONLYOFFICE ít nhất một lần để chuẩn hóa artifact trước khi freeze.
+        </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div>

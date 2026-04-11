@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { env } from '../config/env';
 import { downloadFile } from './storage';
+import { isCanonicalPreviewDocxStorageKey } from './report-artifacts';
 
 const prisma = new PrismaClient();
 
@@ -35,6 +36,12 @@ export async function createGitHubRelease(
 
     if (!build.storageKeyDocx) {
       throw new Error('Completed build has no DOCX artifact to release');
+    }
+
+    if (!isCanonicalPreviewDocxStorageKey(build.storageKeyDocx)) {
+      throw new Error(
+        'Build DOCX is not canonicalized via ONLYOFFICE yet. Open report viewer and use DOCX download once before freezing release.'
+      );
     }
 
     // Sanitize tag name (GitHub doesn't allow spaces or special chars in tags)

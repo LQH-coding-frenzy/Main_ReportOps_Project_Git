@@ -130,6 +130,14 @@ export interface PreviewBuildTriggerResult {
   reusedExisting: boolean;
 }
 
+export interface CanonicalizedReportDocxResult {
+  buildId: number;
+  storageKeyDocx: string;
+  downloadUrl: string;
+  canonicalized: boolean;
+  fileSize: number;
+}
+
 export interface PerformanceUser {
   id: number;
   displayName: string | null;

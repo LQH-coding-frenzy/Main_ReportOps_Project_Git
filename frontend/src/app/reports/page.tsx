@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { usePolling } from '../../hooks/usePolling';
-import { getCurrentUser, getReports, triggerPreviewBuild, getReport, deleteReport, getSections } from '../../lib/api';
+import { getCurrentUser, getReports, triggerPreviewBuild, deleteReport, getSections } from '../../lib/api';
 import type { User, ReportBuild } from '../../lib/types';
 import { useToast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
@@ -83,18 +83,9 @@ export default function ReportsPage() {
     setDeleteId(null);
   }, [deleteId, fetchReports, showToast]);
 
-  const handleDownload = useCallback(async (buildId: number) => {
-    try {
-      const detail = await getReport(buildId);
-      if (detail.downloadUrlDocx) {
-        window.open(detail.downloadUrlDocx, '_blank');
-      } else {
-        showToast('Không có file để tải xuống', 'error');
-      }
-    } catch (err) {
-      showToast(`Download failed: ${err instanceof Error ? err.message : 'Lỗi hệ thống'}`, 'error');
-    }
-  }, [showToast]);
+  const handleDownload = useCallback((buildId: number) => {
+    window.open(`/editor/report/${buildId}?download=docx`, '_blank', 'noopener,noreferrer');
+  }, []);
 
   const calculateProgress = (build: ReportBuild) => {
     if (build.status === 'completed') return 100;
