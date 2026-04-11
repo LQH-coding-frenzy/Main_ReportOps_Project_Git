@@ -5,7 +5,7 @@ import type {
   EditorConfigResponse,
   ReportBuild,
   PreviewBuildTriggerResult,
-  CanonicalizedReportDocxResult,
+  ConsumedPreviewResult,
   Release,
   PaginatedResponse,
   AuditLogEntry,
@@ -108,17 +108,10 @@ export async function deleteReport(id: number): Promise<void> {
   await apiFetch(`/api/reports/${id}`, { method: 'DELETE' });
 }
 
-export async function canonicalizeReportDocx(
-  buildId: number,
-  downloadUrl: string
-): Promise<CanonicalizedReportDocxResult> {
-  const res = await apiFetch<ApiResponse<CanonicalizedReportDocxResult>>(
-    `/api/reports/${buildId}/canonicalize-docx`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ downloadUrl }),
-    }
-  );
+export async function consumePreviewBuild(buildId: number): Promise<ConsumedPreviewResult> {
+  const res = await apiFetch<ApiResponse<ConsumedPreviewResult>>(`/api/reports/${buildId}/consume-preview`, {
+    method: 'POST',
+  });
 
   return res.data;
 }

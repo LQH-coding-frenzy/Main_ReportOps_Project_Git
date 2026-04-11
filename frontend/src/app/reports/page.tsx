@@ -17,6 +17,7 @@ export default function ReportsPage() {
   const [building, setBuilding] = useState(false);
   const [selectedLog, setSelectedLog] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [downloadConsumeBuildId, setDownloadConsumeBuildId] = useState<number | null>(null);
   const { showToast } = useToast();
 
   const fetchReports = useCallback(async () => {
@@ -84,8 +85,15 @@ export default function ReportsPage() {
   }, [deleteId, fetchReports, showToast]);
 
   const handleDownload = useCallback((buildId: number) => {
-    window.open(`/editor/report/${buildId}?download=docx`, '_blank', 'noopener,noreferrer');
+    setDownloadConsumeBuildId(buildId);
   }, []);
+
+  const confirmDownloadConsume = useCallback(() => {
+    if (!downloadConsumeBuildId) return;
+    window.open(`/editor/report/${downloadConsumeBuildId}?download=docx&consume=1`, '_blank', 'noopener,noreferrer');
+    setDownloadConsumeBuildId(null);
+    showToast('Đã mở ONLYOFFICE download. Build preview sẽ bị xóa sau khi tải xong.', 'info');
+  }, [downloadConsumeBuildId, showToast]);
 
   const calculateProgress = (build: ReportBuild) => {
     if (build.status === 'completed') return 100;
@@ -289,6 +297,16 @@ export default function ReportsPage() {
         message="Bạn có chắc chắn muốn xóa bản build này? Hành động này cũng sẽ xóa file trên storage và không thể hoàn tác."
         type="danger"
         confirmText="Xóa bản build"
+      />
+
+      <ConfirmModal
+        isOpen={!!downloadConsumeBuildId}
+        onClose={() => setDownloadConsumeBuildId(null)}
+        onConfirm={confirmDownloadConsume}
+        title="Download & Xóa Preview"
+        message="Sau khi bấm xác nhận, hệ thống sẽ mở ONLYOFFICE để tải DOCX trực tiếp. Ngay sau khi URL tải được tạo, preview build này sẽ bị xóa khỏi database và storage để giải phóng bộ nhớ."
+        type="danger"
+        confirmText="Download & Xóa"
       />
     </div>
   );

@@ -196,7 +196,7 @@ function ReleasesContent() {
           Freeze một preview build thành phiên bản chính thức và đẩy lên GitHub Releases.
         </p>
         <p style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-4)' }}>
-          Lưu ý: Build phải được tải DOCX qua ONLYOFFICE ít nhất một lần để chuẩn hóa artifact trước khi freeze.
+          Lưu ý: Hãy đảm bảo build preview bạn chọn là bản muốn lưu trữ lâu dài trước khi freeze.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
@@ -252,9 +252,9 @@ function ReleasesContent() {
         onClose={() => setDeleteId(null)} 
         onConfirm={confirmDelete}
         title="Xóa Release"
-        message="Bạn có chắc chắn muốn xóa bản release này khỏi hệ thống? (Lưu ý: Hành động này không xóa release trên GitHub)"
+        message="Bạn có chắc chắn muốn xóa release này? Hệ thống sẽ xóa release khỏi database, xóa file build khỏi storage, đồng thời xóa release + tag trên GitHub (nếu có)."
         type="danger"
-        confirmText="Xóa bản ghi"
+        confirmText="Xóa Release"
       />
     </div>
   );

@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { canonicalizeReportDocx, getCurrentUser, getReportEditorConfig } from '../../../../lib/api';
+import { consumePreviewBuild, getCurrentUser, getReportEditorConfig } from '../../../../lib/api';
 import { useToast } from '../../../../components/ui/Toast';
 import type { User, EditorConfigResponse } from '../../../../lib/types';
-
-type DownloadState = 'idle' | 'requested' | 'canonicalizing' | 'ready' | 'error';
 
 interface DownloadAsEvent {
   data?: {
@@ -22,10 +20,10 @@ interface OnlyOfficeDocEditor {
   destroyEditor?: () => void;
 }
 
-function triggerDownload(url: string): void {
+function openDownloadUrl(url: string): void {
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.target = '_self';
+  anchor.target = '_blank';
   anchor.rel = 'noopener noreferrer';
   document.body.appendChild(anchor);
   anchor.click();
@@ -45,11 +43,11 @@ export default function ReportViewerPage() {
   const searchParams = useSearchParams();
   const buildId = parseInt(params.buildId as string, 10);
   const shouldAutoDownload = searchParams.get('download') === 'docx';
+  const shouldConsumeAfterDownload = searchParams.get('consume') === '1';
   const [user, setUser] = useState<User | null>(null);
   const [editorData, setEditorData] = useState<EditorConfigResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [downloadState, setDownloadState] = useState<DownloadState>('idle');
   const editorRef = useRef<OnlyOfficeDocEditor | null>(null);
   const scriptLoadedRef = useRef(false);
   const downloadInFlightRef = useRef(false);
@@ -59,6 +57,7 @@ export default function ReportViewerPage() {
   const removeDownloadIntentFromUrl = useCallback(() => {
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.delete('download');
+    nextUrl.searchParams.delete('consume');
     const search = nextUrl.search ? `${nextUrl.search}` : '';
     window.history.replaceState({}, '', `${nextUrl.pathname}${search}`);
   }, []);
@@ -67,7 +66,6 @@ export default function ReportViewerPage() {
     async (event: DownloadAsEvent) => {
       const onlyOfficeUrl = event.data?.url;
       if (!onlyOfficeUrl) {
-        setDownloadState('error');
         showToast('ONLYOFFICE không trả về URL tải file hợp lệ', 'error');
         return;
       }
@@ -77,25 +75,38 @@ export default function ReportViewerPage() {
       }
 
       downloadInFlightRef.current = true;
-      setDownloadState('canonicalizing');
 
       try {
-        const canonicalized = await canonicalizeReportDocx(buildId, onlyOfficeUrl);
-        setDownloadState('ready');
-        showToast('Đã chuẩn hóa DOCX từ ONLYOFFICE. Đang tải xuống...', 'success');
-        triggerDownload(canonicalized.downloadUrl);
+        openDownloadUrl(onlyOfficeUrl);
+
+        if (shouldConsumeAfterDownload) {
+          await consumePreviewBuild(buildId);
+          showToast('Đã tải DOCX và xóa preview build khỏi hệ thống.', 'success');
+          removeDownloadIntentFromUrl();
+          window.setTimeout(() => {
+            window.location.href = '/reports';
+          }, 300);
+          return;
+        }
+
+        showToast('Đang tải DOCX từ ONLYOFFICE...', 'info');
         removeDownloadIntentFromUrl();
       } catch (err) {
-        setDownloadState('error');
-        showToast(
-          `Chuẩn hóa DOCX thất bại: ${err instanceof Error ? err.message : 'Lỗi hệ thống'}`,
-          'error'
-        );
+        if (shouldConsumeAfterDownload) {
+          showToast(
+            `Đã yêu cầu tải DOCX nhưng xóa preview thất bại: ${
+              err instanceof Error ? err.message : 'Lỗi hệ thống'
+            }`,
+            'error'
+          );
+        } else {
+          showToast(`Tải DOCX thất bại: ${err instanceof Error ? err.message : 'Lỗi hệ thống'}`, 'error');
+        }
       } finally {
         downloadInFlightRef.current = false;
       }
     },
-    [buildId, removeDownloadIntentFromUrl, showToast]
+    [buildId, removeDownloadIntentFromUrl, shouldConsumeAfterDownload, showToast]
   );
 
   const requestOnlyOfficeDownload = useCallback(() => {
@@ -109,9 +120,10 @@ export default function ReportViewerPage() {
       return;
     }
 
-    setDownloadState('requested');
     editor.downloadAs('docx');
   }, [showToast]);
+
+  const downloadButtonDisabled = loading || !!error;
 
   useEffect(() => {
     async function init() {
@@ -137,7 +149,6 @@ export default function ReportViewerPage() {
   useEffect(() => {
     if (!editorData || scriptLoadedRef.current) return;
 
-    // Load ONLYOFFICE Document Server API script
     const script = document.createElement('script');
     script.src = `${editorData.documentServerUrl}/web-apps/apps/api/documents/api.js`;
     script.async = true;
@@ -168,17 +179,15 @@ export default function ReportViewerPage() {
 
           if (shouldAutoDownload && !autoDownloadTriggeredRef.current) {
             autoDownloadTriggeredRef.current = true;
-            setDownloadState('requested');
             window.setTimeout(() => {
               const editor = editorRef.current;
               if (!editor || typeof editor.downloadAs !== 'function') {
-                setDownloadState('error');
                 showToast('Không thể kích hoạt tải DOCX từ ONLYOFFICE', 'error');
                 return;
               }
 
               editor.downloadAs('docx');
-            }, 900);
+            }, 800);
           }
         } catch (err) {
           setError(`Viewer initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -191,14 +200,13 @@ export default function ReportViewerPage() {
     script.onerror = () => {
       setError(
         'Không thể kết nối đến ONLYOFFICE Document Server. ' +
-        'Kiểm tra xem Document Server đã chạy chưa và URL đúng không.'
+          'Kiểm tra xem Document Server đã chạy chưa và URL đúng không.'
       );
     };
 
     document.head.appendChild(script);
 
     return () => {
-      // Cleanup on unmount
       try {
         if (editorRef.current && typeof editorRef.current.destroyEditor === 'function') {
           editorRef.current.destroyEditor();
@@ -213,17 +221,6 @@ export default function ReportViewerPage() {
     };
   }, [editorData, handleDownloadAs, shouldAutoDownload, showToast]);
 
-  const downloadStatusLabel =
-    downloadState === 'requested'
-      ? 'Đang yêu cầu ONLYOFFICE tạo DOCX...'
-      : downloadState === 'canonicalizing'
-        ? 'Đang chuẩn hóa DOCX trước khi tải...'
-        : downloadState === 'ready'
-          ? 'DOCX đã chuẩn hóa và sẵn sàng tải'
-          : downloadState === 'error'
-            ? 'Tải DOCX thất bại, vui lòng thử lại'
-            : '';
-
   if (loading) {
     return (
       <div className="loading-page">
@@ -235,7 +232,6 @@ export default function ReportViewerPage() {
 
   return (
     <>
-      {/* Minimal top bar for viewer */}
       <div className="editor-header bg-slate-900 border-b border-white/10">
         <div className="flex items-center gap-4">
           <a href="/reports" className="btn btn-ghost btn-sm">
@@ -245,9 +241,7 @@ export default function ReportViewerPage() {
             <span className="text-xs font-semibold uppercase tracking-wider text-blue-400">
               Preview Mode (Read-Only)
             </span>
-            <span className="text-sm font-medium text-white">
-              Báo cáo đã ghép #{buildId}
-            </span>
+            <span className="text-sm font-medium text-white">Báo cáo đã ghép #{buildId}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -255,8 +249,8 @@ export default function ReportViewerPage() {
             type="button"
             onClick={requestOnlyOfficeDownload}
             className="btn btn-success btn-sm"
-            disabled={downloadState === 'requested' || downloadState === 'canonicalizing'}
-            title="Tải DOCX qua ONLYOFFICE và chuẩn hóa artifact"
+            disabled={downloadButtonDisabled}
+            title="Tải DOCX trực tiếp từ ONLYOFFICE"
           >
             ⬇️ Download DOCX
           </button>
@@ -264,11 +258,11 @@ export default function ReportViewerPage() {
             <>
               <span className="badge badge-primary">Leader</span>
               {user.avatarUrl && (
-                <Image 
-                  src={user.avatarUrl} 
-                  alt="" 
-                  className="navbar-avatar border border-white/20" 
-                  width={32} 
+                <Image
+                  src={user.avatarUrl}
+                  alt=""
+                  className="navbar-avatar border border-white/20"
+                  width={32}
                   height={32}
                   unoptimized
                 />
@@ -278,19 +272,9 @@ export default function ReportViewerPage() {
         </div>
       </div>
 
-      {downloadStatusLabel && (
-        <div className="container" style={{ paddingTop: '8px', paddingBottom: '8px' }}>
-          <span className="text-xs text-muted">{downloadStatusLabel}</span>
-        </div>
-      )}
-
-      {/* Viewer container */}
       <div className="editor-container">
         {error ? (
-          <div
-            className="empty-state"
-            style={{ flex: 1 }}
-          >
+          <div className="empty-state" style={{ flex: 1 }}>
             <div className="empty-state-icon">⚠️</div>
             <div className="empty-state-title">Không thể xem báo cáo</div>
             <div className="empty-state-desc" style={{ maxWidth: 600 }}>
@@ -306,11 +290,7 @@ export default function ReportViewerPage() {
             </div>
           </div>
         ) : (
-          <div
-            id="onlyoffice-report-viewer"
-            className="editor-frame"
-            style={{ flex: 1, width: '100%' }}
-          />
+          <div id="onlyoffice-report-viewer" className="editor-frame" style={{ flex: 1, width: '100%' }} />
         )}
       </div>
     </>

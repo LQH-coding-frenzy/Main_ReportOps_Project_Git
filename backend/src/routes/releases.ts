@@ -2,7 +2,9 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
-import { createGitHubRelease } from '../services/github-release';
+import { createGitHubRelease, deleteGitHubReleaseByVersion } from '../services/github-release';
+import { deleteFile } from '../services/storage';
+import { env } from '../config/env';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -116,9 +118,55 @@ router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) 
 router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
   try {
     const releaseId = parseInt(req.params.id, 10);
-    
-    await prisma.release.delete({
+    if (Number.isNaN(releaseId)) {
+      res.status(400).json({ error: 'Invalid release id', status: 400 });
+      return;
+    }
+
+    const release = await prisma.release.findUnique({
       where: { id: releaseId },
+      include: {
+        reportBuild: true,
+      },
+    });
+
+    if (!release) {
+      res.status(404).json({ error: 'Release not found', status: 404 });
+      return;
+    }
+
+    let githubDeleteResult: { tag: string; releaseDeleted: boolean; tagDeleted: boolean } | null = null;
+
+    if (release.githubReleaseUrl) {
+      if (!env.GITHUB_TOKEN) {
+        res.status(400).json({
+          error: 'GITHUB_TOKEN is required to delete release from GitHub',
+          status: 400,
+        });
+        return;
+      }
+
+      githubDeleteResult = await deleteGitHubReleaseByVersion(release.version);
+    }
+
+    const buildDocxKey = release.reportBuild.storageKeyDocx;
+    const buildPdfKey = release.reportBuild.storageKeyPdf;
+
+    if (buildDocxKey) {
+      await deleteFile(buildDocxKey).catch(() => undefined);
+    }
+    if (buildPdfKey) {
+      await deleteFile(buildPdfKey).catch(() => undefined);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.release.delete({
+        where: { id: release.id },
+      });
+
+      await tx.reportBuild.delete({
+        where: { id: release.reportBuildId },
+      });
     });
 
     // Audit Log
@@ -126,14 +174,22 @@ router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Resp
       data: {
         userId: req.user!.id,
         action: 'delete_release',
-        details: { releaseId },
+        details: {
+          releaseId,
+          reportBuildId: release.reportBuildId,
+          version: release.version,
+          storageKeyDocx: buildDocxKey,
+          storageKeyPdf: buildPdfKey,
+          github: githubDeleteResult,
+        },
       },
     });
 
     res.json({ data: { success: true }, status: 200 });
   } catch (error) {
     console.error('Delete release error:', error);
-    res.status(500).json({ error: 'Internal server error', status: 500 });
+    const msg = error instanceof Error ? error.message : 'Internal server error';
+    res.status(500).json({ error: msg, status: 500 });
   }
 });
 

@@ -917,6 +917,7 @@ tr:hover td {
   justify-content: center;
   padding: var(--space-6);
   animation: fade-in var(--transition-base) forwards;
+  overflow-y: auto;
 }
 
 .modal {

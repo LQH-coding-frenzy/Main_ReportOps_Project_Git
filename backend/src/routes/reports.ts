@@ -2,75 +2,11 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
-import { buildPreviewReport } from '../services/report-generator';
-import { getSignedUrl, uploadFile } from '../services/storage';
-import { env } from '../config/env';
-import { getCanonicalDocxStorageKey } from '../services/report-artifacts';
+import { buildPreviewReport, deleteReportBuild } from '../services/report-generator';
+import { getSignedUrl } from '../services/storage';
 
 const router = Router();
 const prisma = new PrismaClient();
-const MAX_CANONICAL_DOCX_BYTES = 80 * 1024 * 1024;
-
-interface CanonicalizeDocxRequestBody {
-  downloadUrl?: unknown;
-}
-
-function isDefaultPort(protocol: string, port: string): boolean {
-  if (!port) return true;
-  if (protocol === 'https:' && port === '443') return true;
-  if (protocol === 'http:' && port === '80') return true;
-
-  return false;
-}
-
-function isAllowedOnlyOfficeDownloadUrl(rawUrl: string): boolean {
-  try {
-    const configured = new URL(env.ONLYOFFICE_DOCUMENT_SERVER_URL);
-    const candidate = new URL(rawUrl);
-
-    if (candidate.protocol !== configured.protocol) {
-      return false;
-    }
-
-    if (candidate.hostname.toLowerCase() !== configured.hostname.toLowerCase()) {
-      return false;
-    }
-
-    if (configured.port) {
-      return candidate.port === configured.port;
-    }
-
-    return isDefaultPort(candidate.protocol, candidate.port);
-  } catch {
-    return false;
-  }
-}
-
-async function downloadOnlyOfficeDocx(url: string): Promise<Buffer> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`ONLYOFFICE download failed with HTTP ${response.status}`);
-  }
-
-  const contentLengthHeader = response.headers.get('content-length');
-  const contentLength = Number.parseInt(contentLengthHeader || '', 10);
-  if (Number.isFinite(contentLength) && contentLength > MAX_CANONICAL_DOCX_BYTES) {
-    throw new Error('Downloaded DOCX is too large');
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const fileBuffer = Buffer.from(arrayBuffer);
-
-  if (fileBuffer.length === 0) {
-    throw new Error('Downloaded DOCX is empty');
-  }
-
-  if (fileBuffer.length > MAX_CANONICAL_DOCX_BYTES) {
-    throw new Error('Downloaded DOCX exceeds allowed size limit');
-  }
-
-  return fileBuffer;
-}
 
 /**
  * POST /api/reports/preview
@@ -244,10 +180,10 @@ router.get('/:id', requireAuth, requireLeader, async (req: Request, res: Respons
 });
 
 /**
- * POST /api/reports/:id/canonicalize-docx
- * Canonicalize DOCX via ONLYOFFICE download pipeline, then persist artifact in storage.
+ * POST /api/reports/:id/consume-preview
+ * Mark a completed preview as consumed: delete artifact(s) and remove build record.
  */
-router.post('/:id/canonicalize-docx', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/:id/consume-preview', requireAuth, requireLeader, async (req: Request, res: Response) => {
   try {
     const buildId = parseInt(req.params.id, 10);
     if (Number.isNaN(buildId)) {
@@ -255,67 +191,57 @@ router.post('/:id/canonicalize-docx', requireAuth, requireLeader, async (req: Re
       return;
     }
 
-    const { downloadUrl: downloadUrlRaw } = (req.body || {}) as CanonicalizeDocxRequestBody;
-    if (typeof downloadUrlRaw !== 'string' || downloadUrlRaw.trim().length === 0) {
-      res.status(400).json({ error: 'downloadUrl is required', status: 400 });
-      return;
-    }
+    const build = await prisma.reportBuild.findUnique({
+      where: { id: buildId },
+      include: { release: true },
+    });
 
-    if (!isAllowedOnlyOfficeDownloadUrl(downloadUrlRaw)) {
-      res.status(400).json({ error: 'downloadUrl must be an ONLYOFFICE server URL', status: 400 });
-      return;
-    }
-
-    const build = await prisma.reportBuild.findUnique({ where: { id: buildId } });
     if (!build) {
       res.status(404).json({ error: 'Report build not found', status: 404 });
       return;
     }
 
-    if (build.status !== 'completed') {
-      res.status(400).json({ error: 'Only completed report builds can be canonicalized', status: 400 });
+    if (build.buildType !== 'preview') {
+      res.status(400).json({ error: 'Only preview builds can be consumed after download', status: 400 });
       return;
     }
 
-    const canonicalStorageKey = getCanonicalDocxStorageKey(build.id, build.buildType);
-    const fileBuffer = await downloadOnlyOfficeDocx(downloadUrlRaw);
+    if (build.status !== 'completed') {
+      res.status(400).json({ error: 'Only completed preview builds can be consumed', status: 400 });
+      return;
+    }
 
-    await uploadFile(canonicalStorageKey, fileBuffer);
-    await prisma.reportBuild.update({
-      where: { id: build.id },
-      data: {
-        storageKeyDocx: canonicalStorageKey,
-      },
-    });
+    if (build.release) {
+      res.status(409).json({ error: 'Cannot consume a build already linked to a release', status: 409 });
+      return;
+    }
+
+    await deleteReportBuild(build.id);
 
     await prisma.auditLog.create({
       data: {
         userId: req.user!.id,
-        action: 'canonicalize_report_docx',
+        action: 'consume_preview_download',
         details: {
           buildId: build.id,
-          buildType: build.buildType,
-          fileSize: fileBuffer.length,
-          storageKeyDocx: canonicalStorageKey,
+          storageKeyDocx: build.storageKeyDocx,
+          storageKeyPdf: build.storageKeyPdf,
         },
       },
     });
 
-    const signedDownloadUrl = await getSignedUrl(canonicalStorageKey, 3600);
-
     res.json({
       data: {
+        success: true,
+        consumed: true,
         buildId: build.id,
-        storageKeyDocx: canonicalStorageKey,
-        downloadUrl: signedDownloadUrl,
-        canonicalized: true,
-        fileSize: fileBuffer.length,
       },
       status: 200,
     });
   } catch (error) {
-    console.error('Canonicalize report DOCX error:', error);
-    res.status(500).json({ error: 'Failed to canonicalize DOCX via ONLYOFFICE', status: 500 });
+    console.error('Consume preview error:', error);
+    const msg = error instanceof Error ? error.message : 'Failed to consume preview build';
+    res.status(400).json({ error: msg, status: 400 });
   }
 });
 
@@ -326,8 +252,6 @@ router.post('/:id/canonicalize-docx', requireAuth, requireLeader, async (req: Re
 router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
   try {
     const buildId = parseInt(req.params.id, 10);
-    const { deleteReportBuild } = await import('../services/report-generator');
-    
     await deleteReportBuild(buildId);
 
     // Audit Log
