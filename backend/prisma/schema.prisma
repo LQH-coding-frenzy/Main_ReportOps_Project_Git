@@ -94,6 +94,7 @@ model ReportBuild {
   triggeredById  Int
   createdAt      DateTime  @default(now())
   completedAt    DateTime?
+  restartCount   Int       @default(0)
 
   triggeredBy User     @relation(fields: [triggeredById], references: [id])
   release     Release?

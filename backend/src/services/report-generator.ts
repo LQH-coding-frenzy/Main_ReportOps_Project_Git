@@ -64,8 +64,11 @@ async function mergeDocxBuffers(
 
     const worker = new Worker(workerPath, {
       workerData: { sections, fallbackBuffer },
-      execArgv: isTsNode ? ['-r', 'ts-node/register'] : undefined
-    });
+      execArgv: isTsNode ? ['-r', 'ts-node/register'] : undefined,
+      resourceLimits: {
+        maxOldSpaceSizeMb: 4096 // 4GB RAM limit
+      }
+    } as any);
 
     worker.on('message', (message) => {
       if (message.status === 'success') {
@@ -170,6 +173,7 @@ async function drainBuildQueue(): Promise<void> {
 
 export async function resumeInFlightPreviewBuilds(): Promise<number> {
   const restartMessage = '♻️ Server restart detected. Re-queued preview build.';
+  const MAX_RESTARTS = 3;
 
   const activeBuilds = await prisma.reportBuild.findMany({
     where: {
@@ -183,6 +187,23 @@ export async function resumeInFlightPreviewBuilds(): Promise<number> {
 
   for (const build of activeBuilds) {
     const logs = splitBuildLog(build.buildLog);
+    
+    // Check if the build has crashed too many times
+    if (build.restartCount >= MAX_RESTARTS) {
+      console.error(`[Build #${build.id}] Aborted: Too many restart attempts (${build.restartCount}).`);
+      logs.push(`❌ Fatal: Repeated server crashes detected (${build.restartCount} attempts). Build aborted to ensure server stability. Tip: Check for extremely large images or corrupt document formatting.`);
+      
+      await prisma.reportBuild.update({
+        where: { id: build.id },
+        data: {
+          status: 'failed',
+          buildLog: serializeBuildLog(logs),
+          completedAt: new Date(),
+        },
+      });
+      continue;
+    }
+
     if (logs[logs.length - 1] !== restartMessage) {
       logs.push(restartMessage);
     }
@@ -191,6 +212,7 @@ export async function resumeInFlightPreviewBuilds(): Promise<number> {
       where: { id: build.id },
       data: {
         status: 'pending',
+        restartCount: { increment: 1 },
         buildLog: serializeBuildLog(logs),
       },
     });
