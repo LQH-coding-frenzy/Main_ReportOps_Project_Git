@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireSectionAccess } from '../middleware/rbac';
+import { requireSectionAccess, requireLeader } from '../middleware/rbac';
 import { generateEditorConfig, CallbackStatus, verifyCallbackToken } from '../services/onlyoffice';
 import { getSignedUrl, downloadFromUrl, uploadFile, fileExists, createEmptyDocx } from '../services/storage';
 import { env } from '../config/env';

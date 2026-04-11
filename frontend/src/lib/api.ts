@@ -70,17 +70,17 @@ export async function getSection(id: number): Promise<Section> {
 // ── Editor ──
 
 export async function getEditorConfig(sectionId: number): Promise<EditorConfigResponse> {
-  const res = await apiFetch<EditorConfigResponse>(`/editor/config/${sectionId}`);
+  const res = await apiFetch<ApiResponse<EditorConfigResponse>>(`/editor/config/${sectionId}`);
   return res.data;
 }
 
 export async function getReportEditorConfig(buildId: number): Promise<EditorConfigResponse> {
-  const res = await apiFetch<EditorConfigResponse>(`/editor/config/report/${buildId}`);
+  const res = await apiFetch<ApiResponse<EditorConfigResponse>>(`/editor/config/report/${buildId}`);
   return res.data;
 }
 
 export async function submitReportBuild(): Promise<ReportBuild> {
-  const res = await apiFetch<ApiResponse<ReportBuild[]>>('/api/reports');
+  const res = await apiFetch<ApiResponse<ReportBuild>>('/api/reports', { method: 'POST' });
   return res.data;
 }
 

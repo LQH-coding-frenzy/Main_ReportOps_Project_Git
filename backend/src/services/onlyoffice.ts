@@ -43,7 +43,7 @@ interface EditorConfigParams {
   fileName: string;
   userId: number;
   userName: string;
-  sectionId: number;
+  sectionId?: number;
   canEdit: boolean;
   updatedAt: string;
 }
@@ -76,7 +76,7 @@ export function generateEditorConfig(params: EditorConfigParams): OnlyOfficeConf
     },
     documentType: 'word',
     editorConfig: {
-      callbackUrl: `${env.BACKEND_PUBLIC_URL}/api/onlyoffice/callback?sectionId=${sectionId}`,
+      callbackUrl: `${env.BACKEND_PUBLIC_URL}/api/onlyoffice/callback?sectionId=${sectionId || 0}`,
       mode: canEdit ? 'edit' : 'view',
       lang: 'vi', // Vietnamese
       user: {
