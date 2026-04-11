@@ -259,11 +259,24 @@ async function processReportBuild(buildId: number): Promise<void> {
 
     await updateLogs('🚀 Starting report generation process...');
 
-    // Get all sections ordered by sortOrder
-    const sections = await prisma.section.findMany({
+    // Get only sections that have been started (edited at least once)
+    const allSections = await prisma.section.findMany({
       orderBy: { sortOrder: 'asc' },
       include: { documents: true },
     });
+
+    const activeSections = allSections.filter(s => s.documents.some(d => d.lastEditedAt !== null));
+    const skippedCount = allSections.length - activeSections.length;
+
+    if (skippedCount > 0) {
+      await updateLogs(`ℹ️ Skipping ${skippedCount} unstarted/empty sections.`);
+    }
+
+    if (activeSections.length === 0) {
+      throw new Error('No sections have been started yet. Please edit at least one section before building a report.');
+    }
+
+    const sections = activeSections;
 
     const sectionBuffers: Array<{ code: string; buffer: Buffer } | undefined> = [];
     const missingSections: string[] = [];
