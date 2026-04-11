@@ -100,6 +100,56 @@ router.get(
 );
 
 /**
+ * GET /api/editor/config/report/:buildId
+ * Generate ONLYOFFICE editor configuration for a completed report build (read-only).
+ */
+router.get(
+  '/config/report/:buildId',
+  requireAuth,
+  requireLeader,
+  async (req: Request, res: Response) => {
+    try {
+      const buildId = parseInt(req.params.buildId, 10);
+      const user = req.user!;
+
+      const build = await prisma.reportBuild.findUnique({
+        where: { id: buildId },
+      });
+
+      if (!build || !build.storageKeyDocx) {
+        res.status(404).json({ error: 'Report build or document not found', status: 404 });
+        return;
+      }
+
+      // Generate signed URL for ONLYOFFICE to fetch the document
+      const fileUrl = await getSignedUrl(build.storageKeyDocx, 7200);
+
+      const config = generateEditorConfig({
+        fileUrl,
+        fileKey: build.storageKeyDocx,
+        fileName: `Merged_Report_${build.id}.docx`,
+        userId: user.id,
+        userName: user.displayName || user.githubUsername,
+        canEdit: false, // Reports are read-only to preserve section integrity
+        updatedAt: build.createdAt.getTime().toString(),
+      });
+
+      res.json({
+        data: {
+          config,
+          documentServerUrl: env.ONLYOFFICE_DOCUMENT_SERVER_URL,
+          buildId: build.id,
+        },
+        status: 200,
+      });
+    } catch (error) {
+      console.error('Report editor config error:', error);
+      res.status(500).json({ error: 'Failed to generate report viewer config', status: 500 });
+    }
+  }
+);
+
+/**
  * POST /api/onlyoffice/callback
  * Handle ONLYOFFICE Document Server save callbacks.
  *

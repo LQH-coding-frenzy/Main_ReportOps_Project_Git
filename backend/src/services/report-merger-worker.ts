@@ -19,45 +19,94 @@ interface WorkerInput {
   fallbackBuffer: Buffer;
 }
 
-async function performMerge() {
+/**
+ * Sanitizes a DOCX file buffer by stripping problematic XML attributes like Revision IDs (rsid)
+ * which often cause merge conflicts and corruption in Microsoft Word.
+ */
+function sanitizeDocx(buffer: Buffer): Buffer {
   try {
-    const { sections, fallbackBuffer } = workerData as WorkerInput;
-    const mergeInput: Buffer[] = [];
-    const recoveredSections: string[] = [];
+    const zip = new JSZip();
+    zip.load(buffer);
+    
+    // 1. Sanitize document.xml (Main content)
+    const docXmlPath = 'word/document.xml';
+    const docXmlFile = zip.file(docXmlPath);
+    
+    if (docXmlFile) {
+      let xml = docXmlFile.asText();
+      
+      // Remove all w:rsid attributes which cause most "unreadable content" errors in Word
+      // Example: w:rsidR="005D4D54" w:rsidRDefault="005D4D54"
+      xml = xml.replace(/w:rsid[R|P|RPr|Del|RDefault|Tr|S]="[^"]*"/g, '');
+      
+      zip.file(docXmlPath, xml);
+    }
+    
+    // 2. Sanitize settings.xml (Remove proofing/checking states that might conflict)
+    const settingsPath = 'word/settings.xml';
+    if (zip.file(settingsPath)) {
+      let settingsXml = zip.file(settingsPath).asText();
+      settingsXml = settingsXml.replace(/<w:proofState [^>]*\/>/g, '');
+      zip.file(settingsPath, settingsXml);
+    }
 
-    console.log(`[Worker] Starting deep validation for ${sections.length} sections...`);
+    return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+  } catch (err) {
+    console.error('Failed to sanitize section, proceeding with original:', err);
+    return buffer;
+  }
+}
+
+function validateZip(buffer: Buffer): boolean {
+  try {
+    const jszip = new JSZip();
+    jszip.load(buffer);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function performMerge() {
+  const { sections, fallbackBuffer } = workerData as WorkerInput;
+  const recovered: string[] = [];
+
+  try {
+    const validatedSections: Buffer[] = [];
+
+    console.log(`[Worker] Pre-processing ${sections.length} sections...`);
 
     for (const section of sections) {
-      try {
-        const jszip = new JSZip();
-        // JSZip v2.7.0 uses the synchronous .load() method
-        jszip.load(section.buffer);
-        mergeInput.push(section.buffer);
-      } catch (error) {
-        console.warn(`[Worker] Corrupt section detected: ${section.code}. Replacing with blank page. Error: ${error instanceof Error ? error.message : String(error)}`);
-        recoveredSections.push(section.code);
-        mergeInput.push(fallbackBuffer);
+      const { code, buffer } = section;
+      const isValid = validateZip(buffer);
+
+      if (isValid) {
+        // Apply sanitization to heal formatting before merging
+        const sanitized = sanitizeDocx(buffer);
+        validatedSections.push(sanitized);
+      } else {
+        console.warn(`[Worker] Section ${code} is corrupt. Using fallback.`);
+        validatedSections.push(fallbackBuffer);
+        recovered.push(code);
       }
     }
 
-    if (mergeInput.length === 0) {
+    if (validatedSections.length === 0) {
       throw new Error('No valid documents to merge.');
     }
 
-    // 2. Perform the merge using raw Buffers if docx-merger supports it, 
-    // or binary strings as a last resort but processed carefully.
-    // NOTE: docx-merger 1.2.2 usually expects binary strings or buffers. 
-    // Let's try passing the buffers directly first as it's safer.
-    
-    console.log(`[Worker] Merging ${mergeInput.length} sections...`);
+    console.log(`[Worker] Merging ${validatedSections.length} sections...`);
 
-    const merger = new DocxMerger({}, mergeInput);
+    const merger = new DocxMerger({}, validatedSections);
+    
     merger.save('nodebuffer', (data: unknown) => {
+      // Ensure the result is a Buffer before sending back
       const result = Buffer.isBuffer(data) ? data : Buffer.from(data as string, 'binary');
+      
       parentPort?.postMessage({ 
         status: 'success', 
         data: result, 
-        recovered: recoveredSections 
+        recovered 
       });
     });
 
@@ -70,4 +119,5 @@ async function performMerge() {
   }
 }
 
+// Start execution
 void performMerge();

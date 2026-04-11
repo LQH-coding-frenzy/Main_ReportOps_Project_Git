@@ -223,43 +223,34 @@ export default function ReportsPage() {
                     )}
                   </td>
                   <td>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                      {r.status === 'completed' && (
+                        <>
+                          <a
+                            href={`/editor/report/${r.id}`}
+                            className="btn btn-primary btn-sm flex items-center gap-1"
+                            title="Xem báo cáo trên ONLYOFFICE"
+                          >
+                            <span>👁️</span> View
+                          </a>
+                          <button
+                            onClick={() => handleDownload(r.id)}
+                            className="btn btn-success btn-sm flex items-center gap-1"
+                            title="Tải về file .docx"
+                          >
+                            <span>⬇️</span> DOCX
+                          </button>
+                        </>
+                      )}
+                      
                       <button
                         onClick={() => setSelectedLog(r.buildLog ?? null)}
                         className="btn btn-ghost btn-sm"
                         title="Xem log chi tiết từ server"
                       >
-                        📜 View Log
+                        Log
                       </button>
-                      
-                      {r.status === 'completed' && (
-                        <>
-                          <button
-                            onClick={() => handleDownload(r.id)}
-                            className="btn btn-ghost btn-sm"
-                          >
-                            ⬇ Download
-                          </button>
-                          {!r.release && (
-                            <>
-                              <a
-                                href={`/releases?buildId=${r.id}`}
-                                className="btn btn-secondary btn-sm"
-                              >
-                                🚀 Release
-                              </a>
-                              <button
-                                onClick={() => setDeleteId(r.id)}
-                                className="btn btn-ghost btn-danger btn-sm"
-                                title="Xóa bản build"
-                              >
-                                🗑️
-                              </button>
-                            </>
-                          )}
-                        </>
-                      )}
-                      
+
                       {r.status === 'failed' && (
                         <button
                           onClick={() => setDeleteId(r.id)}
