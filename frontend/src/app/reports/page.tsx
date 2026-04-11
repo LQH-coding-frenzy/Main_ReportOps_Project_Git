@@ -101,9 +101,19 @@ export default function ReportsPage() {
     if (build.status === 'failed') return 0;
     if (!build.buildLog || totalSections === 0) return 5;
     
-    const matches = (build.buildLog.match(/✅ Section .*: Downloaded/g) || []).length;
-    const sectionProgress = (matches / totalSections) * 90; 
-    return Math.min(95, 5 + sectionProgress);
+    const isMerging = build.buildLog.includes('Merging documents');
+    const downloadMatches = (build.buildLog.match(/✅ Section .*: Downloaded/g) || []).length;
+    
+    // Parse skipped sections from log to count them towards progress
+    const skippedMatch = build.buildLog.match(/ℹ️ Skipping (\d+) unstarted/);
+    const skippedCount = skippedMatch ? parseInt(skippedMatch[1]) : 0;
+    
+    // If we have total sections, calculate based on accounted sections
+    const accounted = downloadMatches + skippedCount;
+    const baseProgress = (accounted / totalSections) * 85; 
+    
+    if (isMerging) return 95;
+    return Math.min(90, 5 + baseProgress);
   };
 
   const getStatusPillClass = (status: ReportBuild['status']) => {
@@ -195,12 +205,9 @@ export default function ReportsPage() {
                         );
                       })()}
                       {r.status === 'failed' && (
-                        <button
-                          onClick={() => setSelectedLog(r.buildLog ?? null)}
-                          className="btn btn-ghost btn-sm report-error-log-btn mt-1"
-                        >
-                          ⚠ Xem chi tiết lỗi
-                        </button>
+                        <span className="text-accent-danger text-[10px] font-medium uppercase tracking-tighter">
+                          Build Error
+                        </span>
                       )}
                     </div>
                   </td>
@@ -217,6 +224,14 @@ export default function ReportsPage() {
                   </td>
                   <td>
                     <div className="flex gap-2">
+                      <button
+                        onClick={() => setSelectedLog(r.buildLog ?? null)}
+                        className="btn btn-ghost btn-sm"
+                        title="Xem log chi tiết từ server"
+                      >
+                        📜 View Log
+                      </button>
+                      
                       {r.status === 'completed' && (
                         <>
                           <button
@@ -244,6 +259,7 @@ export default function ReportsPage() {
                           )}
                         </>
                       )}
+                      
                       {r.status === 'failed' && (
                         <button
                           onClick={() => setDeleteId(r.id)}

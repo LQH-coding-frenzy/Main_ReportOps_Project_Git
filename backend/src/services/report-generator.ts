@@ -341,6 +341,7 @@ async function processReportBuild(buildId: number): Promise<void> {
     await updateLogs(`📁 Uploaded ${orderedSectionBuffers.length} sections to preview bundle metadata`);
 
     const fallback = createEmptyDocx();
+    await updateLogs('🧩 Merging documents (this may take a few minutes for large reports)...');
     const { buffer: mergedBuffer, recovered } = await mergeDocxBuffers(orderedSectionBuffers, fallback);
     
     if (recovered.length > 0) {
