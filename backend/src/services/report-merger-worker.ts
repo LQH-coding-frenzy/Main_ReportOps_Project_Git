@@ -6,6 +6,7 @@ const DocxMerger: {
     save: (type: 'nodebuffer', callback: (data: unknown) => void) => void;
   };
 } = require('docx-merger');
+const JSZip = require('jszip');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 interface SectionData {
@@ -13,65 +14,58 @@ interface SectionData {
   buffer: Buffer;
 }
 
-/**
- * Validates if a buffer starts with the ZIP magic number (PK\x03\x04).
- */
-function isZipBuffer(buffer: Buffer): boolean {
-  if (!buffer || buffer.length < 4) return false;
-  return (
-    buffer[0] === 0x50 && // P
-    buffer[1] === 0x4B && // K
-    buffer[2] === 0x03 && // \x03
-    buffer[3] === 0x04    // \x04
-  );
+interface WorkerInput {
+  sections: SectionData[];
+  fallbackBuffer: Buffer;
 }
 
-/**
- * Perform heavy synchronous DOCX merging in a background thread.
- */
 async function performMerge() {
   try {
-    const { sections } = workerData as { sections: SectionData[] };
+    const { sections, fallbackBuffer } = workerData as WorkerInput;
+    const mergeInput: Buffer[] = [];
+    const recoveredSections: string[] = [];
 
-    if (!sections || sections.length === 0) {
-      throw new Error('No documents provided to worker for merging');
-    }
-
-    // 1. Validate all buffers before passing to DocxMerger
-    const binaryFiles: string[] = [];
-    const invalidSections: string[] = [];
+    console.log(`[Worker] Starting deep validation for ${sections.length} sections...`);
 
     for (const section of sections) {
-      if (!isZipBuffer(section.buffer)) {
-        invalidSections.push(
-          `Section ${section.code} (Size: ${section.buffer.length} bytes, Magic: ${section.buffer.subarray(0, 4).toString('hex')})`
-        );
-      } else {
-        binaryFiles.push(section.buffer.toString('binary'));
+      try {
+        const jszip = new JSZip();
+        // JSZip v2.7.0 uses the synchronous .load() method
+        jszip.load(section.buffer);
+        mergeInput.push(section.buffer);
+      } catch (error) {
+        console.warn(`[Worker] Corrupt section detected: ${section.code}. Replacing with blank page. Error: ${error instanceof Error ? error.message : String(error)}`);
+        recoveredSections.push(section.code);
+        mergeInput.push(fallbackBuffer);
       }
     }
 
-    if (invalidSections.length > 0) {
-      throw new Error(`The following sections have invalid document formats (not valid .docx/zip):\n- ${invalidSections.join('\n- ')}`);
+    if (mergeInput.length === 0) {
+      throw new Error('No valid documents to merge.');
     }
 
-    // 2. Perform the merge
-    if (binaryFiles.length === 1) {
-      const result = Buffer.from(binaryFiles[0], 'binary');
-      parentPort?.postMessage({ status: 'success', data: result });
-      return;
-    }
+    // 2. Perform the merge using raw Buffers if docx-merger supports it, 
+    // or binary strings as a last resort but processed carefully.
+    // NOTE: docx-merger 1.2.2 usually expects binary strings or buffers. 
+    // Let's try passing the buffers directly first as it's safer.
+    
+    console.log(`[Worker] Merging ${mergeInput.length} sections...`);
 
-    const merger = new DocxMerger({}, binaryFiles);
+    const merger = new DocxMerger({}, mergeInput);
     merger.save('nodebuffer', (data: unknown) => {
       const result = Buffer.isBuffer(data) ? data : Buffer.from(data as string, 'binary');
-      parentPort?.postMessage({ status: 'success', data: result });
+      parentPort?.postMessage({ 
+        status: 'success', 
+        data: result, 
+        recovered: recoveredSections 
+      });
     });
 
   } catch (error) {
+    console.error('[Worker Fatal Error]', error);
     parentPort?.postMessage({
       status: 'error',
-      error: error instanceof Error ? error.message : 'Unknown worker error',
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 }

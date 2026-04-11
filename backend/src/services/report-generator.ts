@@ -47,12 +47,15 @@ async function runWithConcurrencyLimit<T>(
   await Promise.all(slots);
 }
 
-async function mergeDocxBuffers(sections: Array<{ code: string; buffer: Buffer }>): Promise<Buffer> {
+async function mergeDocxBuffers(
+  sections: Array<{ code: string; buffer: Buffer }>,
+  fallbackBuffer: Buffer
+): Promise<{ buffer: Buffer; recovered: string[] }> {
   if (sections.length === 1) {
-    return sections[0].buffer;
+    return { buffer: sections[0].buffer, recovered: [] };
   }
 
-  return new Promise<Buffer>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const isTsNode = process.argv.some(arg => arg.includes('ts-node'));
     const workerPath = path.resolve(
       __dirname, 
@@ -60,13 +63,13 @@ async function mergeDocxBuffers(sections: Array<{ code: string; buffer: Buffer }
     );
 
     const worker = new Worker(workerPath, {
-      workerData: { sections },
-      execArgv: isTsNode ? ['-r', 'ts-node/register'] : undefined 
+      workerData: { sections, fallbackBuffer },
+      execArgv: isTsNode ? ['-r', 'ts-node/register'] : undefined
     });
 
     worker.on('message', (message) => {
       if (message.status === 'success') {
-        resolve(message.data);
+        resolve({ buffer: message.data, recovered: message.recovered || [] });
       } else {
         reject(new Error(message.error || 'Unknown worker error'));
       }
@@ -324,7 +327,13 @@ async function processReportBuild(buildId: number): Promise<void> {
     }
     await updateLogs(`📁 Uploaded ${orderedSectionBuffers.length} sections to preview bundle metadata`);
 
-    const mergedBuffer = await mergeDocxBuffers(orderedSectionBuffers);
+    const fallback = createEmptyDocx();
+    const { buffer: mergedBuffer, recovered } = await mergeDocxBuffers(orderedSectionBuffers, fallback);
+    
+    if (recovered.length > 0) {
+      await updateLogs(`⚠️ Warning: Recovered ${recovered.length} corrupt sections with blank pages: ${recovered.join(', ')}`);
+    }
+    
     await updateLogs(`🧩 Merged ${orderedSectionBuffers.length} sections into preview document (${mergedBuffer.length} bytes)`);
 
     await uploadFile(finalPreviewKey, mergedBuffer);
@@ -347,8 +356,8 @@ async function processReportBuild(buildId: number): Promise<void> {
       return;
     }
 
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`${buildTag} Failed:`, errorMsg);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`${buildTag} Failed:`, error); // Log full error object to console
     logs.push(`❌ Build failed: ${errorMsg}`);
 
     if (finalPreviewKey) {
