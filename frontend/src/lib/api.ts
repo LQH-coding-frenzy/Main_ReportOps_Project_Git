@@ -70,12 +70,12 @@ export async function getSection(id: number): Promise<Section> {
 // ── Editor ──
 
 export async function getEditorConfig(sectionId: number): Promise<EditorConfigResponse> {
-  const res = await apiFetch<ApiResponse<EditorConfigResponse>>(`/editor/config/${sectionId}`);
+  const res = await apiFetch<ApiResponse<EditorConfigResponse>>(`/api/editor/config/${sectionId}`);
   return res.data;
 }
 
 export async function getReportEditorConfig(buildId: number): Promise<EditorConfigResponse> {
-  const res = await apiFetch<ApiResponse<EditorConfigResponse>>(`/editor/config/report/${buildId}`);
+  const res = await apiFetch<ApiResponse<EditorConfigResponse>>(`/api/editor/config/report/${buildId}`);
   return res.data;
 }
 
