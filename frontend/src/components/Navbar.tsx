@@ -70,6 +70,14 @@ export function Navbar({ user }: NavbarProps) {
                   Performance
                 </Link>
               </li>
+              <li>
+                <Link 
+                  href="/admin" 
+                  className={`navbar-link ${pathname.startsWith('/admin') ? 'active' : ''}`}
+                >
+                  Admin
+                </Link>
+              </li>
             </>
           )}
         </ul>
