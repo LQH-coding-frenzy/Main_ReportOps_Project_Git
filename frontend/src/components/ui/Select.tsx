@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface Option {
   value: string;
@@ -18,19 +19,93 @@ interface SelectProps {
 
 export function Select({ value, onChange, options, disabled, placeholder, className = '' }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [mounted, setMounted] = useState(false);
+  
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(o => o.value === value);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      // Bounding box logic to prevent right-edge overflow and add padding
+      let left: number | string = rect.left;
+      let right: number | string = 'auto';
+      const dropdownWidth = Math.max(rect.width, 160); // Ensure min-width for dropdown
+
+      // If it would overflow the right edge of the screen, align to right edge instead
+      if (rect.left + dropdownWidth > window.innerWidth - 16) {
+        left = 'auto';
+        right = window.innerWidth - rect.right;
+      }
+
+      setDropdownStyle({
+        position: 'absolute',
+        top: rect.bottom + window.scrollY + 4,
+        left,
+        right,
+        width: dropdownWidth,
+        zIndex: 99999,
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+    }
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      // Check if click is outside both the trigger container and the dropdown portal
+      const isOutsideContainer = containerRef.current && !containerRef.current.contains(event.target as Node);
+      const isOutsideDropdown = dropdownRef.current && !dropdownRef.current.contains(event.target as Node);
+      
+      if (isOutsideContainer && isOutsideDropdown) {
         setIsOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const dropdownContent = (
+    <div 
+      ref={dropdownRef}
+      className="custom-select-dropdown"
+      style={{ ...dropdownStyle, top: dropdownStyle.top, left: dropdownStyle.left, width: dropdownStyle.width }}
+    >
+      {options.length === 0 ? (
+        <div className="custom-select-empty">Không có dữ liệu</div>
+      ) : (
+        options.map(opt => (
+          <div 
+            key={opt.value}
+            className={`custom-select-option ${opt.value === value ? 'selected' : ''}`}
+            onClick={() => {
+              onChange(opt.value);
+              setIsOpen(false);
+            }}
+          >
+            {opt.label}
+          </div>
+        ))
+      )}
+    </div>
+  );
 
   return (
     <div 
@@ -56,26 +131,7 @@ export function Select({ value, onChange, options, disabled, placeholder, classN
         </svg>
       </div>
 
-      {isOpen && !disabled && (
-        <div className="custom-select-dropdown">
-          {options.length === 0 ? (
-            <div className="custom-select-empty">Không có dữ liệu</div>
-          ) : (
-            options.map(opt => (
-              <div 
-                key={opt.value}
-                className={`custom-select-option ${opt.value === value ? 'selected' : ''}`}
-                onClick={() => {
-                  onChange(opt.value);
-                  setIsOpen(false);
-                }}
-              >
-                {opt.label}
-              </div>
-            ))
-          )}
-        </div>
-      )}
+      {mounted && isOpen && !disabled && createPortal(dropdownContent, document.body)}
     </div>
   );
 }
