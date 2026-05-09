@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { getAuditLogs } from '../../../lib/api';
 import type { AuditLogEntry } from '../../../lib/types';
+import { Select } from '../../../components/ui/Select';
 
 const ACTION_ICONS: Record<string, string> = {
   login: '🔐',
@@ -71,16 +72,16 @@ export default function AdminAuditLogsPage() {
 
       {/* Toolbar */}
       <div className="admin-toolbar">
-        <select
-          className="admin-select"
-          value={actionFilter}
-          onChange={e => setActionFilter(e.target.value)}
-        >
-          <option value="all">Tất cả hành động</option>
-          {uniqueActions.map(action => (
-            <option key={action} value={action}>{action}</option>
-          ))}
-        </select>
+        <div style={{ minWidth: '200px' }}>
+          <Select
+            value={actionFilter}
+            onChange={value => setActionFilter(value)}
+            options={[
+              { value: 'all', label: 'Tất cả hành động' },
+              ...uniqueActions.map(action => ({ value: action, label: action }))
+            ]}
+          />
+        </div>
         <div className="admin-toolbar-actions">
           <span className="badge badge-info">{total} logs tổng</span>
         </div>

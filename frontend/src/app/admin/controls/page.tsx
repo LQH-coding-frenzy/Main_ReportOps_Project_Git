@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Select } from '../../../components/ui/Select';
 
 const SAMPLE_CONTROLS = [
   { id: '1.1.1.1', title: 'Ensure cramfs kernel module is not available', owner: 'M1', risk: 'Medium', auto: true, enabled: true },
@@ -46,17 +47,19 @@ export default function AdminControlsPage() {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
         />
-        <select
-          className="admin-select"
-          value={filterOwner}
-          onChange={e => setFilterOwner(e.target.value)}
-        >
-          <option value="all">Tất cả Sections</option>
-          <option value="M1">M1</option>
-          <option value="M2">M2</option>
-          <option value="M3">M3</option>
-          <option value="M4">M4</option>
-        </select>
+        <div style={{ minWidth: '160px' }}>
+          <Select
+            value={filterOwner}
+            onChange={value => setFilterOwner(value)}
+            options={[
+              { value: 'all', label: 'Tất cả Sections' },
+              { value: 'M1', label: 'M1' },
+              { value: 'M2', label: 'M2' },
+              { value: 'M3', label: 'M3' },
+              { value: 'M4', label: 'M4' }
+            ]}
+          />
+        </div>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

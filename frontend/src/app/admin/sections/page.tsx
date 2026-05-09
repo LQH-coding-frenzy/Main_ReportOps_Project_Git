@@ -5,6 +5,7 @@ import { getSections, getAdminUsers, adminAssignSection, adminUnassignSection } 
 import type { Section } from '../../../lib/types';
 import type { AdminUser } from '../../../lib/api';
 import { useToast } from '../../../components/ui/Toast';
+import { Select } from '../../../components/ui/Select';
 
 export default function AdminSectionsPage() {
   const [sections, setSections] = useState<Section[]>([]);
@@ -166,19 +167,18 @@ export default function AdminSectionsPage() {
 
             {/* Assign New Member */}
             <div className="admin-section-assign-row">
-              <select
-                className="admin-select"
-                value={selectedUsers[section.id] ?? ''}
-                onChange={e => setSelectedUsers(prev => ({ ...prev, [section.id]: e.target.value }))}
-                disabled={assigning === section.id}
-              >
-                <option value="">— Chọn thành viên để thêm —</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.displayName || u.githubUsername} ({u.role})
-                  </option>
-                ))}
-              </select>
+              <div style={{ flex: 1, maxWidth: '360px' }}>
+                <Select
+                  value={selectedUsers[section.id] ?? ''}
+                  onChange={value => setSelectedUsers(prev => ({ ...prev, [section.id]: value }))}
+                  disabled={assigning === section.id}
+                  placeholder="— Chọn thành viên để thêm —"
+                  options={users.map(u => ({
+                    value: String(u.id),
+                    label: `${u.displayName || u.githubUsername} (${u.role})`
+                  }))}
+                />
+              </div>
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => handleAssign(section.id)}

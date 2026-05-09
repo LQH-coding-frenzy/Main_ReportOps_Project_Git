@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { getAdminUsers, changeUserRole } from '../../../lib/api';
 import type { AdminUser } from '../../../lib/api';
 import { useToast } from '../../../components/ui/Toast';
+import { Select } from '../../../components/ui/Select';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -159,15 +160,15 @@ export default function AdminUsersPage() {
                   }
                 </td>
                 <td>
-                  <select
-                    className="admin-select"
+                  <Select
                     value={user.role}
                     disabled={changingRole === user.id}
-                    onChange={e => handleRoleChange(user.id, e.target.value as 'LEADER' | 'MEMBER')}
-                  >
-                    <option value="LEADER">Leader</option>
-                    <option value="MEMBER">Member</option>
-                  </select>
+                    onChange={value => handleRoleChange(user.id, value as 'LEADER' | 'MEMBER')}
+                    options={[
+                      { value: 'LEADER', label: 'Leader' },
+                      { value: 'MEMBER', label: 'Member' }
+                    ]}
+                  />
                   {changingRole === user.id && (
                     <span className="admin-saving-indicator">⏳</span>
                   )}
