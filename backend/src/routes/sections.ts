@@ -219,4 +219,37 @@ router.post('/:id/assign', requireAuth, requireLeader, async (req: Request, res:
   }
 });
 
+/**
+ * DELETE /api/sections/:id/assign/:userId
+ * Remove a user from a section assignment (leader only).
+ */
+router.delete('/:id/assign/:userId', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const sectionId = parseInt(req.params.id, 10);
+    const userId = parseInt(req.params.userId, 10);
+
+    if (isNaN(sectionId) || isNaN(userId)) {
+      res.status(400).json({ error: 'Invalid IDs', status: 400 });
+      return;
+    }
+
+    await prisma.sectionAssignment.deleteMany({
+      where: { sectionId, userId },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'unassign_section',
+        details: { sectionId, removedUserId: userId },
+      },
+    });
+
+    res.json({ data: null, status: 200 });
+  } catch (error) {
+    console.error('Unassign section error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
 export default router;

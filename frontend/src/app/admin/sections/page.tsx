@@ -1,32 +1,77 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getSections } from '../../../lib/api';
+import { useEffect, useState, useCallback } from 'react';
+import { getSections, getAdminUsers, adminAssignSection, adminUnassignSection } from '../../../lib/api';
 import type { Section } from '../../../lib/types';
+import type { AdminUser } from '../../../lib/api';
+import { useToast } from '../../../components/ui/Toast';
 
 export default function AdminSectionsPage() {
   const [sections, setSections] = useState<Section[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [assigning, setAssigning] = useState<number | null>(null); // sectionId being modified
+  const [selectedUsers, setSelectedUsers] = useState<Record<number, string>>({}); // sectionId -> userId string
+  const { showToast } = useToast();
+
+  const loadData = useCallback(async () => {
+    try {
+      const [s, u] = await Promise.all([getSections(), getAdminUsers()]);
+      setSections(s);
+      setUsers(u);
+    } catch (err) {
+      console.error('Failed to load sections:', err);
+      showToast('Không thể tải dữ liệu sections', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const s = await getSections();
-        setSections(s);
-      } catch (err) {
-        console.error('Failed to load sections:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
-  }, []);
+  }, [loadData]);
+
+  async function handleAssign(sectionId: number) {
+    const userId = parseInt(selectedUsers[sectionId] ?? '', 10);
+    if (!userId || isNaN(userId)) {
+      showToast('Vui lòng chọn người dùng trước', 'error');
+      return;
+    }
+    setAssigning(sectionId);
+    try {
+      await adminAssignSection(sectionId, userId);
+      showToast('Đã phân công thành công!', 'success');
+      await loadData();
+      setSelectedUsers(prev => ({ ...prev, [sectionId]: '' }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Lỗi không xác định';
+      showToast(`Phân công thất bại: ${msg}`, 'error');
+    } finally {
+      setAssigning(null);
+    }
+  }
+
+  async function handleUnassign(sectionId: number, userId: number, userName: string) {
+    setAssigning(sectionId);
+    try {
+      await adminUnassignSection(sectionId, userId);
+      showToast(`Đã xóa phân công cho ${userName}`, 'success');
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Lỗi không xác định';
+      showToast(`Xóa phân công thất bại: ${msg}`, 'error');
+    } finally {
+      setAssigning(null);
+    }
+  }
 
   if (loading) {
     return (
-      <div className="loading-page">
-        <div className="spinner" />
-        <span>Đang tải sections...</span>
+      <div className="admin-content">
+        <div className="admin-loading">
+          <div className="spinner" />
+          <span>Đang tải sections...</span>
+        </div>
       </div>
     );
   }
@@ -38,72 +83,112 @@ export default function AdminSectionsPage() {
         <p className="page-subtitle">Phân công thành viên và quản lý cấu trúc CIS Benchmark</p>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Mã Section</th>
-              <th>Tiêu đề</th>
-              <th>Chương CIS</th>
-              <th>Người phụ trách</th>
-              <th>Trạng thái</th>
-              <th>Dung lượng</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sections.map(section => (
-              <tr key={section.id}>
-                <td>
-                  <code className="admin-code" style={{ color: 'var(--color-accent-primary-hover)', fontWeight: 700 }}>
-                    {section.code}
-                  </code>
-                </td>
-                <td style={{ maxWidth: '300px' }}>
-                  <span style={{ fontSize: 'var(--text-sm)' }}>{section.title}</span>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {section.cisChapters.map(ch => (
-                      <span key={ch} className="admin-chip">§{ch}</span>
-                    ))}
-                  </div>
-                </td>
-                <td>
-                  {section.assignees[0]
-                    ? <span>{section.assignees[0].displayName || section.assignees[0].githubUsername}</span>
-                    : <span className="text-muted">Chưa gán</span>
-                  }
-                </td>
-                <td>
-                  {section.document?.lastEditedAt ? (
-                    <span className="badge badge-success">Đã chỉnh sửa</span>
-                  ) : (
-                    <span className="badge badge-warning">Chưa bắt đầu</span>
-                  )}
-                </td>
-                <td>
-                  {section.document?.fileSize
-                    ? `${(section.document.fileSize / 1024).toFixed(1)} KB`
-                    : <span className="text-muted">—</span>
-                  }
-                </td>
-              </tr>
+      {/* Team assignment guide */}
+      <div className="card admin-info-card" style={{ marginBottom: 'var(--space-6)' }}>
+        <div className="admin-section-assignment-guide">
+          <div className="admin-assignment-guide-title">📋 Phân công hiện tại theo nhóm</div>
+          <div className="admin-assignment-guide-grid">
+            {[
+              { key: 'M1', name: 'LQH (Leader)', chapters: '1.1, 1.2, 1.4, 1.5, 1.6, 2.3, 2.4' },
+              { key: 'M2', name: 'Bao Nguyên', chapters: '1.3, 2.1, 2.2, 3, 4' },
+              { key: 'M3', name: 'Trương Duy', chapters: '5.1, 5.2, 5.3, 5.4' },
+              { key: 'M4', name: 'Lâm Hoàng Phước', chapters: '1.7, 1.8, 6, 7' },
+            ].map(g => (
+              <div key={g.key} className="admin-assignment-guide-item">
+                <span className="admin-chip">{g.key}</span>
+                <span className="admin-assignment-guide-name">{g.name}</span>
+                <span className="admin-assignment-guide-chapters">§{g.chapters}</span>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
       </div>
 
-      {/* Section JSON Preview */}
-      <div className="card" style={{ marginTop: 'var(--space-6)' }}>
-        <h4 style={{ marginBottom: 'var(--space-3)' }}>📋 Cấu trúc Section (JSON)</h4>
-        <pre className="admin-json-preview">
-{JSON.stringify({
-  section_key: "M1",
-  title: "Filesystem, Package, Boot, Process Hardening, Crypto, Time Sync, Schedule",
-  owner: "LQH",
-  cis_sections: ["1.1", "1.2", "1.4", "1.5", "1.6", "2.3", "2.4"]
-}, null, 2)}
-        </pre>
+      <div className="admin-sections-list">
+        {sections.map(section => (
+          <div key={section.id} className="card admin-section-item">
+            {/* Section Header */}
+            <div className="admin-section-header">
+              <div className="admin-section-identity">
+                <code className="admin-code" style={{ color: 'var(--color-accent-primary-hover)', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
+                  {section.code}
+                </code>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-primary)', marginBottom: '4px' }}>
+                    {section.title}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {section.cisChapters.map(ch => (
+                      <span key={ch} className="admin-chip" style={{ fontSize: '11px' }}>§{ch}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="admin-section-status">
+                {section.document?.lastEditedAt ? (
+                  <span className="badge badge-success">✓ Đã chỉnh sửa</span>
+                ) : (
+                  <span className="badge badge-warning">○ Chưa bắt đầu</span>
+                )}
+                {section.document?.fileSize && (
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                    {(section.document.fileSize / 1024).toFixed(1)} KB
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Current Assignees */}
+            <div className="admin-section-assignees">
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-2)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Người phụ trách
+              </div>
+              <div className="admin-assignee-list">
+                {section.assignees.length > 0 ? (
+                  section.assignees.map(assignee => (
+                    <div key={assignee.id} className="admin-assignee-tag">
+                      <span>{assignee.displayName || assignee.githubUsername}</span>
+                      <button
+                        className="admin-assignee-remove"
+                        disabled={assigning === section.id}
+                        onClick={() => handleUnassign(section.id, assignee.id, assignee.displayName || assignee.githubUsername)}
+                        title="Hủy phân công"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Chưa có người phụ trách</span>
+                )}
+              </div>
+            </div>
+
+            {/* Assign New Member */}
+            <div className="admin-section-assign-row">
+              <select
+                className="admin-select"
+                value={selectedUsers[section.id] ?? ''}
+                onChange={e => setSelectedUsers(prev => ({ ...prev, [section.id]: e.target.value }))}
+                disabled={assigning === section.id}
+              >
+                <option value="">— Chọn thành viên để thêm —</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.displayName || u.githubUsername} ({u.role})
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => handleAssign(section.id)}
+                disabled={assigning === section.id || !selectedUsers[section.id]}
+              >
+                {assigning === section.id ? '⏳ Đang xử lý...' : '+ Phân công'}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

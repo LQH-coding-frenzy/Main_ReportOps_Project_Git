@@ -47,8 +47,7 @@ export default function AdminControlsPage() {
           onChange={e => setSearchQuery(e.target.value)}
         />
         <select
-          className="input"
-          style={{ width: 'auto', minWidth: '140px' }}
+          className="admin-select"
           value={filterOwner}
           onChange={e => setFilterOwner(e.target.value)}
         >

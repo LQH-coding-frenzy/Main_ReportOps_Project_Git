@@ -12,6 +12,7 @@ import editorRoutes from './routes/editor';
 import reportRoutes from './routes/reports';
 import releaseRoutes from './routes/releases';
 import auditRoutes from './routes/audit';
+import adminRoutes from './routes/admin';
 
 // Validate environment
 validateEnv();
@@ -49,6 +50,7 @@ app.use('/api/onlyoffice', editorRoutes); // Mount callback under /api/onlyoffic
 app.use('/api/reports', reportRoutes);
 app.use('/api/releases', releaseRoutes);
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ── 404 Handler ──
 app.use((_req, res) => {

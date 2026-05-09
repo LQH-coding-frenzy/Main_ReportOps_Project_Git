@@ -147,3 +147,56 @@ export async function getPerformance(): Promise<PerformanceData> {
   const res = await apiFetch<ApiResponse<PerformanceData>>('/api/reports/performance');
   return res.data;
 }
+
+// ── Admin ──
+
+export interface AdminUser {
+  id: number;
+  githubId: string;
+  githubUsername: string;
+  displayName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  role: 'LEADER' | 'MEMBER';
+  createdAt: string;
+  sections: { id: number; code: string; title: string }[];
+  lastActive: string | null;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalSections: number;
+  totalBuilds: number;
+  totalReleases: number;
+  totalLogs: number;
+}
+
+export async function getAdminUsers(): Promise<AdminUser[]> {
+  const res = await apiFetch<ApiResponse<AdminUser[]>>('/api/admin/users');
+  return res.data;
+}
+
+export async function changeUserRole(userId: number, role: 'LEADER' | 'MEMBER'): Promise<void> {
+  await apiFetch(`/api/admin/users/${userId}/role`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function adminAssignSection(sectionId: number, userId: number): Promise<void> {
+  await apiFetch(`/api/sections/${sectionId}/assign`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function adminUnassignSection(sectionId: number, userId: number): Promise<void> {
+  await apiFetch(`/api/sections/${sectionId}/assign/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const res = await apiFetch<ApiResponse<AdminStats>>('/api/admin/stats');
+  return res.data;
+}

@@ -1530,3 +1530,395 @@ tr:hover td {
 .text-muted {
   color: var(--color-text-muted);
 }
+
+/* ── Admin Select (themed native select) ── */
+.admin-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding: var(--space-2) var(--space-8) var(--space-2) var(--space-3);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-glass);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 140px;
+}
+
+.admin-select:hover {
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-glass-hover);
+}
+
+.admin-select:focus {
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 3px var(--color-accent-primary-glow);
+}
+
+.admin-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-select option {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+/* ── Admin Loading ── */
+.admin-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-16) 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+  justify-content: center;
+}
+
+/* ── Admin GitHub Link ── */
+.admin-github-link {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent-primary-hover);
+  text-decoration: none;
+  padding: 2px 8px;
+  background: var(--color-bg-glass);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  transition: all var(--transition-fast);
+}
+
+.admin-github-link:hover {
+  background: var(--color-accent-primary-glow);
+  border-color: var(--color-border-active);
+  color: var(--color-accent-primary-hover);
+}
+
+/* ── Admin User Avatar Placeholder ── */
+.admin-user-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+/* ── Admin Saving Indicator ── */
+.admin-saving-indicator {
+  font-size: var(--text-xs);
+  margin-left: var(--space-2);
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Admin Note ── */
+.admin-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  margin-top: var(--space-6);
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  line-height: 1.6;
+}
+
+/* ── Admin Info Card ── */
+.admin-info-card {
+  background: rgba(17, 24, 39, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ── Admin Stats Grid ── */
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+@media (max-width: 1280px) {
+  .admin-stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Admin Section Title ── */
+.admin-section-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Admin Quick Link ── */
+.admin-quick-link {
+  text-decoration: none !important;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  position: relative;
+}
+
+.admin-quick-icon {
+  font-size: 1.75rem;
+}
+
+.admin-quick-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.admin-quick-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.admin-quick-arrow {
+  font-size: var(--text-sm);
+  color: var(--color-accent-primary);
+  align-self: flex-end;
+  transition: transform var(--transition-fast);
+}
+
+.admin-quick-link:hover .admin-quick-arrow {
+  transform: translateX(4px);
+}
+
+/* ── Admin Sections Management ── */
+.admin-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin-section-item {
+  transition: all var(--transition-base);
+}
+
+.admin-section-item:hover {
+  transform: translateY(-2px);
+}
+
+.admin-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-section-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.admin-section-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.admin-section-assignees {
+  margin-bottom: var(--space-4);
+}
+
+.admin-assignee-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: 32px;
+  align-items: center;
+}
+
+.admin-assignee-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  background: var(--color-accent-primary-glow);
+  border: 1px solid var(--color-border-active);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.admin-assignee-remove {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: rgba(239, 68, 68, 0.2);
+  border: none;
+  color: var(--color-accent-danger);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  padding: 0;
+  line-height: 1;
+}
+
+.admin-assignee-remove:hover {
+  background: var(--color-accent-danger);
+  color: white;
+}
+
+.admin-assignee-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.admin-section-assign-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* ── Admin Assignment Guide ── */
+.admin-section-assignment-guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-assignment-guide-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.admin-assignment-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+
+@media (max-width: 768px) {
+  .admin-assignment-guide-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.admin-assignment-guide-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3);
+  background: var(--color-bg-glass);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.admin-assignment-guide-name {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.admin-assignment-guide-chapters {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Stat Card (override for cleaner look) ── */
+.admin-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4) !important;
+}
+
+.admin-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  margin-bottom: var(--space-1);
+}
+
+.admin-stat-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+}
+
+.admin-stat-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* ── Toolbar section assign row ── */
+.admin-section-assign-row .admin-select {
+  flex: 1;
+  max-width: 360px;
+}
+
+/* ── Admin Pagination (keep for audit logs) ── */
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+/* ── Admin Log Details ── */
+.admin-log-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 240px;
+  overflow: hidden;
+}
+
+.admin-log-details span {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

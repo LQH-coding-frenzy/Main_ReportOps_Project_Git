@@ -7,11 +7,28 @@ import type { AuditLogEntry } from '../../../lib/types';
 
 const ACTION_ICONS: Record<string, string> = {
   login: '🔐',
+  logout: '🚪',
   edit_section: '✏️',
   save_document: '💾',
   generate_report: '📊',
   release: '📦',
-  logout: '🚪',
+  assign_section: '📌',
+  unassign_section: '📌',
+  change_user_role: '🛡️',
+  freeze_release: '❄️',
+};
+
+const ACTION_COLORS: Record<string, string> = {
+  login: 'badge-success',
+  logout: 'badge-info',
+  edit_section: 'badge-primary',
+  save_document: 'badge-primary',
+  generate_report: 'badge-warning',
+  release: 'badge-warning',
+  assign_section: 'badge-info',
+  unassign_section: 'badge-info',
+  change_user_role: 'badge-danger',
+  freeze_release: 'badge-success',
 };
 
 export default function AdminAuditLogsPage() {
@@ -19,14 +36,17 @@ export default function AdminAuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [actionFilter, setActionFilter] = useState('all');
 
   useEffect(() => {
     async function loadLogs() {
       setLoading(true);
       try {
-        const res = await getAuditLogs(page, 20);
+        const res = await getAuditLogs(page, 25);
         setLogs(res.data.logs);
         setTotalPages(res.data.pagination.totalPages);
+        setTotal(res.data.pagination.total);
       } catch (err) {
         console.error('Failed to load audit logs:', err);
       } finally {
@@ -36,15 +56,38 @@ export default function AdminAuditLogsPage() {
     loadLogs();
   }, [page]);
 
+  const filtered = actionFilter === 'all'
+    ? logs
+    : logs.filter(l => l.action === actionFilter);
+
+  const uniqueActions = Array.from(new Set(logs.map(l => l.action)));
+
   return (
     <div className="admin-content">
       <div className="page-header">
         <h1 className="page-title">Nhật Ký Hoạt Động</h1>
-        <p className="page-subtitle">Theo dõi tất cả hành động của người dùng trong hệ thống</p>
+        <p className="page-subtitle">Toàn bộ thao tác trong hệ thống đều được ghi lại</p>
+      </div>
+
+      {/* Toolbar */}
+      <div className="admin-toolbar">
+        <select
+          className="admin-select"
+          value={actionFilter}
+          onChange={e => setActionFilter(e.target.value)}
+        >
+          <option value="all">Tất cả hành động</option>
+          {uniqueActions.map(action => (
+            <option key={action} value={action}>{action}</option>
+          ))}
+        </select>
+        <div className="admin-toolbar-actions">
+          <span className="badge badge-info">{total} logs tổng</span>
+        </div>
       </div>
 
       {loading ? (
-        <div className="loading-page">
+        <div className="admin-loading">
           <div className="spinner" />
           <span>Đang tải nhật ký...</span>
         </div>
@@ -54,7 +97,7 @@ export default function AdminAuditLogsPage() {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th style={{ width: '40px' }}></th>
+                  <th style={{ width: '36px' }}></th>
                   <th>Hành động</th>
                   <th>Người dùng</th>
                   <th>Chi tiết</th>
@@ -63,17 +106,19 @@ export default function AdminAuditLogsPage() {
                 </tr>
               </thead>
               <tbody>
-                {logs.map(log => (
+                {filtered.map(log => (
                   <tr key={log.id}>
-                    <td style={{ textAlign: 'center', fontSize: '1.1rem' }}>
+                    <td style={{ textAlign: 'center', fontSize: '1rem' }}>
                       {ACTION_ICONS[log.action] || '📌'}
                     </td>
                     <td>
-                      <code className="admin-code">{log.action}</code>
+                      <span className={`badge ${ACTION_COLORS[log.action] || 'badge-info'}`} style={{ fontSize: '11px' }}>
+                        {log.action}
+                      </span>
                     </td>
                     <td>
                       <div className="admin-user-cell">
-                        {log.user.avatarUrl && (
+                        {log.user.avatarUrl ? (
                           <Image
                             src={log.user.avatarUrl}
                             alt=""
@@ -83,19 +128,37 @@ export default function AdminAuditLogsPage() {
                             style={{ width: 24, height: 24 }}
                             unoptimized
                           />
+                        ) : (
+                          <div className="admin-user-avatar-placeholder" style={{ width: 24, height: 24, fontSize: '10px' }}>
+                            {(log.user.displayName || log.user.githubUsername)[0].toUpperCase()}
+                          </div>
                         )}
                         <span style={{ fontSize: 'var(--text-sm)' }}>
                           {log.user.displayName || log.user.githubUsername}
                         </span>
                       </div>
                     </td>
-                    <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {log.details ? JSON.stringify(log.details).slice(0, 60) : '—'}
+                    <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', maxWidth: '240px' }}>
+                      <div className="admin-log-details">
+                        {log.details
+                          ? Object.entries(log.details as Record<string, unknown>).map(([k, v]) => (
+                              <span key={k}>
+                                <span style={{ color: 'var(--color-text-tertiary)' }}>{k}:</span>{' '}
+                                <span style={{ color: 'var(--color-text-secondary)' }}>{String(v)}</span>
+                              </span>
+                            ))
+                          : '—'
+                        }
+                      </div>
                     </td>
                     <td>
-                      <code className="admin-code" style={{ fontSize: '11px' }}>{log.ipAddress || '—'}</code>
+                      {log.ipAddress ? (
+                        <code className="admin-code" style={{ fontSize: '11px' }}>{log.ipAddress}</code>
+                      ) : (
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>—</span>
+                      )}
                     </td>
-                    <td style={{ fontSize: 'var(--text-xs)', whiteSpace: 'nowrap' }}>
+                    <td style={{ fontSize: 'var(--text-xs)', whiteSpace: 'nowrap', color: 'var(--color-text-tertiary)' }}>
                       {new Date(log.createdAt).toLocaleString('vi-VN')}
                     </td>
                   </tr>
@@ -127,11 +190,11 @@ export default function AdminAuditLogsPage() {
             </div>
           )}
 
-          {logs.length === 0 && (
+          {filtered.length === 0 && (
             <div className="empty-state">
               <div className="empty-state-icon">📜</div>
-              <div className="empty-state-title">Chưa có nhật ký</div>
-              <div className="empty-state-desc">Các hoạt động sẽ được ghi lại tại đây.</div>
+              <div className="empty-state-title">Không có nhật ký</div>
+              <div className="empty-state-desc">Chưa có hoạt động nào được ghi lại.</div>
             </div>
           )}
         </>
