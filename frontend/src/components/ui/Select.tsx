@@ -20,16 +20,12 @@ interface SelectProps {
 export function Select({ value, onChange, options, disabled, placeholder, className = '' }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
-  const [mounted, setMounted] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(o => o.value === value);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const updatePosition = () => {
     if (containerRef.current) {
@@ -131,7 +127,7 @@ export function Select({ value, onChange, options, disabled, placeholder, classN
         </svg>
       </div>
 
-      {mounted && isOpen && !disabled && createPortal(dropdownContent, document.body)}
+      {isOpen && !disabled && createPortal(dropdownContent, document.body)}
     </div>
   );
 }
