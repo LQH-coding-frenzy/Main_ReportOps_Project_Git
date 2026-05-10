@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePolling } from '../../hooks/usePolling';
 import { getLabVms } from '../../lib/api';
 import type { LabVm } from '../../lib/types';
 
@@ -24,6 +25,15 @@ export default function LabPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  usePolling(async () => {
+    try {
+      const next = await getLabVms();
+      setVms(next);
+    } catch (err) {
+      console.error('Failed to refresh lab VMs:', err);
+    }
+  }, 5000, true);
 
   const runningVms = vms.filter((v) => v.status === 'RUNNING');
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { usePolling } from '../../../hooks/usePolling';
 import { getLabVm, deleteLabVm } from '../../../lib/api';
 import type { LabVm, AuditJob } from '../../../lib/types';
 
@@ -19,6 +20,16 @@ export default function LabVmDetailPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [vmId]);
+
+  usePolling(async () => {
+    if (!vmId) return;
+    try {
+      const next = await getLabVm(vmId);
+      setVm(next);
+    } catch (err) {
+      console.error('Failed to refresh VM detail:', err);
+    }
+  }, 5000, !!vm && vm.status === 'PROVISIONING');
 
   async function handleDestroy() {
     if (!vm) return;
