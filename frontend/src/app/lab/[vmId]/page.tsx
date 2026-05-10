@@ -92,12 +92,20 @@ export default function LabVmDetailPage() {
                 🌐 Welcome Page
               </a>
               <a
-                href={`https://console.cloud.google.com/compute/instancesDetail/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}`}
+                href={`https://console.cloud.google.com/compute/instancesDetail/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}?project=${vm.gcpProjectId || ''}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-secondary btn-sm"
               >
                 ☁️ GCP Console
+              </a>
+              <a
+                href={`https://ssh.cloud.google.com/v2/ssh/projects/${vm.gcpProjectId || ''}/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary btn-sm"
+              >
+                📟 SSH
               </a>
               <Link href={`/audit/new`} className="btn btn-primary btn-sm">
                 🚀 Run Audit

@@ -219,6 +219,7 @@ export interface LabVm {
   id: number;
   name: string;
   gcpInstanceName: string | null;
+  gcpProjectId: string | null;
   gcpZone: string | null;
   publicIp: string | null;
   machineType: string;

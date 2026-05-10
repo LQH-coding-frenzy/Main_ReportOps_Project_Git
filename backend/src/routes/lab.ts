@@ -198,10 +198,11 @@ router.post('/vms/:id/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    const { status, publicIp, gcpInstanceName, gcpZone, errorMessage } = req.body as {
+    const { status, publicIp, gcpInstanceName, gcpProjectId, gcpZone, errorMessage } = req.body as {
       status?: string;
       publicIp?: string;
       gcpInstanceName?: string;
+      gcpProjectId?: string;
       gcpZone?: string;
       errorMessage?: string;
     };
@@ -234,6 +235,7 @@ router.post('/vms/:id/callback', async (req: Request, res: Response) => {
         ...(nextStatus && { status: nextStatus }),
         ...(publicIp && { publicIp }),
         ...(gcpInstanceName && { gcpInstanceName }),
+        ...(gcpProjectId && { gcpProjectId }),
         ...(gcpZone && { gcpZone }),
         ...(errorMessage !== undefined && { errorMessage }),
       },
@@ -243,7 +245,7 @@ router.post('/vms/:id/callback', async (req: Request, res: Response) => {
       data: {
         userId: vm.createdById,
         action: 'lab_vm_callback',
-        details: { vmId: vm.id, status, publicIp, gcpInstanceName, gcpZone, errorMessage },
+        details: { vmId: vm.id, status, publicIp, gcpInstanceName, gcpProjectId, gcpZone, errorMessage },
       },
     });
 
@@ -286,7 +288,7 @@ router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: 
     // Trigger Terraform GitHub Action to destroy if configured
     if (env.GITHUB_TOKEN && env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
       const repo = `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`;
-      fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+      const dispatchRes = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
         method: 'POST',
         headers: {
           'Accept': 'application/vnd.github.v3+json',
@@ -302,7 +304,24 @@ router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: 
             verification_token: vm.verificationToken || 'none',
           }
         })
-      }).catch(err => console.error('Failed to trigger GitHub Action for destroy:', err));
+      });
+
+      if (!dispatchRes.ok) {
+        const detail = await dispatchRes.text().catch(() => '');
+        await prisma.labVm.update({
+          where: { id },
+          data: {
+            status: 'ERROR',
+            errorMessage: `Failed to trigger Terraform destroy workflow: ${dispatchRes.status} ${detail}`.slice(0, 500),
+          },
+        });
+
+        res.status(502).json({
+          error: 'Failed to trigger Terraform destroy workflow',
+          status: 502,
+        });
+        return;
+      }
     }
 
     res.json({ data: { message: 'VM destruction initiated' }, status: 200 });

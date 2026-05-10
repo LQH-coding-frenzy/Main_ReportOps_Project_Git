@@ -36,6 +36,8 @@ jobs:
 
     env:
       BACKEND_PUBLIC_URL: https://api.automatedprogram.app
+      TF_STATE_BUCKET: cis-benchmark-uit-tfstate
+      TF_ZONE: asia-southeast1-c
 
     steps:
       - name: Checkout
@@ -68,7 +70,31 @@ jobs:
 
       - name: Terraform Init
         working-directory: infra/terraform/environments/dev
-        run: terraform init
+        run: |
+          terraform init -reconfigure -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="prefix=lab-vm/$VM_ID"
+
+      - name: Import existing resources if needed
+        working-directory: infra/terraform/environments/dev
+        run: |
+          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_instance.lab_vm'; then
+            if gcloud compute instances describe "$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" --zone="$TF_ZONE" >/dev/null 2>&1; then
+              terraform import -input=false module.lab_vm.google_compute_instance.lab_vm "projects/${{ secrets.GCP_PROJECT_ID }}/zones/$TF_ZONE/instances/$VM_NAME"
+            fi
+          fi
+
+          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_http'; then
+            if gcloud compute firewall-rules describe "reportops-allow-http-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+              terraform import -input=false module.lab_vm.google_compute_firewall.allow_http "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-http-$VM_NAME"
+            fi
+          fi
+
+          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_ssh'; then
+            if gcloud compute firewall-rules describe "reportops-allow-ssh-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+              terraform import -input=false module.lab_vm.google_compute_firewall.allow_ssh "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-ssh-$VM_NAME"
+            fi
+          fi
 
       - name: Terraform Apply/Destroy
         working-directory: infra/terraform/environments/dev
@@ -112,5 +138,5 @@ jobs:
           curl -sS -X POST "$BACKEND_PUBLIC_URL/api/lab/vms/$VM_ID/callback" \
             -H "Content-Type: application/json" \
             -H "X-Verification-Token: $VERIFICATION_TOKEN" \
-            -d "$(jq -n --arg status "$STATUS" --arg publicIp "${PUBLIC_IP:-}" --arg instanceName "${INSTANCE_NAME:-}" --arg zone "${ZONE:-}" --arg errorMessage "$ERROR_MESSAGE" '{status: $status, publicIp: ($publicIp | select(length>0)), gcpInstanceName: ($instanceName | select(length>0)), gcpZone: ($zone | select(length>0)), errorMessage: ($errorMessage | select(length>0))}')" \
+            -d "$(jq -n --arg status "$STATUS" --arg publicIp "${PUBLIC_IP:-}" --arg instanceName "${INSTANCE_NAME:-}" --arg projectId "${{ secrets.GCP_PROJECT_ID }}" --arg zone "${ZONE:-}" --arg errorMessage "$ERROR_MESSAGE" '{status: $status, publicIp: ($publicIp | select(length>0)), gcpInstanceName: ($instanceName | select(length>0)), gcpProjectId: $projectId, gcpZone: ($zone | select(length>0)), errorMessage: ($errorMessage | select(length>0))}')" \
             || true

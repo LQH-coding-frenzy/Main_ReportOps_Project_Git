@@ -166,6 +166,7 @@ model LabVm {
   id              Int       @id @default(autoincrement())
   name            String    @unique
   gcpInstanceName String?
+  gcpProjectId    String?
   gcpZone         String?
   publicIp        String?
   machineType     String    @default("e2-micro")
