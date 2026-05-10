@@ -198,13 +198,14 @@ router.post('/vms/:id/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    const { status, publicIp, gcpInstanceName, gcpProjectId, gcpZone, errorMessage } = req.body as {
+    const { status, publicIp, gcpInstanceName, gcpProjectId, gcpZone, errorMessage, runUrl } = req.body as {
       status?: string;
       publicIp?: string;
       gcpInstanceName?: string;
       gcpProjectId?: string;
       gcpZone?: string;
       errorMessage?: string;
+      runUrl?: string;
     };
 
     const nextStatus =
@@ -238,6 +239,7 @@ router.post('/vms/:id/callback', async (req: Request, res: Response) => {
         ...(gcpProjectId && { gcpProjectId }),
         ...(gcpZone && { gcpZone }),
         ...(errorMessage !== undefined && { errorMessage }),
+        ...(runUrl && { latestRunUrl: runUrl }),
       },
     });
 
@@ -245,7 +247,7 @@ router.post('/vms/:id/callback', async (req: Request, res: Response) => {
       data: {
         userId: vm.createdById,
         action: 'lab_vm_callback',
-        details: { vmId: vm.id, status, publicIp, gcpInstanceName, gcpProjectId, gcpZone, errorMessage },
+        details: { vmId: vm.id, status, publicIp, gcpInstanceName, gcpProjectId, gcpZone, errorMessage, runUrl },
       },
     });
 

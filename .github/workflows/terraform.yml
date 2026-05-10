@@ -52,6 +52,15 @@ jobs:
           echo "VM_NAME=${{ github.event.inputs.vm_name || github.event.client_payload.vm_name }}" >> $GITHUB_ENV
           echo "VERIFICATION_TOKEN=${{ github.event.inputs.verification_token || github.event.client_payload.verification_token }}" >> $GITHUB_ENV
 
+      - name: Report Run URL to Backend
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sS -X POST "$BACKEND_PUBLIC_URL/api/lab/vms/$VM_ID/callback" \
+            -H "Content-Type: application/json" \
+            -H "X-Verification-Token: $VERIFICATION_TOKEN" \
+            -d "$(jq -n --arg runUrl "$RUN_URL" '{runUrl: $runUrl}')" \
+            || true
+
       - name: Google Auth
         id: auth
         uses: google-github-actions/auth@v2

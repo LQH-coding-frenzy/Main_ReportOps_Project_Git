@@ -177,6 +177,7 @@ model LabVm {
   autoStopAt      DateTime?
   terraformState  String?   // state key reference
   errorMessage    String?
+  latestRunUrl    String?
   createdById     Int
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

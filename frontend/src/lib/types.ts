@@ -229,6 +229,7 @@ export interface LabVm {
   verificationToken: string | null;
   autoStopAt: string | null;
   errorMessage: string | null;
+  latestRunUrl: string | null;
   createdBy: {
     id: number;
     displayName: string | null;

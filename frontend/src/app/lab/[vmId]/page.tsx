@@ -112,6 +112,17 @@ export default function LabVmDetailPage() {
               </Link>
             </>
           )}
+          {vm.latestRunUrl && (
+            <a
+              href={vm.latestRunUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-secondary btn-sm"
+              style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'var(--color-border)' }}
+            >
+              📋 View Log
+            </a>
+          )}
           {vm.status !== 'DESTROYED' && vm.status !== 'DESTROYING' && (
             <button className="btn btn-danger btn-sm" onClick={handleDestroy}>
               🗑️ Destroy
