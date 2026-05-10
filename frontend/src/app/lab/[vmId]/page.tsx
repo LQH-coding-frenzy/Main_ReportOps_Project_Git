@@ -29,7 +29,7 @@ export default function LabVmDetailPage() {
     } catch (err) {
       console.error('Failed to refresh VM detail:', err);
     }
-  }, 5000, !!vm && vm.status === 'PROVISIONING');
+  }, 5000, !!vm && (vm.status === 'PROVISIONING' || vm.status === 'DESTROYING'));
 
   async function handleDestroy() {
     if (!vm) return;
