@@ -79,6 +79,8 @@ jobs:
 
       - name: Terraform Init
         working-directory: infra/terraform/environments/dev
+        env:
+          GOOGLE_BACKEND_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
