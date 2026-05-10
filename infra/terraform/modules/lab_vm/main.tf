@@ -50,6 +50,11 @@ resource "google_compute_instance" "lab_vm" {
     useradd -m -s /bin/bash audituser || true
     echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
     chmod 0440 /etc/sudoers.d/audituser
+    mkdir -p /home/audituser/.ssh
+    chmod 700 /home/audituser/.ssh
+    echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJujB1QoBV3apoB5SC5nYnZOxDLt6KQvO4ojFEIEEm9c audituser@reportops" > /home/audituser/.ssh/authorized_keys
+    chmod 600 /home/audituser/.ssh/authorized_keys
+    chown -R audituser:audituser /home/audituser/.ssh
 
     echo "==> Generating Welcome Page"
     cat << 'HTML' > /usr/share/nginx/html/index.html

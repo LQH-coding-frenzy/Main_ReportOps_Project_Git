@@ -66,6 +66,12 @@ jobs:
             sudo npx prisma db push --accept-data-loss || true
             sudo npm run build
             
+            # Inject/update AUDIT_RUNNER_SSH_KEY in .env
+            echo "🔑 Updating AUDIT_RUNNER_SSH_KEY in .env..."
+            AUDIT_KEY='${{ secrets.AUDIT_RUNNER_SSH_KEY }}'
+            sudo sed -i '/^AUDIT_RUNNER_SSH_KEY=/d' /opt/reportops/backend/.env
+            printf 'AUDIT_RUNNER_SSH_KEY=%s\n' "$AUDIT_KEY" | sudo tee -a /opt/reportops/backend/.env > /dev/null
+
             # Restart backend via PM2
             echo "♻️ Restarting API server..."
             if sudo pm2 describe reportops-api > /dev/null 2>&1; then
