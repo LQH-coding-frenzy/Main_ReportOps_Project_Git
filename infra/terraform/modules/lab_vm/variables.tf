@@ -1,0 +1,76 @@
+variable "project_id" {
+  description = "The GCP project ID"
+  type        = string
+}
+
+variable "region" {
+  description = "The GCP region"
+  type        = string
+  default     = "asia-southeast1"
+}
+
+variable "zone" {
+  description = "The GCP zone"
+  type        = string
+  default     = "asia-southeast1-c"
+}
+
+variable "vm_name" {
+  description = "Name of the VM instance"
+  type        = string
+}
+
+variable "machine_type" {
+  description = "Machine type for the VM"
+  type        = string
+  default     = "e2-micro"
+}
+
+variable "disk_size_gb" {
+  description = "Boot disk size in GB"
+  type        = number
+  default     = 20
+}
+
+variable "network_name" {
+  description = "The network to attach the VM to"
+  type        = string
+  default     = "default"
+}
+
+variable "subnetwork_name" {
+  description = "The subnetwork to attach the VM to"
+  type        = string
+  default     = "default"
+}
+
+variable "labels" {
+  description = "Labels to attach to the VM"
+  type        = map(string)
+  default     = {
+    managed-by = "reportops"
+    purpose    = "audit-lab"
+  }
+}
+
+variable "vm_id" {
+  description = "Database ID of the VM"
+  type        = string
+}
+
+variable "owner_name" {
+  description = "Name of the VM owner"
+  type        = string
+  default     = "Unknown"
+}
+
+variable "verification_token" {
+  description = "Verification token for the welcome page"
+  type        = string
+}
+
+variable "ssh_keys" {
+  description = "Public SSH keys to inject into the instance metadata (format: 'user:ssh-key')"
+  type        = string
+  default     = ""
+}
