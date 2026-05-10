@@ -83,6 +83,8 @@ jobs:
         working-directory: infra/terraform/environments/dev
         env:
           GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
