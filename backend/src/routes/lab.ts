@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
+import { env } from '../config/env';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -113,12 +114,13 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
     });
 
     // Trigger Terraform GitHub Action if configured
-    if (process.env.GITHUB_PAT && process.env.GITHUB_REPO) {
-      fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/dispatches`, {
+    if (env.GITHUB_TOKEN && env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
+      const repo = `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`;
+      fetch(`https://api.github.com/repos/${repo}/dispatches`, {
         method: 'POST',
         headers: {
           'Accept': 'application/vnd.github.v3+json',
-          'Authorization': `token ${process.env.GITHUB_PAT}`,
+          'Authorization': `token ${env.GITHUB_TOKEN}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -197,12 +199,13 @@ router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: 
     });
 
     // Trigger Terraform GitHub Action to destroy if configured
-    if (process.env.GITHUB_PAT && process.env.GITHUB_REPO) {
-      fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/dispatches`, {
+    if (env.GITHUB_TOKEN && env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
+      const repo = `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`;
+      fetch(`https://api.github.com/repos/${repo}/dispatches`, {
         method: 'POST',
         headers: {
           'Accept': 'application/vnd.github.v3+json',
-          'Authorization': `token ${process.env.GITHUB_PAT}`,
+          'Authorization': `token ${env.GITHUB_TOKEN}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
