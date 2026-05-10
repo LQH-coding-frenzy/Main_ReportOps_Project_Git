@@ -112,6 +112,27 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
       },
     });
 
+    // Trigger Terraform GitHub Action if configured
+    if (process.env.GITHUB_PAT && process.env.GITHUB_REPO) {
+      fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/dispatches`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'Authorization': `token ${process.env.GITHUB_PAT}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event_type: 'trigger-terraform',
+          client_payload: {
+            action: 'apply',
+            vm_id: vm.id.toString(),
+            vm_name: vm.name,
+            verification_token: verificationToken,
+          }
+        })
+      }).catch(err => console.error('Failed to trigger GitHub Action:', err));
+    }
+
     res.status(201).json({ data: vm, status: 201 });
   } catch (error) {
     console.error('Create VM error:', error);
@@ -174,6 +195,27 @@ router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: 
         ipAddress: req.ip,
       },
     });
+
+    // Trigger Terraform GitHub Action to destroy if configured
+    if (process.env.GITHUB_PAT && process.env.GITHUB_REPO) {
+      fetch(`https://api.github.com/repos/${process.env.GITHUB_REPO}/dispatches`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'Authorization': `token ${process.env.GITHUB_PAT}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event_type: 'trigger-terraform',
+          client_payload: {
+            action: 'destroy',
+            vm_id: vm.id.toString(),
+            vm_name: vm.name,
+            verification_token: vm.verificationToken || 'none',
+          }
+        })
+      }).catch(err => console.error('Failed to trigger GitHub Action for destroy:', err));
+    }
 
     res.json({ data: { message: 'VM destruction initiated' }, status: 200 });
   } catch (error) {

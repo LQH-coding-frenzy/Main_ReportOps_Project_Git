@@ -1,0 +1,85 @@
+name: 'Terraform Lab VM Runner'
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action (apply or destroy)'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+      vm_id:
+        description: 'Database ID of the VM'
+        required: true
+        type: string
+      vm_name:
+        description: 'Name of the VM to create'
+        required: true
+        type: string
+      verification_token:
+        description: 'Token for the welcome page'
+        required: true
+        type: string
+  repository_dispatch:
+    types: [trigger-terraform]
+
+jobs:
+  terraform:
+    name: 'Terraform ${{ github.event.inputs.action || github.event.client_payload.action }}'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write' # Required for Workload Identity Federation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Ensure inputs are normalized whether from workflow_dispatch or repository_dispatch
+      - name: Set Variables
+        id: vars
+        run: |
+          echo "ACTION=${{ github.event.inputs.action || github.event.client_payload.action }}" >> $GITHUB_ENV
+          echo "VM_ID=${{ github.event.inputs.vm_id || github.event.client_payload.vm_id }}" >> $GITHUB_ENV
+          echo "VM_NAME=${{ github.event.inputs.vm_name || github.event.client_payload.vm_name }}" >> $GITHUB_ENV
+          echo "VERIFICATION_TOKEN=${{ github.event.inputs.verification_token || github.event.client_payload.verification_token }}" >> $GITHUB_ENV
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_TERRAFORM_SA_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Terraform Init
+        working-directory: infra/terraform/environments/dev
+        run: terraform init
+
+      - name: Terraform Apply/Destroy
+        working-directory: infra/terraform/environments/dev
+        run: |
+          if [ "$ACTION" == "destroy" ]; then
+            terraform destroy -auto-approve \
+              -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+              -var="vm_id=$VM_ID" \
+              -var="vm_name=$VM_NAME" \
+              -var="verification_token=$VERIFICATION_TOKEN"
+          else
+            terraform apply -auto-approve \
+              -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+              -var="vm_id=$VM_ID" \
+              -var="vm_name=$VM_NAME" \
+              -var="verification_token=$VERIFICATION_TOKEN"
+          fi
