@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, VmStatus } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { env } from '../config/env';
@@ -116,7 +116,7 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
     // Trigger Terraform GitHub Action if configured
     if (env.GITHUB_TOKEN && env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
       const repo = `${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}`;
-      fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+      const dispatchRes = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
         method: 'POST',
         headers: {
           'Accept': 'application/vnd.github.v3+json',
@@ -132,7 +132,24 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
             verification_token: verificationToken,
           }
         })
-      }).catch(err => console.error('Failed to trigger GitHub Action:', err));
+      });
+
+      if (!dispatchRes.ok) {
+        const detail = await dispatchRes.text().catch(() => '');
+        await prisma.labVm.update({
+          where: { id: vm.id },
+          data: {
+            status: 'ERROR',
+            errorMessage: `Failed to trigger Terraform workflow: ${dispatchRes.status} ${detail}`.slice(0, 500),
+          },
+        });
+
+        return res.status(502).json({
+          error: 'Failed to trigger Terraform workflow',
+          status: 502,
+          data: vm,
+        });
+      }
     }
 
     res.status(201).json({ data: vm, status: 201 });
@@ -165,6 +182,74 @@ router.patch('/vms/:id/status', requireAuth, requireLeader, async (req: Request,
     res.json({ data: vm, status: 200 });
   } catch (error) {
     console.error('Update VM status error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * POST /api/lab/vms/:id/callback
+ * Internal callback from the Terraform runner.
+ */
+router.post('/vms/:id/callback', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      res.status(400).json({ error: 'Invalid VM id', status: 400 });
+      return;
+    }
+
+    const { status, publicIp, gcpInstanceName, gcpZone, errorMessage } = req.body as {
+      status?: string;
+      publicIp?: string;
+      gcpInstanceName?: string;
+      gcpZone?: string;
+      errorMessage?: string;
+    };
+
+    const nextStatus =
+      status === 'PROVISIONING' ||
+      status === 'RUNNING' ||
+      status === 'STOPPED' ||
+      status === 'DESTROYING' ||
+      status === 'DESTROYED' ||
+      status === 'ERROR'
+        ? (status as VmStatus)
+        : undefined;
+
+    const vm = await prisma.labVm.findUnique({ where: { id } });
+    if (!vm) {
+      res.status(404).json({ error: 'VM not found', status: 404 });
+      return;
+    }
+
+    const providedToken = req.header('x-verification-token');
+    if (!providedToken || providedToken !== vm.verificationToken) {
+      res.status(403).json({ error: 'Invalid verification token', status: 403 });
+      return;
+    }
+
+    const updated = await prisma.labVm.update({
+      where: { id },
+      data: {
+        ...(nextStatus && { status: nextStatus }),
+        ...(publicIp && { publicIp }),
+        ...(gcpInstanceName && { gcpInstanceName }),
+        ...(gcpZone && { gcpZone }),
+        ...(errorMessage !== undefined && { errorMessage }),
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: vm.createdById,
+        action: 'lab_vm_callback',
+        details: { vmId: vm.id, status, publicIp, gcpInstanceName, gcpZone, errorMessage },
+      },
+    });
+
+    res.json({ data: updated, status: 200 });
+  } catch (error) {
+    console.error('Lab VM callback error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
   }
 });

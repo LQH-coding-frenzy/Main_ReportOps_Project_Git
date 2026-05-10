@@ -34,6 +34,9 @@ jobs:
       contents: 'read'
       id-token: 'write' # Required for Workload Identity Federation
 
+    env:
+      BACKEND_PUBLIC_URL: https://api.automatedprogram.app
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,3 +86,31 @@ jobs:
               -var="vm_name=$VM_NAME" \
               -var="verification_token=$VERIFICATION_TOKEN"
           fi
+
+      - name: Capture Terraform outputs
+        if: ${{ success() && github.event.inputs.action != 'destroy' && github.event.client_payload.action != 'destroy' }}
+        working-directory: infra/terraform/environments/dev
+        run: |
+          echo "PUBLIC_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
+          echo "INSTANCE_NAME=$(terraform output -raw instance_name)" >> $GITHUB_ENV
+          echo "ZONE=$(terraform output -raw zone)" >> $GITHUB_ENV
+
+      - name: Notify backend of VM result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ] && [ "${ACTION}" = "apply" ]; then
+            STATUS="RUNNING"
+            ERROR_MESSAGE=""
+          elif [ "${{ job.status }}" = "success" ] && [ "${ACTION}" = "destroy" ]; then
+            STATUS="DESTROYED"
+            ERROR_MESSAGE=""
+          else
+            STATUS="ERROR"
+            ERROR_MESSAGE="Terraform workflow failed or was destroyed before completion"
+          fi
+
+          curl -sS -X POST "$BACKEND_PUBLIC_URL/api/lab/vms/$VM_ID/callback" \
+            -H "Content-Type: application/json" \
+            -H "X-Verification-Token: $VERIFICATION_TOKEN" \
+            -d "$(jq -n --arg status "$STATUS" --arg publicIp "${PUBLIC_IP:-}" --arg instanceName "${INSTANCE_NAME:-}" --arg zone "${ZONE:-}" --arg errorMessage "$ERROR_MESSAGE" '{status: $status, publicIp: ($publicIp | select(length>0)), gcpInstanceName: ($instanceName | select(length>0)), gcpZone: ($zone | select(length>0)), errorMessage: ($errorMessage | select(length>0))}')" \
+            || true
