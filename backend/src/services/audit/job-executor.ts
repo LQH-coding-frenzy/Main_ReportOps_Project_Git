@@ -3,6 +3,10 @@ import { SSHRunner } from './ssh-runner';
 import { parseCisStdout, NormalizedAuditResult } from './cis-stdout-parser';
 import { renderTerminalEvidenceHtml, renderDashboardEvidenceHtml } from './evidence-renderer';
 import { supabase } from '../../config/supabase';
+import { chromium } from 'playwright';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 const prisma = new PrismaClient();
 
@@ -33,17 +37,23 @@ export class AuditJobExecutor {
         data: { status: 'RUNNING', startedAt: new Date() }
       });
 
-      // 2. Fetch active scripts for the given ownerSection (e.g., M1)
-      const scripts = await prisma.auditScript.findMany({
-        where: {
-          enabled: true,
-          pack: { ownerSection: this.job.ownerSection, enabled: true }
-        },
-        orderBy: { controlId: 'asc' }
-      });
+      const isOpenscap = this.job.mode === 'OPENSCAP_ONLY' || this.job.mode === 'OPENSCAP_AND_SCRIPTS';
+      const isScripts = this.job.mode === 'SCRIPTS_ONLY' || this.job.mode === 'OPENSCAP_AND_SCRIPTS';
 
-      if (scripts.length === 0) {
-        throw new Error(`No enabled scripts found for section ${this.job.ownerSection}`);
+      // 2. Fetch active scripts if needed
+      let scripts: any[] = [];
+      if (isScripts) {
+        scripts = await prisma.auditScript.findMany({
+          where: {
+            enabled: true,
+            pack: { ownerSection: this.job.ownerSection, enabled: true }
+          },
+          orderBy: { controlId: 'asc' }
+        });
+
+        if (scripts.length === 0) {
+          console.warn(`No enabled scripts found for section ${this.job.ownerSection}`);
+        }
       }
 
       // 3. Connect via SSH
@@ -71,79 +81,149 @@ export class AuditJobExecutor {
       let unknownCount = 0;
 
       // 4. Execute Scripts
-      for (const script of scripts) {
-        if (!script.scriptStoragePath) continue;
-        
-        const scriptStartTime = Date.now();
+      if (isScripts && scripts.length > 0) {
+        for (const script of scripts) {
+          if (!script.scriptStoragePath) continue;
+          
+          const scriptStartTime = Date.now();
 
-        // Download script from Supabase
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from(process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents')
-          .download(script.scriptStoragePath);
+          // Download script from Supabase
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from(process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents')
+            .download(script.scriptStoragePath);
 
-        if (downloadError || !fileData) {
-          console.error(`Failed to download script ${script.controlId}:`, downloadError);
-          continue;
-        }
-
-        const scriptContent = Buffer.from(await fileData.arrayBuffer());
-        const remoteScriptPath = `${remoteDir}/${script.controlId}.sh`;
-
-        // Upload to VM
-        await this.runner.uploadFile(scriptContent, remoteScriptPath);
-
-        // Make executable
-        await this.runner.execCommand(`chmod +x ${remoteScriptPath}`);
-
-        // Run the script (Audit scripts in M1 read state, running with sudo if required by CIS)
-        // MVP policy: allow_sudo_for_read_only_audit_commands = yes
-        const cmdResult = await this.runner.execCommand(`sudo ${remoteScriptPath}`);
-        
-        const scriptEndTime = Date.now();
-
-        // Parse Output
-        const parsed = parseCisStdout({
-          controlId: script.controlId,
-          title: script.title,
-          section: script.section,
-          ownerSection: this.job.ownerSection as 'M1',
-          assessmentType: script.assessmentType as 'Automated' | 'Manual',
-          stdout: cmdResult.stdout,
-          stderr: cmdResult.stderr,
-          exitCode: cmdResult.exitCode,
-          startedAt: new Date(scriptStartTime).toISOString(),
-          finishedAt: new Date(scriptEndTime).toISOString(),
-        });
-
-        results.push(parsed);
-
-        // Update counts
-        switch(parsed.status) {
-          case 'PASS': passCount++; break;
-          case 'FAIL': failCount++; break;
-          case 'MANUAL': manualCount++; break;
-          case 'ERROR': errorCount++; break;
-          default: unknownCount++; break;
-        }
-
-        // Save Script Run DB Record
-        await prisma.auditScriptRun.create({
-          data: {
-            auditJobId: this.jobId,
-            scriptId: script.id,
-            controlId: script.controlId,
-            status: parsed.status,
-            exitCode: cmdResult.exitCode,
-            normalizedResultJson: parsed as any,
-            startedAt: new Date(scriptStartTime),
-            finishedAt: new Date(scriptEndTime),
-            durationMs: scriptEndTime - scriptStartTime,
+          if (downloadError || !fileData) {
+            console.error(`Failed to download script ${script.controlId}:`, downloadError);
+            continue;
           }
-        });
+
+          const scriptContent = Buffer.from(await fileData.arrayBuffer());
+          const remoteScriptPath = `${remoteDir}/${script.controlId}.sh`;
+
+          // Upload to VM
+          await this.runner.uploadFile(scriptContent, remoteScriptPath);
+
+          // Make executable
+          await this.runner.execCommand(`chmod +x ${remoteScriptPath}`);
+
+          // Run the script (Audit scripts in M1 read state, running with sudo if required by CIS)
+          // MVP policy: allow_sudo_for_read_only_audit_commands = yes
+          const cmdResult = await this.runner.execCommand(`sudo ${remoteScriptPath}`);
+          
+          const scriptEndTime = Date.now();
+
+          // Parse Output
+          const parsed = parseCisStdout({
+            controlId: script.controlId,
+            title: script.title,
+            section: script.section,
+            ownerSection: this.job.ownerSection as 'M1',
+            assessmentType: script.assessmentType as 'Automated' | 'Manual',
+            stdout: cmdResult.stdout,
+            stderr: cmdResult.stderr,
+            exitCode: cmdResult.exitCode,
+            startedAt: new Date(scriptStartTime).toISOString(),
+            finishedAt: new Date(scriptEndTime).toISOString(),
+          });
+
+          results.push(parsed);
+
+          // Update counts
+          switch(parsed.status) {
+            case 'PASS': passCount++; break;
+            case 'FAIL': failCount++; break;
+            case 'MANUAL': manualCount++; break;
+            case 'ERROR': errorCount++; break;
+            default: unknownCount++; break;
+          }
+
+          // Save Script Run DB Record
+          await prisma.auditScriptRun.create({
+            data: {
+              auditJobId: this.jobId,
+              scriptId: script.id,
+              controlId: script.controlId,
+              status: parsed.status,
+              exitCode: cmdResult.exitCode,
+              normalizedResultJson: parsed as any,
+              startedAt: new Date(scriptStartTime),
+              finishedAt: new Date(scriptEndTime),
+              durationMs: scriptEndTime - scriptStartTime,
+            }
+          });
+        }
+      }
+
+      // 4.5 Execute OpenSCAP Baseline if requested
+      if (isOpenscap) {
+        console.log(`Executing OpenSCAP baseline scan for job ${this.jobId}...`);
+        const profile = 'xccdf_org.ssgproject.content_profile_cis';
+        const dsPath = '/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml';
+        
+        // Ensure oscap is installed (should be done by Terraform, but just in case)
+        await this.runner.execCommand(`sudo dnf install -y openscap-scanner scap-security-guide`);
+        
+        const oscapCmd = `sudo oscap xccdf eval --profile ${profile} --results ${remoteDir}/oscap-results.xml --report ${remoteDir}/oscap-report.html ${dsPath}`;
+        
+        // oscap exit code is 2 if there are failures, 0 if 100% pass, 1 on error
+        await this.runner.execCommand(oscapCmd);
+        
+        // Count pass/fail directly from XML
+        const passOutput = await this.runner.execCommand(`grep -c '<result>pass</result>' ${remoteDir}/oscap-results.xml || echo 0`);
+        const failOutput = await this.runner.execCommand(`grep -c '<result>fail</result>' ${remoteDir}/oscap-results.xml || echo 0`);
+        const errorOutput = await this.runner.execCommand(`grep -c '<result>error</result>' ${remoteDir}/oscap-results.xml || echo 0`);
+        
+        const oPass = parseInt(passOutput.stdout.trim()) || 0;
+        const oFail = parseInt(failOutput.stdout.trim()) || 0;
+        const oError = parseInt(errorOutput.stdout.trim()) || 0;
+        
+        passCount += oPass;
+        failCount += oFail;
+        errorCount += oError;
+
+        // Add a mock result row for OpenSCAP so it appears in the dashboard
+        results.push({
+          controlId: 'OpenSCAP',
+          title: `OpenSCAP CIS Baseline (Pass: ${oPass}, Fail: ${oFail})`,
+          section: 'OS',
+          status: oFail > 0 ? 'FAIL' : 'PASS',
+          assessmentType: 'Automated',
+          ownerSection: this.job.ownerSection as 'M1',
+          evidence: [`OpenSCAP scan completed.`, `Passed: ${oPass}`, `Failed: ${oFail}`, `Errors: ${oError}`],
+          info: [],
+          failReasons: [],
+          correctlySet: [],
+          rawStdout: oscapCmd,
+          rawStderr: '',
+          parser: 'cis_stdout',
+          parserWarnings: [],
+          exitCode: 0,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        } as NormalizedAuditResult);
+        
+        // Download HTML report and upload to Supabase
+        const oscapHtml = await this.runner.execCommand(`cat ${remoteDir}/oscap-report.html`);
+        if (oscapHtml.stdout) {
+          const oscapReportPath = `archives/audits/${this.jobId}/openscap-report.html`;
+          const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+          await supabase.storage.from(bucket).upload(oscapReportPath, Buffer.from(oscapHtml.stdout, 'utf-8'), { contentType: 'text/html', upsert: true });
+          
+          await prisma.auditEvidence.create({
+            data: {
+              auditJobId: this.jobId,
+              artifactType: 'OPENSCAP_REPORT',
+              artifactName: 'OpenSCAP HTML Report',
+              storagePath: oscapReportPath,
+              mimeType: 'text/html',
+              sizeBytes: Buffer.byteLength(oscapHtml.stdout, 'utf-8'),
+            }
+          });
+        }
       }
 
       // Cleanup VM temp dir
-      await this.runner.execCommand(`rm -rf ${remoteDir}`);
+      await this.runner.execCommand(`sudo rm -rf ${remoteDir}`);
 
       // 5. Generate Evidence Artifacts
       const timestamp = new Date().toLocaleString('vi-VN');
@@ -211,6 +291,41 @@ export class AuditJobExecutor {
           }
         ]
       });
+
+      // 6.5 Capture Screenshot of Dashboard Evidence using Playwright
+      try {
+        console.log('Capturing Playwright screenshot...');
+        const tempHtmlPath = path.join(os.tmpdir(), `dashboard-${this.jobId}.html`);
+        fs.writeFileSync(tempHtmlPath, dashboardHtml, 'utf-8');
+
+        const browser = await chromium.launch({ headless: true });
+        const page = await browser.newPage();
+        await page.goto(`file://${tempHtmlPath}`, { waitUntil: 'networkidle' });
+        
+        // Wait an extra second for any animations to settle
+        await page.waitForTimeout(1000);
+        
+        const screenshotBuffer = await page.screenshot({ fullPage: true });
+        await browser.close();
+        fs.unlinkSync(tempHtmlPath);
+
+        const screenshotPath = `${evidencePathPrefix}/dashboard-screenshot.png`;
+        await supabase.storage.from(bucket).upload(screenshotPath, screenshotBuffer, { contentType: 'image/png', upsert: true });
+
+        await prisma.auditEvidence.create({
+          data: {
+            auditJobId: this.jobId,
+            artifactType: 'DASHBOARD_SCREENSHOT',
+            artifactName: 'Dashboard Screenshot',
+            storagePath: screenshotPath,
+            mimeType: 'image/png',
+            sizeBytes: screenshotBuffer.length,
+          }
+        });
+      } catch (screenshotError) {
+        console.error('Failed to capture dashboard screenshot:', screenshotError);
+        // Do not fail the job if screenshot fails
+      }
 
       // 7. Complete Job
       const finishedAt = new Date();
