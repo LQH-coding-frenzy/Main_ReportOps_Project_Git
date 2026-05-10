@@ -82,7 +82,7 @@ jobs:
       - name: Terraform Init
         working-directory: infra/terraform/environments/dev
         env:
-          GOOGLE_BACKEND_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
@@ -111,6 +111,8 @@ jobs:
 
       - name: Terraform Apply/Destroy
         working-directory: infra/terraform/environments/dev
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           if [ "$ACTION" == "destroy" ]; then
             terraform destroy -auto-approve \
@@ -129,6 +131,8 @@ jobs:
       - name: Capture Terraform outputs
         if: ${{ success() && github.event.inputs.action != 'destroy' && github.event.client_payload.action != 'destroy' }}
         working-directory: infra/terraform/environments/dev
+        env:
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           echo "PUBLIC_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
           echo "INSTANCE_NAME=$(terraform output -raw instance_name)" >> $GITHUB_ENV
