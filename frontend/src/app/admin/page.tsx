@@ -51,9 +51,9 @@ export default function AdminOverviewPage() {
   const quickLinks = [
     { href: '/admin/users', icon: '👥', title: 'Người dùng', desc: 'Xem, phân quyền và quản lý thành viên' },
     { href: '/admin/sections', icon: '📑', title: 'Sections & Phân công', desc: 'Gán thành viên vào sections CIS' },
-    { href: '/admin/controls', icon: '🔒', title: 'CIS Controls', desc: 'Danh sách tiêu chí benchmark' },
+    { href: '/admin/audit-packs', icon: '📦', title: 'Audit Packs', desc: 'Danh sách gói kịch bản audit' },
     { href: '/admin/audit-logs', icon: '📜', title: 'Nhật ký hệ thống', desc: 'Mọi hành động đều được ghi lại' },
-    { href: '/admin/release-settings', icon: '📦', title: 'Release Settings', desc: 'Định dạng và artifacts đính kèm' },
+    { href: '/admin/release-settings', icon: '🚀', title: 'Release Settings', desc: 'Định dạng và artifacts đính kèm' },
     { href: '/admin/settings', icon: '⚡', title: 'Cài đặt', desc: 'GitHub OAuth, ONLYOFFICE, Storage' },
   ];
 

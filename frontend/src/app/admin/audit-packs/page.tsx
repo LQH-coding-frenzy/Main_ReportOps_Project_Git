@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { getAuditPacks, toggleAuditScript } from '../../../../lib/api';
-import type { AuditPack } from '../../../../lib/types';
-import { useToast } from '../../../../components/ui/Toast';
+import { getAuditPacks, toggleAuditScript } from '../../../lib/api';
+import type { AuditPack } from '../../../lib/types';
+import { useToast } from '../../../components/ui/Toast';
 
 const RISK_COLOR: Record<string, string> = {
   critical: 'badge-danger',
@@ -13,7 +13,7 @@ const RISK_COLOR: Record<string, string> = {
   low: 'badge-success',
 };
 
-export default function AdminAuditPacksM1Page() {
+export default function AdminAuditPacksPage() {
   const [packs, setPacks] = useState<AuditPack[]>([]);
   const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
@@ -21,7 +21,7 @@ export default function AdminAuditPacksM1Page() {
   const loadPacks = useCallback(async () => {
     try {
       const data = await getAuditPacks();
-      setPacks(data.filter((p) => p.ownerSection === 'M1'));
+      setPacks(data);
     } catch (err) {
       console.error(err);
       showToast('Không thể tải audit packs', 'error');
@@ -49,7 +49,7 @@ export default function AdminAuditPacksM1Page() {
       <div className="admin-content">
         <div className="admin-loading">
           <div className="spinner" />
-          <span>Đang tải M1 audit scripts...</span>
+          <span>Đang tải audit packs...</span>
         </div>
       </div>
     );
@@ -58,9 +58,9 @@ export default function AdminAuditPacksM1Page() {
   return (
     <div className="admin-content">
       <div className="page-header">
-        <h1 className="page-title">📜 M1 Audit Scripts</h1>
+        <h1 className="page-title">📦 Audit Packs</h1>
         <p className="page-subtitle">
-          Quản lý shell scripts cho §1.1, §1.2, §1.4, §1.5, §1.6, §2.3, §2.4
+          Quản lý các gói kịch bản (Shell scripts) dùng để audit cấu hình bảo mật.
         </p>
       </div>
 

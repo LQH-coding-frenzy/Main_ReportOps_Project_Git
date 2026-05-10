@@ -64,10 +64,26 @@ export function Navbar({ user }: NavbarProps) {
               </li>
               <li>
                 <Link 
-                  href="/performance" 
-                  className={`navbar-link ${pathname === '/performance' ? 'active' : ''}`}
+                  href="/lab" 
+                  className={`navbar-link ${pathname.startsWith('/lab') ? 'active' : ''}`}
                 >
-                  Performance
+                  Lab VMs
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  href="/audit" 
+                  className={`navbar-link ${pathname.startsWith('/audit') ? 'active' : ''}`}
+                >
+                  Auto Audit
+                </Link>
+              </li>
+              <li>
+                <Link 
+                  href="/archive" 
+                  className={`navbar-link ${pathname.startsWith('/archive') ? 'active' : ''}`}
+                >
+                  Archives
                 </Link>
               </li>
               <li>
