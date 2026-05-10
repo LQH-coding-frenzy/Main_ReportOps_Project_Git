@@ -153,8 +153,10 @@ jobs:
             ERROR_MESSAGE="Terraform workflow failed or was destroyed before completion"
           fi
 
-          curl -sS -X POST "$BACKEND_PUBLIC_URL/api/lab/vms/$VM_ID/callback" \
+          RESPONSE=$(curl -sS -w "\nHTTP_STATUS=%{http_code}" -X POST "$BACKEND_PUBLIC_URL/api/lab/vms/$VM_ID/callback" \
             -H "Content-Type: application/json" \
             -H "X-Verification-Token: $VERIFICATION_TOKEN" \
-            -d "$(jq -n --arg status "$STATUS" --arg publicIp "${PUBLIC_IP:-}" --arg instanceName "${INSTANCE_NAME:-}" --arg projectId "${{ secrets.GCP_PROJECT_ID }}" --arg zone "${ZONE:-}" --arg errorMessage "$ERROR_MESSAGE" '{status: $status, publicIp: ($publicIp | select(length>0)), gcpInstanceName: ($instanceName | select(length>0)), gcpProjectId: $projectId, gcpZone: ($zone | select(length>0)), errorMessage: ($errorMessage | select(length>0))}')" \
-            || true
+            -d "$(jq -n --arg status "$STATUS" --arg publicIp "${PUBLIC_IP:-}" --arg instanceName "${INSTANCE_NAME:-}" --arg projectId "${{ secrets.GCP_PROJECT_ID }}" --arg zone "${ZONE:-}" --arg errorMessage "$ERROR_MESSAGE" '{status: $status, publicIp: ($publicIp | select(length>0)), gcpInstanceName: ($instanceName | select(length>0)), gcpProjectId: $projectId, gcpZone: ($zone | select(length>0)), errorMessage: ($errorMessage | select(length>0))}')") || true
+          
+          echo "Backend Response:"
+          echo "$RESPONSE"
