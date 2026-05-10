@@ -77,6 +77,15 @@ jobs:
         with:
           terraform_version: 1.5.0
 
+      - name: Ensure Terraform State Bucket Exists
+        run: |
+          if ! gcloud storage buckets describe gs://$TF_STATE_BUCKET --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Bucket $TF_STATE_BUCKET does not exist. Creating it..."
+            gcloud storage buckets create gs://$TF_STATE_BUCKET --project="${{ secrets.GCP_PROJECT_ID }}" --location="asia-southeast1"
+            # Enable versioning for terraform state
+            gcloud storage buckets update gs://$TF_STATE_BUCKET --versioning
+          fi
+
       - name: Terraform Init
         working-directory: infra/terraform/environments/dev
         run: |
