@@ -10,6 +10,9 @@ import type {
   PaginatedResponse,
   AuditLogEntry,
   PerformanceData,
+  LabVm,
+  AuditPack,
+  AuditJob,
 } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -199,4 +202,65 @@ export async function adminUnassignSection(sectionId: number, userId: number): P
 export async function getAdminStats(): Promise<AdminStats> {
   const res = await apiFetch<ApiResponse<AdminStats>>('/api/admin/stats');
   return res.data;
+}
+
+// ═══════════════════════════════════════════════════
+// Audit Jobs API
+// ═══════════════════════════════════════════════════
+
+export async function getAuditJobs(page = 1): Promise<{ jobs: AuditJob[]; pagination: { page: number; total: number; totalPages: number } }> {
+  const res = await apiFetch<ApiResponse<{ jobs: AuditJob[]; pagination: { page: number; total: number; totalPages: number } }>>(`/api/audit-jobs?page=${page}`);
+  return res.data;
+}
+
+export async function getAuditJob(id: number): Promise<AuditJob> {
+  const res = await apiFetch<ApiResponse<AuditJob>>(`/api/audit-jobs/${id}`);
+  return res.data;
+}
+
+export async function createAuditJob(vmId: number, mode: string): Promise<AuditJob> {
+  const res = await apiFetch<ApiResponse<AuditJob>>('/api/audit-jobs', {
+    method: 'POST',
+    body: JSON.stringify({ vmId, mode, ownerSection: 'M1' }),
+  });
+  return res.data;
+}
+
+// ═══════════════════════════════════════════════════
+// Lab VM API
+// ═══════════════════════════════════════════════════
+
+export async function getLabVms(): Promise<LabVm[]> {
+  const res = await apiFetch<ApiResponse<LabVm[]>>('/api/lab/vms');
+  return res.data;
+}
+
+export async function getLabVm(id: number): Promise<LabVm> {
+  const res = await apiFetch<ApiResponse<LabVm>>(`/api/lab/vms/${id}`);
+  return res.data;
+}
+
+export async function createLabVm(name: string, machineType?: string): Promise<LabVm> {
+  const res = await apiFetch<ApiResponse<LabVm>>('/api/lab/vms', {
+    method: 'POST',
+    body: JSON.stringify({ name, machineType: machineType || 'e2-micro' }),
+  });
+  return res.data;
+}
+
+export async function deleteLabVm(id: number): Promise<void> {
+  await apiFetch(`/api/lab/vms/${id}`, { method: 'DELETE' });
+}
+
+// ═══════════════════════════════════════════════════
+// Audit Scripts / Packs API
+// ═══════════════════════════════════════════════════
+
+export async function getAuditPacks(): Promise<AuditPack[]> {
+  const res = await apiFetch<ApiResponse<AuditPack[]>>('/api/audit-scripts/packs');
+  return res.data;
+}
+
+export async function toggleAuditScript(id: number): Promise<void> {
+  await apiFetch(`/api/audit-scripts/${id}/toggle`, { method: 'PATCH' });
 }

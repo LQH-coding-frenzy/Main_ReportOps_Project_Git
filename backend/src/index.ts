@@ -13,6 +13,9 @@ import reportRoutes from './routes/reports';
 import releaseRoutes from './routes/releases';
 import auditRoutes from './routes/audit';
 import adminRoutes from './routes/admin';
+import auditJobRoutes from './routes/audit-jobs';
+import auditScriptRoutes from './routes/audit-scripts';
+import labRoutes from './routes/lab';
 
 // Validate environment
 validateEnv();
@@ -51,6 +54,9 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/releases', releaseRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/audit-jobs', auditJobRoutes);
+app.use('/api/audit-scripts', auditScriptRoutes);
+app.use('/api/lab', labRoutes);
 
 // ── 404 Handler ──
 app.use((_req, res) => {

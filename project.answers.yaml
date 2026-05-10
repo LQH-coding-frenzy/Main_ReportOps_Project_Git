@@ -1,0 +1,75 @@
+# ═══════════════════════════════════════════════════
+# ReportOps — Project Answers (Source of Truth)
+# AI agent reads this file before automation steps.
+# ═══════════════════════════════════════════════════
+
+project:
+  gcp_project_id: "YOUR_GCP_PROJECT_ID"  # TODO: Set actual project ID
+  region: "asia-southeast1"
+  zone: "asia-southeast1-c"
+  app_name: "reportops"
+  environment: "dev"
+
+infrastructure:
+  use_dedicated_gcp_project: yes
+  accept_possible_cloud_cost: yes
+  require_cost_saving_defaults: yes
+  ai_enable_required_gcp_apis: yes
+  use_terraform_as_source_of_truth: yes
+  reset_vm_by_terraform_recreate: yes
+  vm_has_public_ip: yes
+  vm_has_public_welcome_page_port_80: yes
+  ai_create_tfstate_bucket: yes
+  ai_create_archive_bucket: yes
+
+vm_defaults:
+  machine_type: "e2-micro"
+  disk_size_gb: 20
+  os_family: "almalinux-9"
+  public_http_port: 80
+  ssh_port: 22
+  auto_stop_hours: 4
+  reset_mode: "recreate"
+
+security:
+  ssh_only_from_runner: no
+  demo_open_ssh_interface: yes
+  ssh_button_in_web_app: yes
+  ssh_firewall_ttl_minutes: 60
+  use_audit_runner_ssh_key_in_secret_manager: yes
+  no_auto_remediation_in_mvp: yes
+  audit_logs_for_all_actions: yes
+
+script_execution_policy:
+  audit_only_mode: yes
+  allow_sudo_for_read_only_audit_commands: yes
+  block_destructive_commands: yes
+  full_unrestricted_root_execution: no
+
+cicd:
+  deploy_web_on_vercel: yes
+  use_github_actions: yes
+  ai_create_or_update_github_actions: yes
+  use_workload_identity_federation: yes
+  ai_configure_wif_after_auth: yes
+  avoid_service_account_json_key: yes
+
+workflow:
+  accept_cis_stdout_instead_of_json_only: yes
+  control_id_from_filename_or_manifest: yes
+  ai_generate_manifest: yes
+  normalize_stdout_to_json: yes
+  keep_raw_stdout_stderr: yes
+  generate_terminal_html_evidence: yes
+  generate_dashboard_html_evidence: yes
+  screenshot_with_playwright: yes
+  save_and_index_screenshots: yes
+  auto_attach_screenshots_to_reportops: no
+
+m1_scope:
+  implement_m1_first_only: yes
+  openscap_baseline_enabled: yes
+  uploaded_m1_scripts_enabled: yes
+  allow_modes_openscap_only_m1_only_or_both: yes
+  archive_openscap_raw_files: yes
+  archive_m1_script_evidence: yes

@@ -205,3 +205,137 @@ export interface PaginatedResponse<T> {
   };
   status: number;
 }
+
+// ═══════════════════════════════════════════════════
+// Auto-Audit Types
+// ═══════════════════════════════════════════════════
+
+export type VmStatus = 'PROVISIONING' | 'RUNNING' | 'STOPPED' | 'DESTROYING' | 'DESTROYED' | 'ERROR';
+export type AuditJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+export type AuditResultStatus = 'PASS' | 'FAIL' | 'MANUAL' | 'NOT_APPLICABLE' | 'ERROR' | 'UNKNOWN';
+export type AuditMode = 'OPENSCAP_ONLY' | 'SCRIPTS_ONLY' | 'OPENSCAP_AND_SCRIPTS';
+
+export interface LabVm {
+  id: number;
+  name: string;
+  gcpInstanceName: string | null;
+  gcpZone: string | null;
+  publicIp: string | null;
+  machineType: string;
+  osFamily: string;
+  diskSizeGb: number;
+  status: VmStatus;
+  verificationToken: string | null;
+  autoStopAt: string | null;
+  errorMessage: string | null;
+  createdBy: {
+    id: number;
+    displayName: string | null;
+    githubUsername: string;
+    avatarUrl: string | null;
+  };
+  _count?: { auditJobs: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditPack {
+  id: number;
+  packId: string;
+  ownerSection: string;
+  title: string;
+  benchmarkName: string;
+  benchmarkVersion: string;
+  profile: string;
+  sections: string[];
+  enabled: boolean;
+  _count?: { scripts: number };
+  scripts?: AuditScript[];
+}
+
+export interface AuditScript {
+  id: number;
+  controlId: string;
+  title: string;
+  section: string;
+  assessmentType: string;
+  parserMode: string;
+  risk: string;
+  enabled: boolean;
+  scriptSha256: string | null;
+}
+
+export interface ScriptValidationResult {
+  id: number;
+  valid: boolean;
+  warningsJson: string[] | null;
+  errorsJson: string[] | null;
+  createdAt: string;
+}
+
+export interface AuditJob {
+  id: number;
+  vmId: number;
+  mode: AuditMode;
+  status: AuditJobStatus;
+  ownerSection: string;
+  totalControls: number;
+  passCount: number;
+  failCount: number;
+  manualCount: number;
+  errorCount: number;
+  unknownCount: number;
+  score: number | null;
+  riskLevel: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  vm: {
+    id: number;
+    name: string;
+    publicIp: string | null;
+    status: VmStatus;
+  };
+  triggeredBy: {
+    id: number;
+    displayName: string | null;
+    githubUsername: string;
+    avatarUrl: string | null;
+  };
+  scriptRuns?: AuditScriptRun[];
+  evidences?: AuditEvidence[];
+  _count?: { scriptRuns: number; evidences: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditScriptRun {
+  id: number;
+  controlId: string;
+  status: AuditResultStatus;
+  exitCode: number | null;
+  normalizedResultJson: Record<string, unknown> | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  script: {
+    id: number;
+    controlId: string;
+    title: string;
+    section: string;
+    assessmentType: string;
+    risk: string;
+  };
+}
+
+export interface AuditEvidence {
+  id: number;
+  artifactType: string;
+  artifactName: string;
+  storagePath: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+}
+

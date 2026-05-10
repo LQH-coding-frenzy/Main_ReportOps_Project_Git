@@ -27,6 +27,9 @@ model User {
   documentVersions DocumentVersion[]
   auditLogs        AuditLog[]
   reportBuilds     ReportBuild[]
+  labVms           LabVm[]
+  auditScripts     AuditScript[]
+  auditJobs        AuditJob[]
 }
 
 model Section {
@@ -121,4 +124,178 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+}
+
+// ═══════════════════════════════════════════════════
+// Auto-Audit Models
+// ═══════════════════════════════════════════════════
+
+enum VmStatus {
+  PROVISIONING
+  RUNNING
+  STOPPED
+  DESTROYING
+  DESTROYED
+  ERROR
+}
+
+enum AuditJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AuditResultStatus {
+  PASS
+  FAIL
+  MANUAL
+  NOT_APPLICABLE
+  ERROR
+  UNKNOWN
+}
+
+enum AuditMode {
+  OPENSCAP_ONLY
+  SCRIPTS_ONLY
+  OPENSCAP_AND_SCRIPTS
+}
+
+model LabVm {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique
+  gcpInstanceName String?
+  gcpZone         String?
+  publicIp        String?
+  machineType     String    @default("e2-micro")
+  osFamily        String    @default("almalinux-9")
+  diskSizeGb      Int       @default(20)
+  status          VmStatus  @default(PROVISIONING)
+  verificationToken String?
+  autoStopAt      DateTime?
+  terraformState  String?   // state key reference
+  errorMessage    String?
+  createdById     Int
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  createdBy  User       @relation(fields: [createdById], references: [id])
+  auditJobs  AuditJob[]
+}
+
+model AuditPack {
+  id            Int      @id @default(autoincrement())
+  packId        String   @unique // "m1-filesystem-package-boot-process-crypto-time-scheduler"
+  ownerSection  String   // "M1"
+  title         String
+  benchmarkName String   @default("CIS AlmaLinux OS 9 Benchmark")
+  benchmarkVersion String @default("2.0.0")
+  profile       String   @default("Level 1 - Server")
+  sections      String[] // ["1.1", "1.2", "1.4", ...]
+  runtimeType   String   @default("shell")
+  outputMode    String   @default("cis_stdout")
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  scripts AuditScript[]
+}
+
+model AuditScript {
+  id              Int      @id @default(autoincrement())
+  packId          Int
+  controlId       String   // "1.2.1.2"
+  title           String   // "Ensure gpgcheck is globally activated"
+  section         String   // "1.2"
+  assessmentType  String   // "Automated" | "Manual"
+  parserMode      String   @default("cis_stdout")
+  scriptStoragePath String // Supabase storage path
+  scriptSha256    String?
+  risk            String   @default("medium") // "critical" | "high" | "medium" | "low"
+  enabled         Boolean  @default(true)
+  createdById     Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  pack        AuditPack          @relation(fields: [packId], references: [id], onDelete: Cascade)
+  createdBy   User               @relation(fields: [createdById], references: [id])
+  validations ScriptValidation[]
+  runs        AuditScriptRun[]
+
+  @@unique([packId, controlId])
+}
+
+model ScriptValidation {
+  id           Int      @id @default(autoincrement())
+  scriptId     Int
+  valid        Boolean
+  warningsJson Json?    // string[]
+  errorsJson   Json?    // string[]
+  createdAt    DateTime @default(now())
+
+  script AuditScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+}
+
+model AuditJob {
+  id             Int            @id @default(autoincrement())
+  vmId           Int
+  mode           AuditMode      @default(SCRIPTS_ONLY)
+  status         AuditJobStatus @default(PENDING)
+  ownerSection   String         @default("M1")
+  totalControls  Int            @default(0)
+  passCount      Int            @default(0)
+  failCount      Int            @default(0)
+  manualCount    Int            @default(0)
+  errorCount     Int            @default(0)
+  unknownCount   Int            @default(0)
+  score          Float?         // PASS / (PASS + FAIL + ERROR) * 100
+  riskLevel      String?        // "Critical" | "High" | "Medium" | "Low"
+  summaryJson    Json?          // full summary
+  errorMessage   String?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  durationMs     Int?
+  triggeredById  Int
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  vm          LabVm            @relation(fields: [vmId], references: [id])
+  triggeredBy User             @relation(fields: [triggeredById], references: [id])
+  scriptRuns  AuditScriptRun[]
+  evidences   AuditEvidence[]
+}
+
+model AuditScriptRun {
+  id                  Int               @id @default(autoincrement())
+  auditJobId          Int
+  scriptId            Int
+  controlId           String
+  status              AuditResultStatus @default(UNKNOWN)
+  exitCode            Int?
+  stdoutRef           String?           // storage path to raw stdout
+  stderrRef           String?           // storage path to raw stderr
+  normalizedResultJson Json?            // NormalizedAuditResult
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  durationMs          Int?
+
+  auditJob AuditJob    @relation(fields: [auditJobId], references: [id], onDelete: Cascade)
+  script   AuditScript @relation(fields: [scriptId], references: [id])
+}
+
+model AuditEvidence {
+  id            Int      @id @default(autoincrement())
+  auditJobId    Int
+  vmId          Int?
+  ownerSection  String   @default("M1")
+  artifactType  String   // RAW_STDOUT, NORMALIZED_JSON, TERMINAL_HTML, DASHBOARD_HTML, etc.
+  artifactName  String
+  storagePath   String
+  mimeType      String?
+  sizeBytes     Int?
+  checksum      String?
+  createdAt     DateTime @default(now())
+
+  auditJob AuditJob @relation(fields: [auditJobId], references: [id], onDelete: Cascade)
 }
