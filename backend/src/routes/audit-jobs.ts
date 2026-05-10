@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
+import { AuditJobExecutor } from '../services/audit/job-executor';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -128,6 +129,12 @@ router.post('/', requireAuth, requireLeader, async (req: Request, res: Response)
         details: { jobId: job.id, vmId, mode: mode || 'SCRIPTS_ONLY' },
         ipAddress: req.ip,
       },
+    });
+
+    // Trigger executor asynchronously
+    const executor = new AuditJobExecutor(job.id);
+    executor.execute().catch((err) => {
+      console.error(`Background executor failed for Job ${job.id}:`, err);
     });
 
     res.status(201).json({ data: job, status: 201 });
