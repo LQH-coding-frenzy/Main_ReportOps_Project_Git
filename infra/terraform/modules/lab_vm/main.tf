@@ -44,7 +44,7 @@ resource "google_compute_instance" "lab_vm" {
 
     echo "==> Updating packages and installing prerequisites"
     dnf install -y epel-release
-    dnf install -y nginx openscap-scanner openscap-utils scap-security-guide jq
+    dnf install -y nginx firewalld openscap-scanner openscap-utils scap-security-guide jq
 
     echo "==> Creating audituser"
     useradd -m -s /bin/bash audituser || true
@@ -86,6 +86,9 @@ resource "google_compute_instance" "lab_vm" {
     HTML
 
     echo "==> Enabling and starting Nginx"
+    systemctl enable --now firewalld
+    firewall-cmd --permanent --add-service=http
+    firewall-cmd --reload
     systemctl enable --now nginx
 
     echo "==> Setup complete"
