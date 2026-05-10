@@ -77,15 +77,6 @@ jobs:
         with:
           terraform_version: 1.5.0
 
-      - name: Ensure Terraform State Bucket Exists
-        run: |
-          if ! gcloud storage buckets describe gs://$TF_STATE_BUCKET --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
-            echo "Bucket $TF_STATE_BUCKET does not exist. Creating it..."
-            gcloud storage buckets create gs://$TF_STATE_BUCKET --project="${{ secrets.GCP_PROJECT_ID }}" --location="asia-southeast1"
-            # Enable versioning for terraform state
-            gcloud storage buckets update gs://$TF_STATE_BUCKET --versioning
-          fi
-
       - name: Terraform Init
         working-directory: infra/terraform/environments/dev
         run: |
@@ -142,21 +133,41 @@ jobs:
       - name: Notify backend of VM result
         if: always()
         run: |
-          if [ "${{ job.status }}" = "success" ] && [ "${ACTION}" = "apply" ]; then
+          # Resolve action directly from github event (safe even if Set Variables step failed)
+          ACTION_RAW="${{ github.event.inputs.action || github.event.client_payload.action }}"
+          VM_ID_RAW="${{ github.event.inputs.vm_id || github.event.client_payload.vm_id }}"
+          TOKEN_RAW="${{ github.event.inputs.verification_token || github.event.client_payload.verification_token }}"
+
+          if [ "${{ job.status }}" = "success" ] && [ "${ACTION_RAW}" = "apply" ]; then
             STATUS="RUNNING"
             ERROR_MESSAGE=""
-          elif [ "${{ job.status }}" = "success" ] && [ "${ACTION}" = "destroy" ]; then
+          elif [ "${{ job.status }}" = "success" ] && [ "${ACTION_RAW}" = "destroy" ]; then
             STATUS="DESTROYED"
             ERROR_MESSAGE=""
           else
             STATUS="ERROR"
-            ERROR_MESSAGE="Terraform workflow failed or was destroyed before completion"
+            ERROR_MESSAGE="GitHub Actions workflow failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           fi
 
-          RESPONSE=$(curl -sS -w "\nHTTP_STATUS=%{http_code}" -X POST "$BACKEND_PUBLIC_URL/api/lab/vms/$VM_ID/callback" \
+          echo "Notifying backend: VM=$VM_ID_RAW STATUS=$STATUS"
+          RESPONSE=$(curl -sS -w "\nHTTP_STATUS=%{http_code}" -X POST "$BACKEND_PUBLIC_URL/api/lab/vms/$VM_ID_RAW/callback" \
             -H "Content-Type: application/json" \
-            -H "X-Verification-Token: $VERIFICATION_TOKEN" \
-            -d "$(jq -n --arg status "$STATUS" --arg publicIp "${PUBLIC_IP:-}" --arg instanceName "${INSTANCE_NAME:-}" --arg projectId "${{ secrets.GCP_PROJECT_ID }}" --arg zone "${ZONE:-}" --arg errorMessage "$ERROR_MESSAGE" '{status: $status, publicIp: ($publicIp | select(length>0)), gcpInstanceName: ($instanceName | select(length>0)), gcpProjectId: $projectId, gcpZone: ($zone | select(length>0)), errorMessage: ($errorMessage | select(length>0))}')") || true
-          
+            -H "X-Verification-Token: $TOKEN_RAW" \
+            -d "$(jq -n \
+              --arg status "$STATUS" \
+              --arg publicIp "${PUBLIC_IP:-}" \
+              --arg instanceName "${INSTANCE_NAME:-}" \
+              --arg projectId "${{ secrets.GCP_PROJECT_ID }}" \
+              --arg zone "${ZONE:-}" \
+              --arg errorMessage "$ERROR_MESSAGE" \
+              '{
+                status: $status,
+                publicIp: (if $publicIp != "" then $publicIp else null end),
+                gcpInstanceName: (if $instanceName != "" then $instanceName else null end),
+                gcpProjectId: $projectId,
+                gcpZone: (if $zone != "" then $zone else null end),
+                errorMessage: (if $errorMessage != "" then $errorMessage else null end)
+              }')") || true
+
           echo "Backend Response:"
           echo "$RESPONSE"
