@@ -32,18 +32,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # Required for Workload Identity Federation
 
     env:
       BACKEND_PUBLIC_URL: https://api.automatedprogram.app
       TF_STATE_BUCKET: cis-benchmark-uit-tfstate
       TF_ZONE: asia-southeast1-c
+      # Use SA JSON key for simple, reliable auth
+      GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Ensure inputs are normalized whether from workflow_dispatch or repository_dispatch
+      # Normalize inputs from both workflow_dispatch and repository_dispatch
       - name: Set Variables
         id: vars
         run: |
@@ -61,15 +62,11 @@ jobs:
             -d "$(jq -n --arg runUrl "$RUN_URL" '{runUrl: $runUrl}')" \
             || true
 
-      - name: Google Auth
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_TERRAFORM_SA_EMAIL }}
-          token_format: access_token
-          create_credentials_file: true
+      - name: Authenticate gcloud with SA key
+        run: |
+          echo '${{ secrets.GCP_SA_KEY }}' > /tmp/gcp-sa-key.json
+          gcloud auth activate-service-account --key-file=/tmp/gcp-sa-key.json
+          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -81,10 +78,6 @@ jobs:
 
       - name: Terraform Init
         working-directory: infra/terraform/environments/dev
-        env:
-          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
-          CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: ""
-          GOOGLE_APPLICATION_CREDENTIALS: ""
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
@@ -113,8 +106,6 @@ jobs:
 
       - name: Terraform Apply/Destroy
         working-directory: infra/terraform/environments/dev
-        env:
-          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           if [ "$ACTION" == "destroy" ]; then
             terraform destroy -auto-approve \
@@ -133,8 +124,6 @@ jobs:
       - name: Capture Terraform outputs
         if: ${{ success() && github.event.inputs.action != 'destroy' && github.event.client_payload.action != 'destroy' }}
         working-directory: infra/terraform/environments/dev
-        env:
-          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           echo "PUBLIC_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
           echo "INSTANCE_NAME=$(terraform output -raw instance_name)" >> $GITHUB_ENV
