@@ -75,9 +75,10 @@ export class AuditJobExecutor {
       }
       
       // Robust Base64 detection and cleaning
+      let privateKeyBuffer: Buffer | string = privateKey;
       if (!privateKey.includes('-----BEGIN')) {
         try {
-          // Remove ALL whitespace including newlines that might have leaked into the .env value
+          // Remove ALL whitespace and non-base64 characters
           const cleaned = privateKey.replace(/[^A-Za-z0-9+/=]/g, '');
           
           // Add padding if missing
@@ -86,24 +87,26 @@ export class AuditJobExecutor {
             padded += '=';
           }
 
-          const decoded = Buffer.from(padded, 'base64').toString('utf-8');
-          if (decoded.includes('-----BEGIN')) {
-            privateKey = decoded;
-            this.addLog('Detected and decoded Base64 SSH key.');
+          const decodedBuffer = Buffer.from(padded, 'base64');
+          const decodedString = decodedBuffer.toString('utf-8');
+          
+          if (decodedString.includes('-----BEGIN')) {
+            privateKeyBuffer = decodedBuffer; // Use the raw Buffer!
+            this.addLog('Detected and decoded Base64 SSH key (using raw Buffer).');
           }
         } catch {
           this.addLog('Warning: Failed to decode Base64 key, using as-is.');
         }
+      } else {
+        // If it's already a PEM string, ensure literal \n are handled
+        privateKeyBuffer = privateKey.replace(/\\n/g, '\n').trim();
       }
       
-      // Clean up literal \n if they still exist
-      privateKey = privateKey.replace(/\\n/g, '\n');
-
       this.addLog(`Connecting to VM at ${job.vm.publicIp} as audituser...`);
       this.runner = new SSHRunner({
         host: job.vm.publicIp,
         username: 'audituser',
-        privateKey: privateKey.trim(),
+        privateKey: privateKeyBuffer,
       });
 
       try {
