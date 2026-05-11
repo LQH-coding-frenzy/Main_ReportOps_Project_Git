@@ -79,7 +79,7 @@ export class AuditJobExecutor {
           if (decoded.includes('-----BEGIN')) {
             privateKey = decoded;
           }
-        } catch (e) {
+        } catch {
           this.addLog('Warning: Failed to decode Base64 key, using raw string.');
         }
       }
