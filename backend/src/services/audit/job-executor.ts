@@ -71,16 +71,25 @@ export class AuditJobExecutor {
         throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
       }
       
-      // Robust Base64 detection and cleaning: strip all whitespace/newlines
+      // Robust Base64 detection and cleaning
       if (!privateKey.includes('-----BEGIN')) {
         try {
-          const cleaned = privateKey.replace(/\s/g, '');
-          const decoded = Buffer.from(cleaned, 'base64').toString('utf-8');
+          // Remove all whitespace and non-base64 characters
+          const cleaned = privateKey.replace(/[^A-Za-z0-9+/=]/g, '');
+          
+          // Add padding if missing
+          let padded = cleaned;
+          while (padded.length % 4 !== 0) {
+            padded += '=';
+          }
+
+          const decoded = Buffer.from(padded, 'base64').toString('utf-8');
           if (decoded.includes('-----BEGIN')) {
             privateKey = decoded;
+            this.addLog('Detected and decoded Base64 SSH key.');
           }
         } catch {
-          this.addLog('Warning: Failed to decode Base64 key, using raw string.');
+          this.addLog('Warning: Failed to decode Base64 key, using as-is.');
         }
       }
       
