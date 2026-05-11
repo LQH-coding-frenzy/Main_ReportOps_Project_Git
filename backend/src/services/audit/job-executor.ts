@@ -143,27 +143,27 @@ export class AuditJobExecutor {
       // Robust Base64 detection and cleaning
       if (!rawPrivateKey.includes('-----BEGIN')) {
         try {
-          // Remove ALL whitespace and non-base64 characters
+          await this.addLog('Analyzing Base64 SSH key...');
+          // Remove ALL whitespace, quotes, and non-base64 characters
           const cleaned = rawPrivateKey.replace(/[^A-Za-z0-9+/=]/g, '');
           
-          // Add padding if missing
-          let padded = cleaned;
-          while (padded.length % 4 !== 0) {
-            padded += '=';
-          }
-
-          const decodedBuffer = Buffer.from(padded, 'base64');
-          const decodedString = decodedBuffer.toString('utf-8');
+          const decodedBuffer = Buffer.from(cleaned, 'base64');
+          const decodedString = decodedBuffer.toString('utf-8').trim();
           
           if (decodedString.includes('-----BEGIN')) {
-            privateKeyBuffer = decodedString; // Use the string!
-            await this.addLog('Detected and decoded Base64 SSH key.');
+            privateKeyBuffer = decodedString;
+            await this.addLog(`Successfully decoded Base64 key (Header: ${decodedString.substring(0, 30)}...)`);
+          } else {
+            await this.addLog('Warning: Decoded string does not look like a PEM key. Using raw value.');
+            privateKeyBuffer = rawPrivateKey;
           }
-        } catch {
-          await this.addLog('Warning: Failed to decode Base64 key, using as-is.');
+        } catch (err) {
+          await this.addLog(`Error decoding Base64 key: ${err}. Using as-is.`);
+          privateKeyBuffer = rawPrivateKey;
         }
       } else {
         // If it's already a PEM string, ensure literal \n are handled
+        await this.addLog('Using PEM format key directly.');
         privateKeyBuffer = rawPrivateKey.replace(/\\n/g, '\n').trim();
       }
       
