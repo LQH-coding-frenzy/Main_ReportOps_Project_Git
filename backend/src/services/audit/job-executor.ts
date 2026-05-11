@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 export class AuditJobExecutor {
   private jobId: number;
   private runner?: SSHRunner;
-  private job?: AuditJob & { vm: LabVm };
+  private job: (AuditJob & { vm: LabVm }) | null = null;
 
   constructor(jobId: number) {
     this.jobId = jobId;
@@ -28,8 +28,10 @@ export class AuditJobExecutor {
       });
 
       if (!this.job) throw new Error(`Audit Job ${this.jobId} not found`);
-      if (this.job.status !== 'PENDING') throw new Error(`Job is already in status ${this.job.status}`);
-      if (!this.job.vm.publicIp) throw new Error('VM does not have a public IP address');
+      const job = this.job; // Local narrowing
+
+      if (job.status !== 'PENDING') throw new Error(`Job is already in status ${job.status}`);
+      if (!job.vm.publicIp) throw new Error('VM does not have a public IP address');
 
       // Update status to RUNNING
       await prisma.auditJob.update({
@@ -37,8 +39,8 @@ export class AuditJobExecutor {
         data: { status: 'RUNNING', startedAt: new Date() }
       });
 
-      const isOpenscap = this.job.mode === 'OPENSCAP_ONLY' || this.job.mode === 'OPENSCAP_AND_SCRIPTS';
-      const isScripts = this.job.mode === 'SCRIPTS_ONLY' || this.job.mode === 'OPENSCAP_AND_SCRIPTS';
+      const isOpenscap = job.mode === 'OPENSCAP_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS';
+      const isScripts = job.mode === 'SCRIPTS_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS';
 
       // 2. Fetch active scripts if needed
       let scripts: AuditScript[] = [];
@@ -46,13 +48,13 @@ export class AuditJobExecutor {
         scripts = await prisma.auditScript.findMany({
           where: {
             enabled: true,
-            pack: { ownerSection: this.job.ownerSection, enabled: true }
+            pack: { ownerSection: job.ownerSection, enabled: true }
           },
           orderBy: { controlId: 'asc' }
         });
 
         if (scripts.length === 0) {
-          console.warn(`No enabled scripts found for section ${this.job.ownerSection}`);
+          console.warn(`No enabled scripts found for section ${job.ownerSection}`);
         }
       }
 
@@ -77,7 +79,7 @@ export class AuditJobExecutor {
       privateKey = privateKey.replace(/\\n/g, '\n');
 
       this.runner = new SSHRunner({
-        host: this.job.vm.publicIp,
+        host: job.vm.publicIp,
         username: 'audituser',
         privateKey: privateKey.trim(),
       });
@@ -132,7 +134,7 @@ export class AuditJobExecutor {
             controlId: script.controlId,
             title: script.title,
             section: script.section,
-            ownerSection: this.job.ownerSection as 'M1',
+            ownerSection: job.ownerSection as 'M1',
             assessmentType: script.assessmentType as 'Automated' | 'Manual',
             stdout: cmdResult.stdout,
             stderr: cmdResult.stderr,
@@ -203,7 +205,7 @@ export class AuditJobExecutor {
           section: 'OS',
           status: oFail > 0 ? 'FAIL' : 'PASS',
           assessmentType: 'Automated',
-          ownerSection: this.job.ownerSection as 'M1',
+          ownerSection: job.ownerSection as 'M1',
           evidence: [`OpenSCAP scan completed.`, `Passed: ${oPass}`, `Failed: ${oFail}`, `Errors: ${oError}`],
           info: [],
           failReasons: [],
@@ -245,9 +247,9 @@ export class AuditJobExecutor {
       
       const terminalHtml = renderTerminalEvidenceHtml({
         benchmark: 'CIS AlmaLinux OS 9 Benchmark v2.0.0',
-        scope: this.job.ownerSection,
-        vmName: this.job.vm.name,
-        publicIp: this.job.vm.publicIp,
+        scope: job.ownerSection,
+        vmName: job.vm.name,
+        publicIp: job.vm.publicIp,
         auditJobId: this.jobId,
         timestamp,
         results,
@@ -264,7 +266,7 @@ export class AuditJobExecutor {
 
       const dashboardHtml = renderDashboardEvidenceHtml({
         benchmark: 'CIS AlmaLinux OS 9 Benchmark v2.0.0',
-        scope: this.job.ownerSection,
+        scope: job.ownerSection,
         score: score || 0,
         passCount, failCount, manualCount, errorCount, unknownCount,
         riskLevel: riskLevel || 'Unknown',
@@ -344,7 +346,8 @@ export class AuditJobExecutor {
 
       // 7. Complete Job
       const finishedAt = new Date();
-      const durationMs = finishedAt.getTime() - this.job.startedAt.getTime();
+      const jobStartedAt = job.startedAt || new Date(); // Fallback
+      const durationMs = finishedAt.getTime() - jobStartedAt.getTime();
 
       await prisma.auditJob.update({
         where: { id: this.jobId },
