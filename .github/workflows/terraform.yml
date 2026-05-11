@@ -105,6 +105,12 @@ jobs:
             fi
           fi
 
+          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_https'; then
+            if gcloud compute firewall-rules describe "reportops-allow-https-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+              terraform import -input=false module.lab_vm.google_compute_firewall.allow_https "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-https-$VM_NAME"
+            fi
+          fi
+
       - name: Terraform Apply/Destroy
         working-directory: infra/terraform/environments/dev
         run: |
@@ -113,13 +119,15 @@ jobs:
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
-              -var="verification_token=$VERIFICATION_TOKEN"
+              -var="verification_token=$VERIFICATION_TOKEN" \
+              -var="enable_oslogin=false"
           else
             terraform apply -auto-approve \
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
-              -var="verification_token=$VERIFICATION_TOKEN"
+              -var="verification_token=$VERIFICATION_TOKEN" \
+              -var="enable_oslogin=false"
           fi
 
       - name: Capture Terraform outputs

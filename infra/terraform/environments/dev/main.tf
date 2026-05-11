@@ -10,4 +10,5 @@ module "lab_vm" {
   verification_token = var.verification_token
   ssh_keys           = var.ssh_keys
   machine_type       = var.machine_type
+  enable_oslogin     = var.enable_oslogin
 }

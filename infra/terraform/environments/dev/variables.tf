@@ -48,3 +48,9 @@ variable "machine_type" {
   type        = string
   default     = "e2-micro"
 }
+
+variable "enable_oslogin" {
+  description = "Enable OS Login for the instance"
+  type        = bool
+  default     = false
+}

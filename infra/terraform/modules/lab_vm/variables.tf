@@ -74,3 +74,9 @@ variable "ssh_keys" {
   type        = string
   default     = ""
 }
+
+variable "enable_oslogin" {
+  description = "Enable OS Login for the instance"
+  type        = bool
+  default     = false
+}

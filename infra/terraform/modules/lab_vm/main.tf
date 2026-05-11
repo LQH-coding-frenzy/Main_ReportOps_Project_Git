@@ -33,9 +33,12 @@ resource "google_compute_instance" "lab_vm" {
 
   tags = ["reportops-lab", "http-server"]
 
-  metadata = {
-    ssh-keys = var.ssh_keys
-  }
+  metadata = merge(
+    {
+      enable-oslogin = var.enable_oslogin ? "TRUE" : "FALSE"
+    },
+    var.ssh_keys != "" ? { "ssh-keys" = var.ssh_keys } : {}
+  )
 
   # Startup script to install required packages, add audituser, and serve welcome page
   metadata_startup_script = <<-EOF
@@ -155,4 +158,19 @@ resource "google_compute_firewall" "allow_ssh" {
   # In production, this should be restricted to the runner IP
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["reportops-lab"]
+}
+
+# Optional firewall rule to allow HTTPS (443)
+resource "google_compute_firewall" "allow_https" {
+  name    = "reportops-allow-https-${var.vm_name}"
+  network = var.network_name
+  project = var.project_id
+
+  allow {
+    protocol = "tcp"
+    ports    = ["443"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["http-server", "reportops-lab"]
 }
