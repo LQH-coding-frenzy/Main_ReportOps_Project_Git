@@ -58,13 +58,29 @@ export class AuditJobExecutor {
       }
 
       // 3. Connect via SSH
-      const privateKey = env.AUDIT_RUNNER_SSH_KEY;
-      if (!privateKey) throw new Error('AUDIT_RUNNER_SSH_KEY is not configured in backend .env');
+      let privateKey = process.env.AUDIT_RUNNER_SSH_KEY;
+      if (!privateKey) throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
+
+      // Robust key parsing (handle Base64 or literal \n)
+      if (!privateKey.includes('-----BEGIN')) {
+        // Might be base64
+        try {
+          const decoded = Buffer.from(privateKey, 'base64').toString('utf-8');
+          if (decoded.includes('-----BEGIN')) {
+            privateKey = decoded;
+          }
+        } catch (e) {
+          // Not base64, continue
+        }
+      }
+      
+      // Clean up literal \n if they still exist
+      privateKey = privateKey.replace(/\\n/g, '\n');
 
       this.runner = new SSHRunner({
         host: this.job.vm.publicIp,
         username: 'audituser',
-        privateKey: privateKey.replace(/\\n/g, '\n'),
+        privateKey: privateKey.trim(),
       });
 
       await this.runner.connect();

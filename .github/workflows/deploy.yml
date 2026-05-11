@@ -66,11 +66,17 @@ jobs:
             sudo npx prisma db push --accept-data-loss || true
             sudo npm run build
             
-            # Inject/update AUDIT_RUNNER_SSH_KEY in .env
+            # Inject/update AUDIT_RUNNER_SSH_KEY in .env (as base64 for safety)
             echo "🔑 Updating AUDIT_RUNNER_SSH_KEY in .env..."
-            AUDIT_KEY='${{ secrets.AUDIT_RUNNER_SSH_KEY }}'
+            # Encode to base64 to avoid newline/special char issues in bash
+            AUDIT_KEY_B64=$(echo '${{ secrets.AUDIT_RUNNER_SSH_KEY }}' | base64 -w 0)
             sudo sed -i '/^AUDIT_RUNNER_SSH_KEY=/d' /opt/reportops/backend/.env
-            printf 'AUDIT_RUNNER_SSH_KEY=%s\n' "$AUDIT_KEY" | sudo tee -a /opt/reportops/backend/.env > /dev/null
+            echo "AUDIT_RUNNER_SSH_KEY=$AUDIT_KEY_B64" | sudo tee -a /opt/reportops/backend/.env > /dev/null
+
+            # Run Audit Bootstrap to ensure scripts are in DB and Storage
+            echo "🌱 Bootstrapping audit data..."
+            cd $APP_DIR/backend
+            sudo node dist/scripts/bootstrap-audit.js || echo "⚠️ Bootstrap failed, check logs"
 
             # Restart backend via PM2
             echo "♻️ Restarting API server..."
