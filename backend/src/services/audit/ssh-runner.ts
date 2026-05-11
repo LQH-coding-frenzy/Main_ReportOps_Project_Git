@@ -7,7 +7,7 @@ export interface SSHRunnerConfig {
   port?: number;
   username: string;
   privateKeyPath?: string;
-  privateKey?: string;
+  privateKey?: string | Buffer;
 }
 
 export interface SSHCommandResult {

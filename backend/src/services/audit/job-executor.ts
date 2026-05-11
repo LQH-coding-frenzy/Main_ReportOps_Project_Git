@@ -66,20 +66,19 @@ export class AuditJobExecutor {
       }
 
       // 3. Connect via SSH
-      let privateKey = process.env.AUDIT_RUNNER_SSH_KEY || '';
+      const rawPrivateKey = process.env.AUDIT_RUNNER_SSH_KEY || '';
       
-      // If the key is missing or seems truncated, it might be due to a mangled .env file.
-      // We can't easily fix a broken .env at runtime, but we can try to be robust.
-      if (!privateKey) {
+      if (!rawPrivateKey) {
         throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
       }
       
+      let privateKeyBuffer: Buffer | string = rawPrivateKey;
+
       // Robust Base64 detection and cleaning
-      let privateKeyBuffer: Buffer | string = privateKey;
-      if (!privateKey.includes('-----BEGIN')) {
+      if (!rawPrivateKey.includes('-----BEGIN')) {
         try {
           // Remove ALL whitespace and non-base64 characters
-          const cleaned = privateKey.replace(/[^A-Za-z0-9+/=]/g, '');
+          const cleaned = rawPrivateKey.replace(/[^A-Za-z0-9+/=]/g, '');
           
           // Add padding if missing
           let padded = cleaned;
@@ -99,7 +98,7 @@ export class AuditJobExecutor {
         }
       } else {
         // If it's already a PEM string, ensure literal \n are handled
-        privateKeyBuffer = privateKey.replace(/\\n/g, '\n').trim();
+        privateKeyBuffer = rawPrivateKey.replace(/\\n/g, '\n').trim();
       }
       
       this.addLog(`Connecting to VM at ${job.vm.publicIp} as audituser...`);
