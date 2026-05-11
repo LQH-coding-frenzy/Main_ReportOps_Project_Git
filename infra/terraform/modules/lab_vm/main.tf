@@ -146,35 +146,7 @@ HTML
   allow_stopping_for_update = true
 }
 
-# Firewall rule to allow HTTP (Shared for all labs)
-resource "google_compute_firewall" "allow_http" {
-  name    = "reportops-lab-allow-http"
-  network = var.network_name
-  project = var.project_id
-
-  allow {
-    protocol = "tcp"
-    ports    = ["80"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["reportops-lab"]
-}
-
-# Firewall rule to allow SSH (Shared for all labs)
-resource "google_compute_firewall" "allow_ssh" {
-  name    = "reportops-lab-allow-ssh"
-  network = var.network_name
-  project = var.project_id
-
-  allow {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["reportops-lab"]
-}
+# (Firewall rules moved to environment root)
 
 # Optional firewall rule to allow HTTPS (443)
 resource "google_compute_firewall" "allow_https" {
