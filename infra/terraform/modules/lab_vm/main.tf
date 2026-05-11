@@ -49,37 +49,37 @@ resource "google_compute_instance" "lab_vm" {
   metadata_startup_script = <<-EOF
     #!/bin/bash
     set -e
-    exec > /var/log/startup-script.log 2>&1
-
-    echo "[$(date)] ==> Starting setup for ${var.vm_name}"
+    exec > >(tee /var/log/startup-script.log | logger -t startup-script -s 2>/dev/console) 2>&1
     
-    # Wait for network
-    until ping -c 1 google.com >/dev/null 2>&1; do
-      echo "[$(date)] ==> Waiting for internet connectivity..."
-      sleep 5
-    done
-
-    echo "[$(date)] ==> Installing packages"
-    dnf install -y epel-release || true
-    dnf install -y nginx openscap-scanner openscap-utils scap-security-guide jq policycoreutils-python-utils || true
-
-    echo "[$(date)] ==> Creating audituser"
+    echo "Starting ReportOps Lab initialization..."
+    
+    # 1. Install essential packages (no update for speed)
+    echo "Installing essential packages..."
+    dnf install -y epel-release
+    dnf install -y nginx openscap-scanner scap-security-guide curl jq policycoreutils-python-utils
+    
+    # 2. Create audit user for SSH access
     if ! id "audituser" &>/dev/null; then
+      echo "Creating audituser..."
       useradd -m -s /bin/bash audituser
+      mkdir -p /home/audituser/.ssh
+      echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
+      chown -R audituser:audituser /home/audituser/.ssh
+      chmod 700 /home/audituser/.ssh
+      chmod 600 /home/audituser/.ssh/authorized_keys
+      echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
+      chmod 0440 /etc/sudoers.d/audituser
     fi
-    echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
-    chmod 0440 /etc/sudoers.d/audituser
 
-    echo "[$(date)] ==> Setting up SSH for audituser"
-    mkdir -p /home/audituser/.ssh
-    echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
-    chmod 700 /home/audituser/.ssh
-    chmod 600 /home/audituser/.ssh/authorized_keys
-    chown -R audituser:audituser /home/audituser/.ssh
+    # 3. Ensure SSH service is running
+    echo "Configuring SSH..."
+    systemctl enable sshd
+    systemctl restart sshd
 
-    echo "[$(date)] ==> Generating Welcome Page"
+    # 4. Configure Welcome Page
+    echo "Configuring Nginx..."
     mkdir -p /usr/share/nginx/html
-    cat << 'HTML' > /usr/share/nginx/html/index.html
+    cat > /usr/share/nginx/html/index.html <<HTML
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -124,37 +124,25 @@ resource "google_compute_instance" "lab_vm" {
         </div>
     </body>
     </html>
-    HTML
+HTML
 
-    echo "[$(date)] ==> Configuring Nginx"
     restorecon -Rv /usr/share/nginx/html || true
     setsebool -P httpd_can_network_connect 1 || true
-
     systemctl enable --now nginx || true
 
-    # Disable firewalld
-    if systemctl is-active --quiet firewalld; then
-      echo "[$(date)] ==> Disabling firewalld"
-      systemctl stop firewalld
-      systemctl disable firewalld
-    fi
+    # Disable firewalld inside VM to prevent conflicts
+    systemctl stop firewalld || true
+    systemctl disable firewalld || true
 
-    # Verify port 80
-    if ss -tuln | grep -q ":80 "; then
-      echo "[$(date)] ==> Nginx is listening on port 80"
-    else
-      echo "[$(date)] ==> ERROR: Nginx is NOT listening on port 80"
-    fi
-
-    echo "[$(date)] ==> Setup complete"
+    echo "Initialization complete!"
   EOF
 
   allow_stopping_for_update = true
 }
 
-# Firewall rule to allow HTTP
+# Firewall rule to allow HTTP (Shared for all labs)
 resource "google_compute_firewall" "allow_http" {
-  name    = "reportops-allow-http-${var.vm_name}"
+  name    = "reportops-lab-allow-http"
   network = var.network_name
   project = var.project_id
 
@@ -164,12 +152,12 @@ resource "google_compute_firewall" "allow_http" {
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server", "reportops-lab", var.vm_name]
+  target_tags   = ["reportops-lab"]
 }
 
-# Firewall rule to allow SSH
+# Firewall rule to allow SSH (Shared for all labs)
 resource "google_compute_firewall" "allow_ssh" {
-  name    = "reportops-allow-ssh-${var.vm_name}"
+  name    = "reportops-lab-allow-ssh"
   network = var.network_name
   project = var.project_id
 
@@ -178,7 +166,6 @@ resource "google_compute_firewall" "allow_ssh" {
     ports    = ["22"]
   }
 
-  # In production, this should be restricted to the runner IP
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["reportops-lab"]
 }
