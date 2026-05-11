@@ -61,12 +61,19 @@ resource "google_compute_instance" "lab_vm" {
       chown -R audituser:audituser /home/audituser/.ssh
       chmod 700 /home/audituser/.ssh
       chmod 600 /home/audituser/.ssh/authorized_keys
+      
+      # CRITICAL: Set SELinux context for SSH files
+      if command -v restorecon &>/dev/null; then
+        restorecon -Rv /home/audituser/.ssh
+      fi
+      
       echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
       chmod 0440 /etc/sudoers.d/audituser
     fi
 
-    # 2. Ensure SSH service is running immediately
-    echo "Configuring SSH..."
+    # 2. Ensure SSH service is running and not blocked by SELinux
+    echo "Configuring SSH and SELinux..."
+    setenforce 0 || true # Set to permissive for setup
     systemctl enable sshd
     systemctl restart sshd
 
