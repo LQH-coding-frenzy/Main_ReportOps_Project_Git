@@ -98,8 +98,34 @@ function extractSection(
 // ── Main Parser ──
 
 export function parseCisStdout(input: CisStdoutParserInput): NormalizedAuditResult {
-  const { stdout, stderr, exitCode, assessmentType } = input;
+  let { stdout } = input;
+  const { stderr, exitCode, assessmentType, controlId } = input;
   const warnings: string[] = [];
+
+  // 0. Segment Filtering: If stdout contains section headers (### 1.1.1.1), isolate the relevant part
+  if (stdout.includes(`### ${controlId}`)) {
+    const lines = stdout.split('\n');
+    let segment = '';
+    let capturing = false;
+    
+    for (const line of lines) {
+      if (line.trim().startsWith(`### ${controlId}`)) {
+        capturing = true;
+        segment += line + '\n';
+        continue;
+      }
+      if (capturing) {
+        if (line.trim().startsWith('### ') && !line.trim().startsWith(`### ${controlId}`)) {
+          break; // Next section started
+        }
+        segment += line + '\n';
+      }
+    }
+    
+    if (segment) {
+      stdout = segment; // Only parse this segment
+    }
+  }
 
   // Determine status
   let status: AuditStatus;
@@ -113,6 +139,8 @@ export function parseCisStdout(input: CisStdoutParserInput): NormalizedAuditResu
     status = 'PASS';
   } else if (/\*{2,3}\s*FAIL\s*\*{2,3}/.test(stdout)) {
     status = 'FAIL';
+  } else if (/\*{2,3}\s*NOT_APPLICABLE\s*\*{2,3}/.test(stdout)) {
+    status = 'NOT_APPLICABLE';
   } else if (assessmentType === 'Manual') {
     status = 'MANUAL';
   } else if (/REVIEW|Review the generated output/i.test(stdout)) {
@@ -120,7 +148,7 @@ export function parseCisStdout(input: CisStdoutParserInput): NormalizedAuditResu
     warnings.push('Automated control returned REVIEW status — marked as MANUAL');
   } else {
     status = 'UNKNOWN';
-    warnings.push('Could not determine PASS/FAIL status from stdout');
+    warnings.push('Could not determine PASS/FAIL/NA status from stdout');
   }
 
   // Extract structured sections from stdout

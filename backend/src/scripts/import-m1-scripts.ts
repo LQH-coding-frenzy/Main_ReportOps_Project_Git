@@ -16,7 +16,7 @@ const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
 const SCRIPTS_DIR = path.join(__dirname, '../../../m1_audit_scripts_almalinux9/sections');
 
 async function importScripts() {
-  console.log('🚀 Starting M1 Scripts Import...');
+  console.log('🚀 Starting M1 Scripts Import (Whole File Strategy)...');
 
   const leader = await prisma.user.findFirst({ where: { role: Role.LEADER } });
   if (!leader) {
@@ -38,99 +38,77 @@ async function importScripts() {
   const files = fs.readdirSync(SCRIPTS_DIR).filter(f => f.endsWith('.sh'));
 
   for (const file of files) {
-    console.log(`\nProcessing ${file}...`);
+    console.log(`\nProcessing section file ${file}...`);
     const fullPath = path.join(SCRIPTS_DIR, file);
     const content = fs.readFileSync(fullPath, 'utf-8');
-    const lines = content.split('\n');
-
-    // 1. Extract Header (everything before the first check call)
-    let header = '';
-    let firstCheckLineIndex = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      // A check call starts with check_ or print_ and has arguments, but NO opening brace
-      if (line.match(/^(check_|print_)[a-zA-Z0-9_]+\s+"[0-9.]+"/) && !line.includes('{')) {
-        firstCheckLineIndex = i;
-        break;
-      }
+    
+    // Find all control IDs in this file using regex
+    const controlMatches = content.matchAll(/["']([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*)["']/g);
+    const controlIds = new Set<string>();
+    
+    for (const match of controlMatches) {
+        controlIds.add(match[1]);
     }
 
-    if (firstCheckLineIndex === -1) {
-        console.warn(`⚠️ No check calls found in ${file}. Checking for direct calls...`);
-        // Try even more lenient
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].match(/^[a-zA-Z0-9_]+\s+"[0-9.]+"/) && !lines[i].includes('{')) {
-                firstCheckLineIndex = i;
-                break;
-            }
-        }
-    }
-
-    if (firstCheckLineIndex === -1) {
-        console.warn(`❌ Still no check calls found in ${file}`);
+    if (controlIds.size === 0) {
+        console.warn(`⚠️ No control IDs found in ${file}`);
         continue;
     }
 
-    header = lines.slice(0, firstCheckLineIndex).join('\n');
+    console.log(`  - Found ${controlIds.size} controls in this file.`);
 
-    // 2. Identify individual check calls
-    for (let i = firstCheckLineIndex; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.startsWith('#') || line === '') continue;
-
-      // Match: func "control_id" "title" ...
-      const match = line.match(/^([a-zA-Z0-9_]+)\s+"([0-9.]+)"\s+"([^"]+)"/);
+    for (const controlId of controlIds) {
+      // Find the title for this control (usually on the same line or next line)
+      const titleRegex = new RegExp(`["']${controlId.replace(/\./g, '\\.')}["']\\s*,?\\s*["']([^"']+)["']`);
+      const titleMatch = content.match(titleRegex);
+      const title = titleMatch ? titleMatch[1] : `Audit Control ${controlId}`;
       
-      if (match) {
-        const [, , controlId, title] = match;
-        
-        const section = controlId.split('.').slice(0, 2).join('.');
-        console.log(`  - Found control ${controlId}: ${title}`);
+      const section = controlId.split('.').slice(0, 2).join('.');
+      
+      console.log(`    - Registering ${controlId}: ${title}`);
 
-        const individualScriptContent = `#!/usr/bin/env bash\n${header}\n\n${line}\n`;
-        const storagePath = `audit-scripts/m1/${controlId}.sh`;
+      const storagePath = `audit-scripts/m1/${controlId}.sh`;
 
-        // Upload to Supabase
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET)
-          .upload(storagePath, Buffer.from(individualScriptContent), {
-            contentType: 'text/x-shellscript',
-            upsert: true,
-          });
+      // Upload the WHOLE file content
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(storagePath, Buffer.from(content), {
+          contentType: 'text/x-shellscript',
+          upsert: true,
+        });
 
-        if (uploadError) {
-          console.error(`    ❌ Upload failed for ${controlId}:`, uploadError.message);
-          continue;
-        }
+      if (uploadError) {
+        console.error(`      ❌ Upload failed for ${controlId}:`, uploadError.message);
+        continue;
+      }
 
-        // Register in DB
-        await prisma.auditScript.upsert({
-          where: {
-            packId_controlId: {
-              packId: pack.id,
-              controlId: controlId,
-            },
-          },
-          update: {
-            title: title,
-            section: section,
-            scriptStoragePath: storagePath,
-          },
-          create: {
+      // Register in DB
+      await prisma.auditScript.upsert({
+        where: {
+          packId_controlId: {
             packId: pack.id,
             controlId: controlId,
-            title: title,
-            section: section,
-            assessmentType: 'Automated',
-            scriptStoragePath: storagePath,
-            createdById: leader.id,
           },
-        });
-      }
+        },
+        update: {
+          title: title,
+          section: section,
+          scriptStoragePath: storagePath,
+        },
+        create: {
+          packId: pack.id,
+          controlId: controlId,
+          title: title,
+          section: section,
+          assessmentType: 'Automated',
+          scriptStoragePath: storagePath,
+          createdById: leader.id,
+        },
+      });
     }
   }
 
-  console.log('\n✨ All M1 scripts imported successfully!');
+  console.log('\n✨ All M1 scripts imported using Whole File Strategy!');
 }
 
 importScripts()
