@@ -52,29 +52,31 @@ resource "google_compute_instance" "lab_vm" {
     
     echo "Starting ReportOps Lab initialization..."
     
-    # 1. Create audit user for SSH access (CRITICAL)
+    # 1. Ensure audituser exists and has correct shell
     if ! id "audituser" &>/dev/null; then
-      echo "Creating audituser manually..."
-      useradd -m -s /bin/bash audituser
-      mkdir -p /home/audituser/.ssh
-      echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
-      chown -R audituser:audituser /home/audituser/.ssh
-      chmod 700 /home/audituser/.ssh
-      chmod 600 /home/audituser/.ssh/authorized_keys
-      
-      # Fix SELinux labels for the new files
-      if command -v restorecon &>/dev/null; then
-        restorecon -Rv /home/audituser/.ssh || true
-      fi
+      echo "Creating audituser..."
+      useradd -m -s /bin/bash audituser || true
     fi
 
-    # 2. Broaden SSH compatibility for RHEL 9
-    update-crypto-policies --set DEFAULT:SHA1 || true
-
-    # 3. Disable SELinux temporarily for smooth setup
-    setenforce 0 || true
+    # 2. FORCE update SSH keys and permissions (Always run)
+    echo "Updating SSH keys for audituser..."
+    mkdir -p /home/audituser/.ssh
+    echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
+    chown -R audituser:audituser /home/audituser/.ssh
+    chmod 700 /home/audituser/.ssh
+    chmod 600 /home/audituser/.ssh/authorized_keys
     
-    # 4. Ensure audituser has sudo permissions
+    # 3. CRITICAL: Always fix SELinux labels
+    if command -v restorecon &>/dev/null; then
+      restorecon -Rv /home/audituser/.ssh || true
+    fi
+
+    # 4. Broaden SSH compatibility and Disable SELinux (Persistent & Immediate)
+    update-crypto-policies --set DEFAULT:SHA1 || true
+    setenforce 0 || true
+    sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
+    
+    # 5. Ensure sudo permissions
     echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
     chmod 0440 /etc/sudoers.d/audituser
 
