@@ -4,6 +4,11 @@ data "google_compute_image" "almalinux" {
   project = "almalinux-cloud"
 }
 
+locals {
+  audit_runner_ssh_entry = var.audit_runner_ssh_public_key != "" ? "audituser:${var.audit_runner_ssh_public_key}" : ""
+  combined_ssh_keys      = trimspace(join("\n", compact([var.ssh_keys, local.audit_runner_ssh_entry])))
+}
+
 # The Lab VM Instance
 resource "google_compute_instance" "lab_vm" {
   name         = var.vm_name
@@ -37,7 +42,7 @@ resource "google_compute_instance" "lab_vm" {
     {
       enable-oslogin = var.enable_oslogin ? "TRUE" : "FALSE"
     },
-    var.ssh_keys != "" ? { "ssh-keys" = var.ssh_keys } : {}
+    local.combined_ssh_keys != "" ? { "ssh-keys" = local.combined_ssh_keys } : {}
   )
 
   # Startup script to install required packages, add audituser, and serve welcome page
@@ -47,18 +52,13 @@ resource "google_compute_instance" "lab_vm" {
     exec > /var/log/startup-script.log 2>&1
 
     echo "==> Updating packages and installing prerequisites"
-    dnf install -y epel-release
-    dnf install -y nginx openscap-scanner openscap-utils scap-security-guide jq policycoreutils-python-utils
+    dnf install -y epel-release || true
+    dnf install -y nginx openscap-scanner openscap-utils scap-security-guide jq policycoreutils-python-utils || true
 
     echo "==> Creating audituser"
     useradd -m -s /bin/bash audituser || true
     echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
     chmod 0440 /etc/sudoers.d/audituser
-    mkdir -p /home/audituser/.ssh
-    chmod 700 /home/audituser/.ssh
-    echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHiTd+cTkUPKbQpfNbktsXcPfmxI4+qAsaSNqqEZOpSn jach9@JustADude" > /home/audituser/.ssh/authorized_keys
-    chmod 600 /home/audituser/.ssh/authorized_keys
-    chown -R audituser:audituser /home/audituser/.ssh
 
     cat << 'HTML' > /usr/share/nginx/html/index.html
     <!DOCTYPE html>
@@ -114,7 +114,7 @@ resource "google_compute_instance" "lab_vm" {
     setsebool -P httpd_can_network_connect 1 || true
 
     echo "==> Enabling and starting Nginx"
-    systemctl enable --now nginx
+    systemctl enable --now nginx || true
 
     # Disable firewalld if active - we rely on GCP VPC firewall rules
     if systemctl is-active --quiet firewalld; then
@@ -173,4 +173,18 @@ resource "google_compute_firewall" "allow_https" {
 
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["http-server", "reportops-lab"]
+}
+
+# Optional firewall rule to allow ICMP (useful for debugging reachability)
+resource "google_compute_firewall" "allow_icmp" {
+  name    = "reportops-allow-icmp-${var.vm_name}"
+  network = var.network_name
+  project = var.project_id
+
+  allow {
+    protocol = "icmp"
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["reportops-lab"]
 }

@@ -111,6 +111,12 @@ jobs:
             fi
           fi
 
+          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_icmp'; then
+            if gcloud compute firewall-rules describe "reportops-allow-icmp-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+              terraform import -input=false module.lab_vm.google_compute_firewall.allow_icmp "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-icmp-$VM_NAME"
+            fi
+          fi
+
       - name: Terraform Apply/Destroy
         working-directory: infra/terraform/environments/dev
         run: |
@@ -120,14 +126,18 @@ jobs:
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
               -var="verification_token=$VERIFICATION_TOKEN" \
-              -var="enable_oslogin=false"
+              -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
+              -var="enable_oslogin=false" \
+              -var="audit_runner_ssh_public_key=${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}"
           else
             terraform apply -auto-approve \
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
               -var="verification_token=$VERIFICATION_TOKEN" \
-              -var="enable_oslogin=false"
+              -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
+              -var="enable_oslogin=false" \
+              -var="audit_runner_ssh_public_key=${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}"
           fi
 
       - name: Capture Terraform outputs

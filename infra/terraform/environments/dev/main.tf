@@ -11,4 +11,5 @@ module "lab_vm" {
   ssh_keys           = var.ssh_keys
   machine_type       = var.machine_type
   enable_oslogin     = var.enable_oslogin
+  audit_runner_ssh_public_key = var.audit_runner_ssh_public_key
 }

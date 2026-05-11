@@ -54,3 +54,9 @@ variable "enable_oslogin" {
   type        = bool
   default     = false
 }
+
+variable "audit_runner_ssh_public_key" {
+  description = "Public SSH key for the audit runner (authorized for audituser)"
+  type        = string
+  default     = ""
+}
