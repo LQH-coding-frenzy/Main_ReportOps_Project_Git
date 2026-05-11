@@ -108,16 +108,32 @@ export class AuditJobExecutor {
         privateKey: privateKeyBuffer,
       });
 
-      try {
-        await this.runner.connect();
-        this.addLog('SSH connection established.');
-      } catch (connError) {
-        const msg = connError instanceof Error ? connError.message : String(connError);
-        this.addLog(`SSH Connection Failed: ${msg}`);
-        if (msg.includes('Authentication failed')) {
-          this.addLog('TIP: This usually means the VM is still initializing or the SSH key is incorrect.');
+      let connected = false;
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (!connected && attempts < maxAttempts) {
+        try {
+          attempts++;
+          if (attempts > 1) {
+            this.addLog(`Retry connection attempt ${attempts}/${maxAttempts}...`);
+          }
+          await this.runner.connect();
+          connected = true;
+          this.addLog('SSH connection established.');
+        } catch (connError) {
+          const msg = connError instanceof Error ? connError.message : String(connError);
+          if (attempts < maxAttempts && (msg.includes('Timed out') || msg.includes('ECONNREFUSED'))) {
+            this.addLog(`Connection attempt ${attempts} failed: ${msg}. Waiting 10s...`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          } else {
+            this.addLog(`SSH Connection Failed: ${msg}`);
+            if (msg.includes('Authentication failed')) {
+              this.addLog('TIP: This usually means the VM is still initializing or the SSH key is incorrect.');
+            }
+            throw connError;
+          }
         }
-        throw connError;
       }
 
       // Create remote directory

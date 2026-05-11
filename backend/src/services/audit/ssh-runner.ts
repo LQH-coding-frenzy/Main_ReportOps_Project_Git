@@ -38,6 +38,7 @@ export class SSHRunner {
       port: this.config.port,
       username: this.config.username,
       privateKey: this.config.privateKeyPath || this.config.privateKey,
+      readyTimeout: 60000, // Increase to 60 seconds
     });
     this.isConnected = true;
   }
