@@ -51,47 +51,22 @@ resource "google_compute_instance" "lab_vm" {
     exec > >(tee /var/log/startup-script.log | logger -t startup-script -s 2>/dev/console) 2>&1
     
     echo "Starting ReportOps Lab initialization..."
-
-    # 1. Create audit user for SSH access (TOP PRIORITY)
-    if ! id "audituser" &>/dev/null; then
-      echo "Force creating audituser..."
-      useradd -m -s /bin/bash audituser || {
-        echo "Useradd failed, trying with SELinux disabled..."
-        setenforce 0
-        useradd -m -s /bin/bash audituser
-      }
-      
-      # 2. DISARM SELINUX (To allow writing keys and SSH access)
-      echo "Disarming SELinux..."
-      setenforce 0 || true
-      sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
-
-      mkdir -p /home/audituser/.ssh
-      echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
-      chown -R audituser:audituser /home/audituser/.ssh
-      chmod 700 /home/audituser/.ssh
-      chmod 600 /home/audituser/.ssh/authorized_keys
-      
-      # 3. CRITICAL: Set SELinux context for SSH files
-      echo "Applying SELinux restorecon to /home/audituser/.ssh..."
-      if command -v restorecon &>/dev/null; then
-        restorecon -Rv /home/audituser/.ssh || true
-      fi
-      
-      echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
-      chmod 0440 /etc/sudoers.d/audituser
-    fi
-
-    # 4. Broaden SSH compatibility (RHEL 9 safety)
-    echo "Broadening SSH crypto policies..."
+    
+    # 1. Broaden SSH compatibility for RHEL 9 (Keep this as it's safe)
     update-crypto-policies --set DEFAULT:SHA1 || true
 
-    # 5. Ensure SSH service is running
-    echo "Configuring SSH..."
+    # 2. Disable SELinux temporarily for smooth setup
+    setenforce 0 || true
+    
+    # 3. Ensure audituser has sudo permissions (Guest Agent creates the user)
+    echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
+    chmod 0440 /etc/sudoers.d/audituser
+
+    # 4. Configure SSH
     systemctl enable sshd
     systemctl restart sshd
 
-    # 6. Install essential packages
+    # 5. Install essential packages
     echo "Installing essential packages..."
     dnf install -y epel-release
     dnf install -y nginx openscap-scanner scap-security-guide curl jq policycoreutils-python-utils
