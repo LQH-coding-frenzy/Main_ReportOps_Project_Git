@@ -1,5 +1,5 @@
 import { PrismaClient, Role } from '@prisma/client';
-import { createClient } from '@supabase/supabase-client';
+import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
