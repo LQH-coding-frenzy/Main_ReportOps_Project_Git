@@ -4,6 +4,7 @@ import { parseCisStdout, NormalizedAuditResult } from './cis-stdout-parser';
 import { renderTerminalEvidenceHtml, renderDashboardEvidenceHtml } from './evidence-renderer';
 import { supabase } from '../../config/supabase';
 import { chromium } from 'playwright';
+import { env } from '../../config/env';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -57,9 +58,8 @@ export class AuditJobExecutor {
       }
 
       // 3. Connect via SSH
-      // IMPORTANT: In production, the private key should be loaded from Secret Manager or env
-      const privateKey = process.env.AUDIT_RUNNER_SSH_KEY;
-      if (!privateKey) throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
+      const privateKey = env.AUDIT_RUNNER_SSH_KEY;
+      if (!privateKey) throw new Error('AUDIT_RUNNER_SSH_KEY is not configured in backend .env');
 
       this.runner = new SSHRunner({
         host: this.job.vm.publicIp,

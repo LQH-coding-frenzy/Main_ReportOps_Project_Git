@@ -92,6 +92,9 @@ export const env = {
   // Backend public URL (for ONLYOFFICE callback)
   BACKEND_PUBLIC_URL: resolvePublicUrl('BACKEND_PUBLIC_URL', defaultBackendPublicUrl),
 
+  // Audit Runner
+  AUDIT_RUNNER_SSH_KEY: process.env.AUDIT_RUNNER_SSH_KEY || '',
+
   // Preview merge worker memory budget (MB)
   REPORT_MERGE_WORKER_MAX_OLD_GENERATION_MB: parsePositiveInt(
     process.env.REPORT_MERGE_WORKER_MAX_OLD_GENERATION_MB,
@@ -110,7 +113,7 @@ export function validateEnv(): void {
   ];
 
   if (env.NODE_ENV === 'production') {
-    required.push('JWT_SECRET', 'ONLYOFFICE_JWT_SECRET');
+    required.push('JWT_SECRET', 'ONLYOFFICE_JWT_SECRET', 'AUDIT_RUNNER_SSH_KEY');
   }
 
   const missing = required.filter((key) => !process.env[key]);

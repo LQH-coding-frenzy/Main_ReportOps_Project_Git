@@ -41,10 +41,11 @@ resource "google_compute_instance" "lab_vm" {
   metadata_startup_script = <<-EOF
     #!/bin/bash
     set -e
+    exec > /var/log/startup-script.log 2>&1
 
     echo "==> Updating packages and installing prerequisites"
     dnf install -y epel-release
-    dnf install -y nginx firewalld openscap-scanner openscap-utils scap-security-guide jq policycoreutils-python-utils
+    dnf install -y nginx openscap-scanner openscap-utils scap-security-guide jq policycoreutils-python-utils
 
     echo "==> Creating audituser"
     useradd -m -s /bin/bash audituser || true
@@ -52,7 +53,7 @@ resource "google_compute_instance" "lab_vm" {
     chmod 0440 /etc/sudoers.d/audituser
     mkdir -p /home/audituser/.ssh
     chmod 700 /home/audituser/.ssh
-    echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJujB1QoBV3apoB5SC5nYnZOxDLt6KQvO4ojFEIEEm9c audituser@reportops" > /home/audituser/.ssh/authorized_keys
+    echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHiTd+cTkUPKbQpfNbktsXcPfmxI4+qAsaSNqqEZOpSn jach9@JustADude" > /home/audituser/.ssh/authorized_keys
     chmod 600 /home/audituser/.ssh/authorized_keys
     chown -R audituser:audituser /home/audituser/.ssh
 
@@ -90,12 +91,21 @@ resource "google_compute_instance" "lab_vm" {
     </html>
     HTML
 
-    echo "==> Enabling and starting Nginx"
-    systemctl enable --now firewalld
-    firewall-cmd --permanent --add-service=http
-    firewall-cmd --reload
+    echo "==> Configuring Nginx and SELinux"
+    # Ensure SELinux context is correct for web files
     restorecon -Rv /usr/share/nginx/html || true
+    # Allow nginx to connect to network if needed (optional)
+    setsebool -P httpd_can_network_connect 1 || true
+
+    echo "==> Enabling and starting Nginx"
     systemctl enable --now nginx
+
+    # Disable firewalld if active - we rely on GCP VPC firewall rules
+    if systemctl is-active --quiet firewalld; then
+      echo "==> Disabling firewalld"
+      systemctl stop firewalld
+      systemctl disable firewalld
+    fi
 
     echo "==> Setup complete"
   EOF
