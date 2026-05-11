@@ -90,9 +90,3 @@ variable "audit_runner_ssh_public_key" {
   type        = string
   default     = ""
 }
-
-variable "create_shared_firewall" {
-  description = "Set to true to create the shared firewall rules. Set to false if they already exist."
-  type        = bool
-  default     = false
-}
