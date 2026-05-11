@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getAuditJobs } from '../../lib/api';
 import type { AuditJob } from '../../lib/types';
+import { benchmarkLabel, projectConfig } from '../../lib/project-config';
 
 const STATUS_BADGES: Record<string, { cls: string; icon: string }> = {
   PENDING: { cls: 'badge-warning', icon: '⏳' },
@@ -33,7 +34,7 @@ export default function AuditPage() {
         <div className="page-header">
           <h1 className="page-title">🔒 Auto-Audit</h1>
           <p className="page-subtitle">
-            CIS AlmaLinux OS 9 Benchmark v2.0.0 — Level 1 Server
+            {benchmarkLabel} — {projectConfig.benchmarkProfile}
           </p>
         </div>
 

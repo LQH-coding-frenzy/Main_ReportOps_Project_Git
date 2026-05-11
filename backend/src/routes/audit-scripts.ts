@@ -5,11 +5,20 @@ import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { validateAuditScript } from '../services/audit/script-validator';
+import { env } from '../config/env';
+import { getProjectAnswers } from '../config/project-answers';
 import { supabase } from '../config/supabase';
 
 const router = Router();
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 } });
+const answers = getProjectAnswers();
+const defaultOwnerSection = answers.audit_pack?.owner_section || 'M1';
+const defaultTitle = answers.audit_pack?.title || 'M1 Standard Audit Pack';
+const defaultSections = answers.audit_pack?.sections || answers.m1_scope?.sections || ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'];
+const defaultBenchmarkName = answers.audit_pack?.benchmark_name || answers.benchmark?.name || 'CIS AlmaLinux OS 9 Benchmark';
+const defaultBenchmarkVersion = answers.audit_pack?.benchmark_version || answers.benchmark?.version || '2.0.0';
+const defaultProfile = answers.audit_pack?.profile || answers.benchmark?.profile || 'Level 1 - Server';
 
 /**
  * GET /api/audit-scripts/packs
@@ -23,8 +32,24 @@ router.get('/packs', requireAuth, async (_req: Request, res: Response) => {
         _count: { select: { scripts: true } },
         scripts: {
           select: {
-            id: true, controlId: true, title: true, section: true,
-            assessmentType: true, risk: true, enabled: true,
+            id: true,
+            controlId: true,
+            title: true,
+            section: true,
+            assessmentType: true,
+            risk: true,
+            enabled: true,
+            validations: {
+              orderBy: { createdAt: 'desc' },
+              take: 5,
+              select: {
+                id: true,
+                valid: true,
+                warningsJson: true,
+                errorsJson: true,
+                createdAt: true,
+              },
+            },
           },
           orderBy: { controlId: 'asc' },
         },
@@ -44,17 +69,18 @@ router.get('/packs', requireAuth, async (_req: Request, res: Response) => {
 router.post('/packs', requireAuth, requireLeader, async (req: Request, res: Response) => {
   try {
     const { packId, ownerSection, title, sections, benchmarkName, benchmarkVersion, profile } = req.body;
+    const resolvedPackId = String(packId || answers.audit_pack?.pack_id || 'm1-standard');
 
     const pack = await prisma.auditPack.upsert({
-      where: { packId },
+      where: { packId: resolvedPackId },
       create: {
-        packId,
-        ownerSection: ownerSection || 'M1',
-        title,
-        sections: sections || [],
-        benchmarkName: benchmarkName || 'CIS AlmaLinux OS 9 Benchmark',
-        benchmarkVersion: benchmarkVersion || '2.0.0',
-        profile: profile || 'Level 1 - Server',
+        packId: resolvedPackId,
+        ownerSection: ownerSection || defaultOwnerSection,
+        title: title || defaultTitle,
+        sections: sections || defaultSections,
+        benchmarkName: benchmarkName || defaultBenchmarkName,
+        benchmarkVersion: benchmarkVersion || defaultBenchmarkVersion,
+        profile: profile || defaultProfile,
       },
       update: { title, sections, enabled: true },
     });
@@ -88,22 +114,31 @@ router.post(
         return res.status(400).json({ error: 'Missing required fields: packId, controlId, title, section', status: 400 });
       }
 
-      // Find pack
-      const pack = await prisma.auditPack.findFirst({ where: { packId: String(packId) } });
-      if (!pack) {
-        return res.status(404).json({ error: `Pack "${packId}" not found`, status: 404 });
-      }
-
       // Validate script
       const validation = validateAuditScript(file.originalname, file.buffer, controlId);
 
       // Calculate SHA-256
       const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
 
+      const resolvedPackId = String(packId || answers.audit_pack?.pack_id || 'm1-standard');
+      const pack = await prisma.auditPack.upsert({
+        where: { packId: resolvedPackId },
+        create: {
+          packId: resolvedPackId,
+          ownerSection: defaultOwnerSection,
+          title: defaultTitle,
+          sections: defaultSections,
+          benchmarkName: defaultBenchmarkName,
+          benchmarkVersion: defaultBenchmarkVersion,
+          profile: defaultProfile,
+        },
+        update: { enabled: true },
+      });
+
       // Upload to Supabase storage
       const storagePath = `audit-scripts/${pack.ownerSection}/${controlId}.sh`;
       const { error: uploadError } = await supabase.storage
-        .from(process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents')
+        .from(env.SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file.buffer, {
           contentType: 'text/x-shellscript',
           upsert: true,

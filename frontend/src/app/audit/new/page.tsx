@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getLabVms, createAuditJob } from '../../../lib/api';
 import type { LabVm } from '../../../lib/types';
+import { benchmarkLabel, projectConfig } from '../../../lib/project-config';
 
 const MODES = [
   { value: 'OPENSCAP_ONLY', label: 'OpenSCAP Only', icon: '🛡️', desc: 'Chạy OpenSCAP baseline CIS Level 1 Server' },
@@ -50,12 +51,12 @@ export default function NewAuditPage() {
         </Link>
       </div>
 
-      <div className="page-header">
-        <h1 className="page-title">🚀 Tạo Audit Job mới</h1>
-        <p className="page-subtitle">
-          Chọn VM target và chế độ kiểm thử
-        </p>
-      </div>
+        <div className="page-header">
+          <h1 className="page-title">🚀 Tạo Audit Job mới</h1>
+          <p className="page-subtitle">
+          Chọn VM target và chế độ kiểm thử cho {benchmarkLabel} • {projectConfig.benchmarkProfile}
+          </p>
+        </div>
 
       {/* Step 1: Choose VM */}
       <div className="card" style={{ marginBottom: 'var(--space-6)' }}>

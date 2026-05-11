@@ -118,15 +118,17 @@ resource "google_compute_instance" "lab_vm" {
             <p style="color: var(--muted); margin-bottom: 24px; font-size: 0.9rem;">This virtual machine is managed by ReportOps platform for CIS Benchmark auditing.</p>
             
             <div class="info-card">
+                <div class="info-row"><span class="info-label">VM ID</span><span class="info-value">${var.vm_id}</span></div>
                 <div class="info-row"><span class="info-label">Owner</span><span class="info-value">${var.owner_name}</span></div>
-                <div class="info-row"><span class="info-label">Section</span><span class="info-value">M1 - Filesystem & Hardening</span></div>
-                <div class="info-row"><span class="info-label">Benchmark</span><span class="info-value">AlmaLinux 9 v2.0.0</span></div>
+                <div class="info-row"><span class="info-label">Section</span><span class="info-value">${var.section_label}</span></div>
+                <div class="info-row"><span class="info-label">Benchmark</span><span class="info-value">${var.benchmark_name} v${var.benchmark_version}</span></div>
+                <div class="info-row"><span class="info-label">Profile</span><span class="info-value">${var.benchmark_profile}</span></div>
                 <div class="info-row"><span class="info-label">Token</span><span class="info-value token">${var.verification_token}</span></div>
             </div>
 
-            <a href="https://automatedprogram.app/dashboard" class="btn">Back to Dashboard</a>
+            <a href="${var.frontend_url}/dashboard" class="btn">Back to Dashboard</a>
             
-            <div class="footer">Managed by AutomatedProgram.app</div>
+            <div class="footer">Created by ReportOps Web App</div>
         </div>
     </body>
     </html>

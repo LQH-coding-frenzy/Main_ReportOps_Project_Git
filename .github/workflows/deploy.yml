@@ -29,6 +29,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Set shared URLs
+        run: |
+          echo "BACKEND_PUBLIC_URL=https://api.automatedprogram.app" >> $GITHUB_ENV
+          echo "FRONTEND_PUBLIC_URL=https://automatedprogram.app" >> $GITHUB_ENV
+          echo "ONLYOFFICE_PUBLIC_URL=https://docs.automatedprogram.app" >> $GITHUB_ENV
+
       # ── Build backend locally to verify ──
       - name: Install & Build backend
         working-directory: backend
@@ -100,7 +106,7 @@ jobs:
           sleep 10
           
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://api.automatedprogram.app/api/auth/me" \
+            "$BACKEND_PUBLIC_URL/api/auth/me" \
             --max-time 10 || echo "000")
           
           if [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ]; then
@@ -115,5 +121,6 @@ jobs:
           echo "## 🚀 Deployment Successful" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **API**: https://api.automatedprogram.app" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend**: https://automatedprogram.app" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: $BACKEND_PUBLIC_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: $FRONTEND_PUBLIC_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- **ONLYOFFICE**: $ONLYOFFICE_PUBLIC_URL" >> $GITHUB_STEP_SUMMARY

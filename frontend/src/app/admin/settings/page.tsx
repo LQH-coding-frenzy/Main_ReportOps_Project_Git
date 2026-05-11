@@ -1,5 +1,7 @@
 'use client';
 
+import { benchmarkLabel, projectConfig } from '../../../lib/project-config';
+
 export default function AdminSettingsPage() {
   return (
     <div className="admin-content">
@@ -25,7 +27,11 @@ export default function AdminSettingsPage() {
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">Callback URL:</span>
-            <code className="admin-code" style={{ fontSize: '11px' }}>https://api.automatedprogram.app/api/auth/github/callback</code>
+            <code className="admin-code" style={{ fontSize: '11px' }}>{projectConfig.backendUrl}/api/auth/github/callback</code>
+          </div>
+          <div className="admin-target-row">
+            <span className="admin-target-label">Frontend URL:</span>
+            <code className="admin-code" style={{ fontSize: '11px' }}>{projectConfig.frontendUrl}</code>
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">Allowed org/users:</span>
@@ -47,7 +53,7 @@ export default function AdminSettingsPage() {
         <div className="admin-target-meta" style={{ marginTop: 'var(--space-4)' }}>
           <div className="admin-target-row">
             <span className="admin-target-label">Document Server URL:</span>
-            <code className="admin-code">https://docs.automatedprogram.app</code>
+            <code className="admin-code">{projectConfig.onlyOfficeUrl}</code>
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">JWT Secret:</span>
@@ -55,7 +61,7 @@ export default function AdminSettingsPage() {
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">Callback URL base:</span>
-            <code className="admin-code">https://api.automatedprogram.app/api/onlyoffice</code>
+            <code className="admin-code">{projectConfig.backendUrl}/api/onlyoffice</code>
           </div>
         </div>
       </div>
@@ -99,11 +105,11 @@ export default function AdminSettingsPage() {
         <div className="admin-target-meta" style={{ marginTop: 'var(--space-4)' }}>
           <div className="admin-target-row">
             <span className="admin-target-label">Default benchmark:</span>
-            <span>CIS AlmaLinux OS 9 Benchmark v2.0.0</span>
+            <span>{benchmarkLabel}</span>
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">Default profile:</span>
-            <span>Level 1 - Server</span>
+            <span>{projectConfig.benchmarkProfile}</span>
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">Max concurrent jobs:</span>

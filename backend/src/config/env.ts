@@ -1,15 +1,23 @@
 import dotenv from 'dotenv';
+import { getProjectAnswers } from './project-answers';
 dotenv.config();
+
+const projectAnswers = getProjectAnswers();
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
 
+const defaultFrontendUrl = isProduction
+  ? projectAnswers.project?.frontend_url || 'https://automatedprogram.app'
+  : 'http://localhost:3000';
 const defaultBackendPublicUrl = isProduction
-  ? 'https://api.automatedprogram.app'
+  ? projectAnswers.project?.backend_url || 'https://api.automatedprogram.app'
   : 'http://localhost:4000';
 const defaultOnlyOfficeUrl = isProduction
-  ? 'https://docs.automatedprogram.app'
+  ? projectAnswers.project?.onlyoffice_url || 'https://docs.automatedprogram.app'
   : 'http://localhost:8080';
+const defaultDocumentsBucket = projectAnswers.storage?.documents_bucket || 'reportops-documents';
+const defaultArchiveBucket = projectAnswers.storage?.archive_bucket || 'reportops-archives';
 
 function trimTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
@@ -60,7 +68,7 @@ export const env = {
   // Server
   PORT: parseInt(process.env.PORT || '4000', 10),
   NODE_ENV: nodeEnv,
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+  FRONTEND_URL: process.env.FRONTEND_URL || defaultFrontendUrl,
 
   // Database (Supabase Postgres via Prisma)
   DATABASE_URL: process.env.DATABASE_URL || '',
@@ -68,7 +76,8 @@ export const env = {
   // Supabase (for Storage)
   SUPABASE_URL: process.env.SUPABASE_URL || '',
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  SUPABASE_STORAGE_BUCKET: process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents',
+  SUPABASE_STORAGE_BUCKET: process.env.SUPABASE_STORAGE_BUCKET || defaultDocumentsBucket,
+  SUPABASE_ARCHIVE_BUCKET: process.env.SUPABASE_ARCHIVE_BUCKET || defaultArchiveBucket,
 
   // GitHub OAuth
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID || '',
@@ -79,6 +88,9 @@ export const env = {
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || '',
   GITHUB_REPO_OWNER: process.env.GITHUB_REPO_OWNER || 'LQH-coding-frenzy',
   GITHUB_REPO_NAME: process.env.GITHUB_REPO_NAME || 'Main_ReportOps_Project_Git',
+
+  // Source of truth
+  PROJECT_ANSWERS_PATH: process.env.PROJECT_ANSWERS_PATH || '',
 
   // ONLYOFFICE
   ONLYOFFICE_DOCUMENT_SERVER_URL: resolvePublicUrl('ONLYOFFICE_DOCUMENT_SERVER_URL', defaultOnlyOfficeUrl),

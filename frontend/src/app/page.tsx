@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, getLoginUrl } from '../lib/api';
 import type { User } from '../lib/types';
+import { benchmarkLabel, projectConfig } from '../lib/project-config';
 
 function getAuthErrorFromQuery(): string | null {
   if (typeof window === 'undefined') return null;
@@ -55,7 +56,7 @@ export default function LoginPage() {
           Nền tảng cộng tác viết báo cáo CIS Benchmark
           <br />
           <span style={{ fontSize: 'var(--text-sm)', opacity: 0.7 }}>
-            CIS AlmaLinux OS 9 • Level 1 Server • v2.0.0
+            {benchmarkLabel} • {projectConfig.benchmarkProfile}
           </span>
         </p>
 

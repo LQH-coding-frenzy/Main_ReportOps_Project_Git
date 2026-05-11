@@ -6,7 +6,12 @@ module "lab_vm" {
   zone               = var.zone
   vm_name            = var.vm_name
   vm_id              = var.vm_id
+  section_label      = var.section_label
   owner_name         = var.owner_name
+  benchmark_name     = var.benchmark_name
+  benchmark_version  = var.benchmark_version
+  benchmark_profile  = var.benchmark_profile
+  frontend_url       = var.frontend_url
   verification_token = var.verification_token
   ssh_keys           = var.ssh_keys
   machine_type       = var.machine_type

@@ -2,6 +2,8 @@ import { PrismaClient, AuditJob, LabVm, AuditScript } from '@prisma/client';
 import { SSHRunner } from './ssh-runner';
 import { parseCisStdout, NormalizedAuditResult } from './cis-stdout-parser';
 import { renderTerminalEvidenceHtml, renderDashboardEvidenceHtml } from './evidence-renderer';
+import { env } from '../../config/env';
+import { getProjectAnswers } from '../../config/project-answers';
 import { supabase } from '../../config/supabase';
 import { chromium } from 'playwright';
 import * as fs from 'fs';
@@ -9,6 +11,58 @@ import * as path from 'path';
 import * as os from 'os';
 
 const prisma = new PrismaClient();
+const documentsBucket = env.SUPABASE_STORAGE_BUCKET;
+const archiveBucket = env.SUPABASE_ARCHIVE_BUCKET;
+const projectAnswers = getProjectAnswers();
+const benchmarkName = projectAnswers.benchmark?.name || 'CIS AlmaLinux OS 9 Benchmark';
+const benchmarkVersion = projectAnswers.benchmark?.version || '2.0.0';
+const benchmarkProfile = projectAnswers.benchmark?.profile || 'Level 1 - Server';
+const benchmarkLabel = `${benchmarkName} v${benchmarkVersion}`;
+
+type OpenScapResultRow = {
+  idref: string;
+  result: string;
+};
+
+function parseOpenScapResultRows(xml: string): OpenScapResultRow[] {
+  const rows: OpenScapResultRow[] = [];
+  const ruleResultRegex = /<rule-result[^>]*idref="([^"]+)"[^>]*>[\s\S]*?<result>([^<]+)<\/result>/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = ruleResultRegex.exec(xml)) !== null) {
+    rows.push({ idref: match[1], result: match[2].trim() });
+  }
+
+  return rows;
+}
+
+function buildOpenScapFilteredJson(input: {
+  benchmark: string;
+  profile: string;
+  ownerSection: string;
+  counts: { pass: number; fail: number; error: number };
+  rows: OpenScapResultRow[];
+}): string {
+  const actionableRows = input.rows.filter((row) => {
+    const normalized = row.result.toLowerCase();
+    return !['notselected', 'notchecked'].includes(normalized);
+  });
+
+  return JSON.stringify(
+    {
+      benchmark: input.benchmark,
+      profile: input.profile,
+      ownerSection: input.ownerSection,
+      scope: 'M1',
+      m1Sections: projectAnswers.m1_scope?.sections || [],
+      counts: input.counts,
+      ruleResults: actionableRows,
+      generatedAt: new Date().toISOString(),
+    },
+    null,
+    2
+  );
+}
 
 export class AuditJobExecutor {
   private jobId: number;
@@ -168,7 +222,7 @@ export class AuditJobExecutor {
 
           // Download script from Supabase
           const { data: fileData, error: downloadError } = await supabase.storage
-            .from(process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents')
+            .from(documentsBucket)
             .download(script.scriptStoragePath);
 
           if (downloadError || !fileData) {
@@ -239,19 +293,23 @@ export class AuditJobExecutor {
         console.log(`Executing OpenSCAP baseline scan for job ${this.jobId}...`);
         const profile = 'xccdf_org.ssgproject.content_profile_cis';
         const dsPath = '/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml';
+        const openScapPrefix = `archives/audits/${this.jobId}/m1/openscap`;
+        const oscapResultsXmlPath = `${remoteDir}/oscap-results.xml`;
+        const oscapArfXmlPath = `${remoteDir}/oscap-results-arf.xml`;
+        const oscapReportHtmlPath = `${remoteDir}/oscap-report.html`;
         
         // Ensure oscap is installed (should be done by Terraform, but just in case)
         await this.runner.execCommand(`sudo dnf install -y openscap-scanner scap-security-guide`);
         
-        const oscapCmd = `sudo oscap xccdf eval --profile ${profile} --results ${remoteDir}/oscap-results.xml --report ${remoteDir}/oscap-report.html ${dsPath}`;
+        const oscapCmd = `sudo oscap xccdf eval --profile ${profile} --results ${oscapResultsXmlPath} --results-arf ${oscapArfXmlPath} --report ${oscapReportHtmlPath} ${dsPath}`;
         
         // oscap exit code is 2 if there are failures, 0 if 100% pass, 1 on error
         await this.runner.execCommand(oscapCmd);
         
         // Count pass/fail directly from XML
-        const passOutput = await this.runner.execCommand(`grep -c '<result>pass</result>' ${remoteDir}/oscap-results.xml || echo 0`);
-        const failOutput = await this.runner.execCommand(`grep -c '<result>fail</result>' ${remoteDir}/oscap-results.xml || echo 0`);
-        const errorOutput = await this.runner.execCommand(`grep -c '<result>error</result>' ${remoteDir}/oscap-results.xml || echo 0`);
+        const passOutput = await this.runner.execCommand(`grep -c '<result>pass</result>' ${oscapResultsXmlPath} || echo 0`);
+        const failOutput = await this.runner.execCommand(`grep -c '<result>fail</result>' ${oscapResultsXmlPath} || echo 0`);
+        const errorOutput = await this.runner.execCommand(`grep -c '<result>error</result>' ${oscapResultsXmlPath} || echo 0`);
         
         const oPass = parseInt(passOutput.stdout.trim()) || 0;
         const oFail = parseInt(failOutput.stdout.trim()) || 0;
@@ -264,7 +322,7 @@ export class AuditJobExecutor {
         // Add a mock result row for OpenSCAP so it appears in the dashboard
         results.push({
           controlId: 'OpenSCAP',
-          title: `OpenSCAP CIS Baseline (Pass: ${oPass}, Fail: ${oFail})`,
+          title: `${benchmarkLabel} (Pass: ${oPass}, Fail: ${oFail})`,
           section: 'OS',
           status: oFail > 0 ? 'FAIL' : 'PASS',
           assessmentType: 'Automated',
@@ -282,13 +340,18 @@ export class AuditJobExecutor {
           finishedAt: new Date().toISOString(),
         } as NormalizedAuditResult);
         
-        // Download HTML report and upload to Supabase
-        const oscapHtml = await this.runner.execCommand(`cat ${remoteDir}/oscap-report.html`);
+        // Download raw OpenSCAP artifacts and upload to Supabase
+        const oscapHtml = await this.runner.execCommand(`cat ${oscapReportHtmlPath}`);
+        const oscapXml = await this.runner.execCommand(`cat ${oscapResultsXmlPath}`);
+        const oscapArf = await this.runner.execCommand(`cat ${oscapArfXmlPath}`);
+        const bucket = archiveBucket;
+
+        const oscapReportPath = `${openScapPrefix}/report.html`;
+        const oscapXmlPath = `${openScapPrefix}/results.xml`;
+        const oscapArfPath = `${openScapPrefix}/results-arf.xml`;
+
         if (oscapHtml.stdout) {
-          const oscapReportPath = `archives/audits/${this.jobId}/openscap-report.html`;
-          const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
           await supabase.storage.from(bucket).upload(oscapReportPath, Buffer.from(oscapHtml.stdout, 'utf-8'), { contentType: 'text/html', upsert: true });
-          
           await prisma.auditEvidence.create({
             data: {
               auditJobId: this.jobId,
@@ -300,6 +363,55 @@ export class AuditJobExecutor {
             }
           });
         }
+
+        if (oscapXml.stdout) {
+          await supabase.storage.from(bucket).upload(oscapXmlPath, Buffer.from(oscapXml.stdout, 'utf-8'), { contentType: 'application/xml', upsert: true });
+          await prisma.auditEvidence.create({
+            data: {
+              auditJobId: this.jobId,
+              artifactType: 'OPENSCAP_RESULTS_XML',
+              artifactName: 'OpenSCAP XCCDF Results',
+              storagePath: oscapXmlPath,
+              mimeType: 'application/xml',
+              sizeBytes: Buffer.byteLength(oscapXml.stdout, 'utf-8'),
+            }
+          });
+        }
+
+        if (oscapArf.stdout) {
+          await supabase.storage.from(bucket).upload(oscapArfPath, Buffer.from(oscapArf.stdout, 'utf-8'), { contentType: 'application/xml', upsert: true });
+          await prisma.auditEvidence.create({
+            data: {
+              auditJobId: this.jobId,
+              artifactType: 'OPENSCAP_ARF',
+              artifactName: 'OpenSCAP ARF Results',
+              storagePath: oscapArfPath,
+              mimeType: 'application/xml',
+              sizeBytes: Buffer.byteLength(oscapArf.stdout, 'utf-8'),
+            }
+          });
+        }
+
+        // Store a compact normalized JSON summary for archive UI usage
+        const oscapSummaryPath = `${openScapPrefix}/openscap-m1-filtered.json`;
+        const oscapSummaryJson = buildOpenScapFilteredJson({
+          benchmark: benchmarkLabel,
+          profile: benchmarkProfile,
+          ownerSection: job.ownerSection,
+          counts: { pass: oPass, fail: oFail, error: oError },
+          rows: parseOpenScapResultRows(oscapXml.stdout),
+        });
+        await supabase.storage.from(bucket).upload(oscapSummaryPath, Buffer.from(oscapSummaryJson, 'utf-8'), { contentType: 'application/json', upsert: true });
+        await prisma.auditEvidence.create({
+          data: {
+            auditJobId: this.jobId,
+            artifactType: 'OPENSCAP_M1_FILTERED_JSON',
+            artifactName: 'OpenSCAP M1 Filtered JSON',
+            storagePath: oscapSummaryPath,
+            mimeType: 'application/json',
+            sizeBytes: Buffer.byteLength(oscapSummaryJson, 'utf-8'),
+          }
+        });
       }
 
       // Cleanup VM temp dir
@@ -309,7 +421,7 @@ export class AuditJobExecutor {
       const timestamp = new Date().toLocaleString('vi-VN');
       
       const terminalHtml = renderTerminalEvidenceHtml({
-        benchmark: 'CIS AlmaLinux OS 9 Benchmark v2.0.0',
+        benchmark: benchmarkLabel,
         scope: job.ownerSection,
         vmName: job.vm.name,
         publicIp: job.vm.publicIp,
@@ -328,7 +440,7 @@ export class AuditJobExecutor {
       }
 
       const dashboardHtml = renderDashboardEvidenceHtml({
-        benchmark: 'CIS AlmaLinux OS 9 Benchmark v2.0.0',
+        benchmark: benchmarkLabel,
         scope: job.ownerSection,
         score: score || 0,
         passCount, failCount, manualCount, errorCount, unknownCount,
@@ -339,7 +451,7 @@ export class AuditJobExecutor {
       });
 
       // 6. Upload Evidence to Supabase
-      const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+      const bucket = archiveBucket;
       const evidencePathPrefix = `archives/audits/${this.jobId}`;
 
       // Upload Terminal HTML
@@ -386,6 +498,7 @@ export class AuditJobExecutor {
         await page.waitForTimeout(1000);
         
         const screenshotBuffer = await page.screenshot({ fullPage: true });
+        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
         await browser.close();
         fs.unlinkSync(tempHtmlPath);
 
@@ -400,6 +513,20 @@ export class AuditJobExecutor {
             storagePath: screenshotPath,
             mimeType: 'image/png',
             sizeBytes: screenshotBuffer.length,
+          }
+        });
+
+        const pdfPath = `${evidencePathPrefix}/dashboard-evidence.pdf`;
+        await supabase.storage.from(bucket).upload(pdfPath, pdfBuffer, { contentType: 'application/pdf', upsert: true });
+
+        await prisma.auditEvidence.create({
+          data: {
+            auditJobId: this.jobId,
+            artifactType: 'DASHBOARD_PDF',
+            artifactName: 'Dashboard PDF Report',
+            storagePath: pdfPath,
+            mimeType: 'application/pdf',
+            sizeBytes: pdfBuffer.length,
           }
         });
         await this.addLog('Dashboard screenshot captured successfully.');
@@ -460,7 +587,7 @@ export class AuditJobExecutor {
       // Always attempt to upload logs at the end
       try {
         if (this.logs.length > 0) {
-          const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+          const bucket = archiveBucket;
           const logContent = this.logs.join('\n');
           const logPath = `archives/audits/${this.jobId}/audit-log.txt`;
           

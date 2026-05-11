@@ -38,6 +38,7 @@ yarn-error.log*
 # Prisma
 prisma/migrations/**/migration_lock.toml
 *.db
+infra/terraform/environments/dev/auto.tfvars.json
 
 # Coverage
 coverage/

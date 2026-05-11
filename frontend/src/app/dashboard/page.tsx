@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePolling } from '../../hooks/usePolling';
 import { getCurrentUser, getSections } from '../../lib/api';
 import type { User, Section } from '../../lib/types';
+import { benchmarkLabel, projectConfig } from '../../lib/project-config';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -62,7 +63,7 @@ export default function DashboardPage() {
             {isLeader ? 'Tổng quan dự án' : 'Sections của bạn'}
           </h1>
           <p className="page-subtitle">
-            CIS AlmaLinux OS 9 Benchmark v2.0.0 • Level 1 — Server
+            {benchmarkLabel} • {projectConfig.benchmarkProfile}
           </p>
         </div>
 

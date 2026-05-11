@@ -5,6 +5,8 @@
  * Ensures scripts meet security requirements for audit-only mode.
  */
 
+import { getProjectAnswers } from '../../config/project-answers';
+
 // ── Types ──
 
 export interface ScriptValidationResult {
@@ -15,7 +17,7 @@ export interface ScriptValidationResult {
 
 // ── M1 CIS sections scope ──
 
-const M1_SECTIONS = ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'];
+const M1_SECTIONS = getProjectAnswers().m1_scope?.sections || ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'];
 
 // ── Blocked destructive commands (MVP audit-only mode) ──
 

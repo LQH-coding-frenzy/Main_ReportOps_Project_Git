@@ -3,16 +3,26 @@ import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getProjectAnswers } from '../config/project-answers';
+import { env } from '../config/env';
 
 dotenv.config();
 
 const prisma = new PrismaClient();
+const answers = getProjectAnswers();
+const packSections = answers.audit_pack?.sections || answers.m1_scope?.sections || ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'];
+const defaultPackId = answers.audit_pack?.pack_id || 'm1-standard';
+const defaultOwnerSection = answers.audit_pack?.owner_section || 'M1';
+const defaultTitle = answers.audit_pack?.title || 'M1 Standard Audit Pack';
+const defaultBenchmarkName = answers.audit_pack?.benchmark_name || answers.benchmark?.name || 'CIS AlmaLinux OS 9 Benchmark';
+const defaultBenchmarkVersion = answers.audit_pack?.benchmark_version || answers.benchmark?.version || '2.0.0';
+const defaultProfile = answers.audit_pack?.profile || answers.benchmark?.profile || 'Level 1 - Server';
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+const BUCKET = env.SUPABASE_STORAGE_BUCKET;
 const SCRIPTS_DIR = path.join(__dirname, '../../../m1_audit_scripts_almalinux9/sections');
 
 async function importScripts() {
@@ -25,13 +35,16 @@ async function importScripts() {
   }
 
   const pack = await prisma.auditPack.upsert({
-    where: { packId: 'm1-standard' },
+    where: { packId: defaultPackId },
     update: {},
     create: {
-      packId: 'm1-standard',
-      ownerSection: 'M1',
-      title: 'M1 Standard Audit Pack',
-      sections: ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'],
+      packId: defaultPackId,
+      ownerSection: defaultOwnerSection,
+      title: defaultTitle,
+      sections: packSections,
+      benchmarkName: defaultBenchmarkName,
+      benchmarkVersion: defaultBenchmarkVersion,
+      profile: defaultProfile,
     },
   });
 

@@ -19,24 +19,48 @@ export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE
  */
 export async function initStorage(): Promise<void> {
   const { data: buckets } = await supabase.storage.listBuckets();
-  const bucketExists = buckets?.some((b) => b.name === env.SUPABASE_STORAGE_BUCKET);
+  const bucketNames = new Set((buckets || []).map((bucket) => bucket.name));
 
-  if (!bucketExists) {
-    const { error } = await supabase.storage.createBucket(env.SUPABASE_STORAGE_BUCKET, {
-      public: false,
-      fileSizeLimit: 52428800, // 50MB
-      allowedMimeTypes: [
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-        'application/pdf',
-      ],
-    });
-
-    if (error) {
-      console.error('❌ Failed to create storage bucket:', error.message);
-    } else {
-      console.log(`✅ Storage bucket "${env.SUPABASE_STORAGE_BUCKET}" created`);
+  const ensureBucket = async (
+    name: string,
+    options: { public: boolean; fileSizeLimit: number; allowedMimeTypes: string[] }
+  ): Promise<void> => {
+    if (bucketNames.has(name)) {
+      console.log(`✅ Storage bucket "${name}" exists`);
+      return;
     }
-  } else {
-    console.log(`✅ Storage bucket "${env.SUPABASE_STORAGE_BUCKET}" exists`);
-  }
+
+    const { error } = await supabase.storage.createBucket(name, options);
+    if (error) {
+      console.error(`❌ Failed to create storage bucket "${name}":`, error.message);
+      return;
+    }
+
+    bucketNames.add(name);
+    console.log(`✅ Storage bucket "${name}" created`);
+  };
+
+  await ensureBucket(env.SUPABASE_STORAGE_BUCKET, {
+    public: false,
+    fileSizeLimit: 52428800, // 50MB
+    allowedMimeTypes: [
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/pdf',
+      'text/x-shellscript',
+    ],
+  });
+
+  await ensureBucket(env.SUPABASE_ARCHIVE_BUCKET, {
+    public: false,
+    fileSizeLimit: 52428800, // 50MB
+    allowedMimeTypes: [
+      'text/html',
+      'text/plain',
+      'application/json',
+      'application/xml',
+      'text/xml',
+      'image/png',
+      'application/octet-stream',
+    ],
+  });
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createLabVm } from '../../../lib/api';
+import { benchmarkLabel } from '../../../lib/project-config';
 
 const MACHINE_TYPES = [
   { value: 'e2-micro', label: 'e2-micro (0.25 vCPU, 1 GB)', cost: '~$6/mo' },
@@ -52,7 +53,7 @@ export default function NewLabVmPage() {
         <div className="page-header">
           <h1 className="page-title">+ Tạo Lab VM mới</h1>
           <p className="page-subtitle">
-            Tạo máy ảo AlmaLinux 9 trên GCP cho kiểm thử CIS Benchmark
+            Tạo máy ảo AlmaLinux 9 trên GCP cho kiểm thử {benchmarkLabel}
           </p>
         </div>
 

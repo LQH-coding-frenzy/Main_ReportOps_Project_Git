@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { getAuditJob } from '../../../../lib/api';
 import type { AuditJob, AuditResultStatus } from '../../../../lib/types';
 
@@ -24,6 +25,7 @@ export default function AuditJobDetailPage() {
   const [logs, setLogs] = useState<string | null>(null);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const logContainerRef = useRef<HTMLPreElement>(null);
+  const jobStatus = job?.status;
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -59,16 +61,16 @@ export default function AuditJobDetailPage() {
 
     // Poll every 2 seconds if job is running
     interval = setInterval(() => {
-      if (job?.status === 'PENDING' || job?.status === 'RUNNING') {
+      if (jobStatus === 'PENDING' || jobStatus === 'RUNNING') {
         fetchJob();
-      } else if (job) {
+      } else if (jobStatus) {
         // Job is COMPLETED, FAILED, or CANCELLED, so stop polling
         clearInterval(interval);
       }
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [jobId, job?.status]);
+  }, [jobId, jobStatus]);
 
   const [selectedImage, setSelectedImage] = useState<{ url: string; name: string } | null>(null);
 
@@ -345,12 +347,16 @@ export default function AuditJobDetailPage() {
         >
           <div style={{ position: 'absolute', top: 20, right: 20, color: '#fff', fontSize: 32, cursor: 'pointer', fontWeight: 300 }}>✕</div>
           <div style={{ color: '#fff', marginBottom: 20, fontSize: 'var(--text-lg)', fontWeight: 600 }}>{selectedImage.name}</div>
-          <img 
-            src={selectedImage.url} 
-            alt={selectedImage.name} 
-            style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 150px)', borderRadius: 'var(--radius-lg)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}
-            onClick={(e) => e.stopPropagation()}
-          />
+          <div style={{ position: 'relative', width: 'min(100%, 1200px)', height: 'calc(100vh - 150px)' }} onClick={(e) => e.stopPropagation()}>
+            <Image
+              src={selectedImage.url}
+              alt={selectedImage.name}
+              fill
+              unoptimized
+              sizes="100vw"
+              style={{ objectFit: 'contain', borderRadius: 'var(--radius-lg)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}
+            />
+          </div>
           <div style={{ marginTop: 20 }}>
             <a href={selectedImage.url} download className="btn btn-primary">Download Image</a>
           </div>

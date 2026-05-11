@@ -35,6 +35,8 @@ jobs:
 
     env:
       BACKEND_PUBLIC_URL: https://api.automatedprogram.app
+      FRONTEND_PUBLIC_URL: https://automatedprogram.app
+      ONLYOFFICE_PUBLIC_URL: https://docs.automatedprogram.app
       TF_STATE_BUCKET: reportops-tfstate-cis-uit
       TF_ZONE: asia-southeast1-c
       GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
@@ -42,6 +44,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Terraform vars from answers
+        working-directory: backend
+        run: npm run answers:write-tfvars
 
       # Normalize inputs from both workflow_dispatch and repository_dispatch
       - name: Set Variables
@@ -122,22 +139,18 @@ jobs:
         run: |
           if [ "$ACTION" == "destroy" ]; then
             terraform destroy -auto-approve \
+              -var-file="auto.tfvars.json" \
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
-              -var="verification_token=$VERIFICATION_TOKEN" \
-              -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
-              -var="enable_oslogin=false" \
-              -var="audit_runner_ssh_public_key=${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}"
+              -var="verification_token=$VERIFICATION_TOKEN"
           else
             terraform apply -auto-approve \
+              -var-file="auto.tfvars.json" \
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
-              -var="verification_token=$VERIFICATION_TOKEN" \
-              -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
-              -var="enable_oslogin=false" \
-              -var="audit_runner_ssh_public_key=${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}"
+              -var="verification_token=$VERIFICATION_TOKEN"
           fi
 
       - name: Capture Terraform outputs

@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getAuditJobs } from '../../lib/api';
+import { getAuditJobs, getAuditJobEvidence } from '../../lib/api';
 import type { AuditJob } from '../../lib/types';
 
 export default function ArchivePage() {
   const [jobs, setJobs] = useState<AuditJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
+  const [evidenceMap, setEvidenceMap] = useState<Record<number, Awaited<ReturnType<typeof getAuditJobEvidence>>>>({});
 
   useEffect(() => {
     getAuditJobs()
@@ -15,6 +17,19 @@ export default function ArchivePage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleToggleEvidence(jobId: number) {
+    if (expandedJobId === jobId) {
+      setExpandedJobId(null);
+      return;
+    }
+
+    setExpandedJobId(jobId);
+    if (!evidenceMap[jobId]) {
+      const evidence = await getAuditJobEvidence(jobId);
+      setEvidenceMap((prev) => ({ ...prev, [jobId]: evidence }));
+    }
+  }
 
   return (
     <main className="main-content">
@@ -66,13 +81,46 @@ export default function ArchivePage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleToggleEvidence(job.id)}>
+                    📎 Evidence
+                  </button>
+                  <Link href={`/archive/${job.id}`} className="btn btn-secondary btn-sm">
+                    📦 Open Archive
+                  </Link>
                   <Link href={`/audit/jobs/${job.id}`} className="btn btn-secondary btn-sm">
                     📊 Results
                   </Link>
-                  <button className="btn btn-secondary btn-sm" disabled>
-                    📥 Download
-                  </button>
                 </div>
+
+                {expandedJobId === job.id && evidenceMap[job.id] && (
+                  <div style={{ width: '100%', marginTop: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 8 }}>Artifacts</div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {evidenceMap[job.id].map((ev) => (
+                        <a
+                          key={ev.id}
+                          href={`/api/audit-jobs/${job.id}/evidence/${ev.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="card"
+                          style={{ padding: 12, textDecoration: 'none' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{ev.artifactName}</div>
+                              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                                {ev.artifactType} • {ev.mimeType || 'file'}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                              {ev.sizeBytes ? `${(ev.sizeBytes / 1024).toFixed(1)} KB` : ''}
+                            </div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

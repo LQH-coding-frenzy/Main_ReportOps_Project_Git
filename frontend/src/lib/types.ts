@@ -265,6 +265,7 @@ export interface AuditScript {
   risk: string;
   enabled: boolean;
   scriptSha256: string | null;
+  validations?: ScriptValidationResult[];
 }
 
 export interface ScriptValidationResult {
@@ -341,4 +342,3 @@ export interface AuditEvidence {
   sizeBytes: number | null;
   createdAt: string;
 }
-

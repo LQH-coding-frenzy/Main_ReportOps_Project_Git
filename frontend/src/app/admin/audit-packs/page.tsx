@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, type FormEvent } from 'react';
 import Link from 'next/link';
-import { getAuditPacks, toggleAuditScript } from '../../../lib/api';
-import type { AuditPack } from '../../../lib/types';
+import { getAuditPacks, toggleAuditScript, uploadAuditScript } from '../../../lib/api';
+import type { AuditPack, ScriptValidationResult } from '../../../lib/types';
+import { benchmarkLabel, projectConfig } from '../../../lib/project-config';
 import { useToast } from '../../../components/ui/Toast';
 
 const RISK_COLOR: Record<string, string> = {
@@ -16,6 +17,8 @@ const RISK_COLOR: Record<string, string> = {
 export default function AdminAuditPacksPage() {
   const [packs, setPacks] = useState<AuditPack[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [selectedPackId, setSelectedPackId] = useState<string>('');
   const { showToast } = useToast();
 
   const loadPacks = useCallback(async () => {
@@ -30,6 +33,10 @@ export default function AdminAuditPacksPage() {
     }
   }, [showToast]);
 
+  const selectedPack = useMemo(() => packs.find((pack) => pack.packId === selectedPackId) || packs[0] || null, [packs, selectedPackId]);
+  const currentBenchmarkLabel = selectedPack ? `${selectedPack.benchmarkName} v${selectedPack.benchmarkVersion}` : benchmarkLabel;
+  const profileLabel = selectedPack?.profile || projectConfig.benchmarkProfile;
+
   useEffect(() => {
     loadPacks();
   }, [loadPacks]);
@@ -42,6 +49,39 @@ export default function AdminAuditPacksPage() {
     } catch {
       showToast('Không thể cập nhật script', 'error');
     }
+  }
+
+  async function handleUploadScript(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedPack) {
+      showToast('Chưa có audit pack để upload', 'error');
+      return;
+    }
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    formData.set('packId', selectedPack.packId);
+
+    setUploading(true);
+    try {
+      const result = await uploadAuditScript(formData);
+      showToast(`Đã upload ${result.script.controlId}`, result.validation.valid ? 'success' : 'info');
+      form.reset();
+      await loadPacks();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Không thể upload script', 'error');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function getValidationBadge(validation?: ScriptValidationResult) {
+    if (!validation) {
+      return <span className="badge badge-info">No history</span>;
+    }
+
+    return <span className={`badge ${validation.valid ? 'badge-success' : 'badge-danger'}`}>{validation.valid ? 'Valid' : 'Invalid'}</span>;
   }
 
   if (loading) {
@@ -69,7 +109,7 @@ export default function AdminAuditPacksPage() {
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'start' }}>
           <span style={{ fontSize: '1.5rem' }}>ℹ️</span>
           <div>
-            <strong>CIS AlmaLinux OS 9 Benchmark v2.0.0 — Level 1 Server</strong>
+            <strong>{currentBenchmarkLabel} — {profileLabel}</strong>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
               Upload các file .sh theo format CIS stdout. Script phải có shebang bash,
               không chứa lệnh phá hoại, và phải thuộc scope M1. Parser sẽ tự detect
@@ -78,6 +118,51 @@ export default function AdminAuditPacksPage() {
           </div>
         </div>
       </div>
+
+      {packs.length > 0 && (
+        <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+          <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-3)' }}>Upload Script</h3>
+          <form onSubmit={handleUploadScript} style={{ display: 'grid', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: '1fr 1fr' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Audit Pack</span>
+                <select
+                  className="admin-input"
+                  value={selectedPack?.packId || ''}
+                  onChange={(e) => setSelectedPackId(e.target.value)}
+                >
+                  {packs.map((pack) => (
+                    <option key={pack.packId} value={pack.packId}>
+                      {pack.packId} - {pack.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Script File</span>
+                <input className="admin-input" name="script" type="file" accept=".sh" required />
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gap: 'var(--space-2)', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              <input className="admin-input" name="controlId" placeholder="1.2.1.2" required />
+              <input className="admin-input" name="title" placeholder="Ensure gpgcheck is globally activated" required />
+              <input className="admin-input" name="section" placeholder="1.2" required />
+              <input className="admin-input" name="risk" placeholder="medium" defaultValue="medium" />
+            </div>
+
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <select className="admin-input" name="assessmentType" defaultValue="Automated" style={{ maxWidth: 180 }}>
+                <option value="Automated">Automated</option>
+                <option value="Manual">Manual</option>
+              </select>
+              <button className="btn btn-primary" type="submit" disabled={uploading}>
+                {uploading ? 'Uploading...' : 'Upload Script'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Packs */}
       {packs.length === 0 ? (
@@ -127,6 +212,7 @@ export default function AdminAuditPacksPage() {
                       <th>Type</th>
                       <th>Risk</th>
                       <th>Status</th>
+                      <th>Validation</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -150,6 +236,44 @@ export default function AdminAuditPacksPage() {
                           <span className={`badge ${script.enabled ? 'badge-success' : 'badge-danger'}`}>
                             {script.enabled ? 'Enabled' : 'Disabled'}
                           </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'grid', gap: 8 }}>
+                            {getValidationBadge(script.validations?.[0])}
+                            {script.validations?.length ? (
+                              <details>
+                                <summary style={{ cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                                  {script.validations.length} lần kiểm tra
+                                </summary>
+                                <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                                  {script.validations.map((validation) => (
+                                    <div
+                                      key={validation.id}
+                                      style={{
+                                        padding: '8px 10px',
+                                        border: '1px solid var(--color-border)',
+                                        borderRadius: 'var(--radius-sm)',
+                                        fontSize: 'var(--text-xs)',
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                        <strong>{validation.valid ? 'Valid' : 'Invalid'}</strong>
+                                        <span style={{ color: 'var(--color-text-muted)' }}>
+                                          {new Date(validation.createdAt).toLocaleString('vi-VN')}
+                                        </span>
+                                      </div>
+                                      {(validation.errorsJson?.length || validation.warningsJson?.length) ? (
+                                        <div style={{ marginTop: 6, color: 'var(--color-text-muted)' }}>
+                                          {validation.errorsJson?.length ? `Errors: ${validation.errorsJson.join('; ')}` : ''}
+                                          {validation.warningsJson?.length ? `${validation.errorsJson?.length ? ' | ' : ''}Warnings: ${validation.warningsJson.join('; ')}` : ''}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            ) : null}
+                          </div>
                         </td>
                         <td>
                           <button

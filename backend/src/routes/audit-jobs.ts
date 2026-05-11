@@ -3,10 +3,25 @@ import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { AuditJobExecutor } from '../services/audit/job-executor';
+import { env } from '../config/env';
 import { supabase } from '../config/supabase';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+const evidenceBuckets = [env.SUPABASE_ARCHIVE_BUCKET, env.SUPABASE_STORAGE_BUCKET];
+
+async function downloadFromAnyBucket(storagePath: string): Promise<Blob | null> {
+  for (const bucket of evidenceBuckets) {
+    const { data, error } = await supabase.storage.from(bucket).download(storagePath);
+
+    if (!error && data) {
+      return data;
+    }
+  }
+
+  return null;
+}
 
 /**
  * GET /api/audit-jobs
@@ -40,6 +55,32 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('List audit jobs error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * GET /api/audit-jobs/stats/summary
+ * Get aggregate audit statistics.
+ */
+router.get('/stats/summary', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const [totalJobs, completedJobs, latestJob] = await Promise.all([
+      prisma.auditJob.count(),
+      prisma.auditJob.count({ where: { status: 'COMPLETED' } }),
+      prisma.auditJob.findFirst({
+        where: { status: 'COMPLETED' },
+        orderBy: { finishedAt: 'desc' },
+        select: { id: true, score: true, riskLevel: true, finishedAt: true, passCount: true, failCount: true },
+      }),
+    ]);
+
+    res.json({
+      data: { totalJobs, completedJobs, latestJob },
+      status: 200,
+    });
+  } catch (error) {
+    console.error('Audit stats error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
   }
 });
@@ -146,32 +187,6 @@ router.post('/', requireAuth, requireLeader, async (req: Request, res: Response)
 });
 
 /**
- * GET /api/audit-jobs/stats/summary
- * Get aggregate audit statistics.
- */
-router.get('/stats/summary', requireAuth, async (_req: Request, res: Response) => {
-  try {
-    const [totalJobs, completedJobs, latestJob] = await Promise.all([
-      prisma.auditJob.count(),
-      prisma.auditJob.count({ where: { status: 'COMPLETED' } }),
-      prisma.auditJob.findFirst({
-        where: { status: 'COMPLETED' },
-        orderBy: { finishedAt: 'desc' },
-        select: { id: true, score: true, riskLevel: true, finishedAt: true, passCount: true, failCount: true },
-      }),
-    ]);
-
-    res.json({
-      data: { totalJobs, completedJobs, latestJob },
-      status: 200,
-    });
-  } catch (error) {
-    console.error('Audit stats error:', error);
-    res.status(500).json({ error: 'Internal server error', status: 500 });
-  }
-});
-
-/**
  * GET /api/audit-jobs/:id/logs
  * Get the raw execution logs from Supabase.
  */
@@ -179,11 +194,9 @@ router.get('/:id/logs', requireAuth, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const logPath = `archives/audits/${id}/audit-log.txt`;
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+    const data = await downloadFromAnyBucket(logPath);
 
-    const { data, error } = await supabase.storage.from(bucket).download(logPath);
-
-    if (error || !data) {
+    if (!data) {
       return res.status(404).json({ error: 'Log file not found', status: 404 });
     }
 
@@ -212,10 +225,9 @@ router.get('/:id/evidence/:evidenceId', requireAuth, async (req: Request, res: R
       return res.status(404).json({ error: 'Evidence not found', status: 404 });
     }
 
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
-    const { data, error } = await supabase.storage.from(bucket).download(evidence.storagePath);
+    const data = await downloadFromAnyBucket(evidence.storagePath);
 
-    if (error || !data) {
+    if (!data) {
       return res.status(404).json({ error: 'Evidence file not found in storage', status: 404 });
     }
 
@@ -225,6 +237,25 @@ router.get('/:id/evidence/:evidenceId', requireAuth, async (req: Request, res: R
     res.send(buffer);
   } catch (error) {
     console.error('Get audit evidence error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * GET /api/audit-jobs/:id/evidence
+ * List evidence artifacts for a job.
+ */
+router.get('/:id/evidence', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const evidences = await prisma.auditEvidence.findMany({
+      where: { auditJobId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ data: evidences, status: 200 });
+  } catch (error) {
+    console.error('List audit evidence error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
   }
 });

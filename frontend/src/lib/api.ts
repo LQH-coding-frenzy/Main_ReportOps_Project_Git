@@ -13,9 +13,19 @@ import type {
   LabVm,
   AuditPack,
   AuditJob,
+  AuditEvidence,
+  AuditScript,
+  ScriptValidationResult,
 } from './types';
+import { projectConfig } from './project-config';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+export interface ScriptValidationPreview {
+  valid: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
+const API_BASE = projectConfig.backendUrl;
 
 /**
  * Base fetch wrapper with credentials (cookies) and error handling.
@@ -223,6 +233,24 @@ export async function getAuditJobLogs(id: number): Promise<string> {
   return res.data.content;
 }
 
+export async function getAuditJobEvidence(id: number): Promise<AuditEvidence[]> {
+  const res = await apiFetch<ApiResponse<AuditEvidence[]>>(`/api/audit-jobs/${id}/evidence`);
+  return res.data;
+}
+
+export async function getAuditJobEvidenceFile(jobId: number, evidenceId: number): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/audit-jobs/${jobId}/evidence/${evidenceId}`, {
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errorBody.error || `API Error: ${res.status}`);
+  }
+
+  return res.blob();
+}
+
 export async function createAuditJob(vmId: number, mode: string): Promise<AuditJob> {
   const res = await apiFetch<ApiResponse<AuditJob>>('/api/audit-jobs', {
     method: 'POST',
@@ -268,4 +296,25 @@ export async function getAuditPacks(): Promise<AuditPack[]> {
 
 export async function toggleAuditScript(id: number): Promise<void> {
   await apiFetch(`/api/audit-scripts/${id}/toggle`, { method: 'PATCH' });
+}
+
+export async function uploadAuditScript(formData: FormData): Promise<{ script: AuditScript; validation: ScriptValidationPreview }> {
+  const res = await fetch(`${API_BASE}/api/audit-scripts/upload`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errorBody.error || `API Error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.data;
+}
+
+export async function getScriptValidation(id: number): Promise<ScriptValidationResult> {
+  const res = await apiFetch<ApiResponse<ScriptValidationResult>>(`/api/audit-scripts/${id}/validation`);
+  return res.data;
 }

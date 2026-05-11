@@ -12,7 +12,10 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "audit:bootstrap": "ts-node src/scripts/bootstrap-audit.ts",
+    "audit:import-m1": "ts-node src/scripts/import-m1-scripts.ts",
+    "answers:write-tfvars": "ts-node src/scripts/write-terraform-vars.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -29,7 +32,8 @@
     "multer": "^2.1.1",
     "node-ssh": "^13.2.1",
     "playwright": "^1.59.1",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "yaml": "^2.9.0"
   },
   "overrides": {
     "docx-merger": {
