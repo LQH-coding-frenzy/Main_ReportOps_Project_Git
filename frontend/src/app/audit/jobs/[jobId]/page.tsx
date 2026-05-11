@@ -61,7 +61,8 @@ export default function AuditJobDetailPage() {
     interval = setInterval(() => {
       if (job?.status === 'PENDING' || job?.status === 'RUNNING') {
         fetchJob();
-      } else if (job && job.status !== 'PENDING' && job.status !== 'RUNNING') {
+      } else if (job) {
+        // Job is COMPLETED, FAILED, or CANCELLED, so stop polling
         clearInterval(interval);
       }
     }, 2000);
