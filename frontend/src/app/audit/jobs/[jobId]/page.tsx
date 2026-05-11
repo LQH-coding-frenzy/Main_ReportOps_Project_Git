@@ -71,6 +71,8 @@ export default function AuditJobDetailPage() {
   }, [jobId, job?.status]);
 
   async function handleViewLogs() {
+    if (!job) return;
+    
     if (showLogs) {
       setShowLogs(false);
       return;
