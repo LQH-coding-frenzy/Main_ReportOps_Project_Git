@@ -21,11 +21,26 @@ const M1_SCRIPTS = [
 echo "§1.1.1.1 Ensure mounting of cramfs filesystems is disabled"
 output=$(modprobe -n -v cramfs 2>/dev/null)
 if [[ "$output" == "install /bin/false" ]] || [[ -z "$output" ]]; then
-  echo "PASS: cramfs is disabled"
+  echo "*** PASS ***: cramfs is disabled"
   exit 0
 else
-  echo "FAIL: cramfs is enabled"
+  echo "*** FAIL ***: cramfs is enabled"
   echo "Current configuration: $output"
+  exit 1
+fi`,
+  },
+  {
+    controlId: '1.1.1.2',
+    title: 'Ensure mounting of freevxfs filesystems is disabled',
+    section: '1.1',
+    content: `#!/bin/bash
+echo "§1.1.1.2 Ensure mounting of freevxfs filesystems is disabled"
+output=$(modprobe -n -v freevxfs 2>/dev/null)
+if [[ "$output" == "install /bin/false" ]] || [[ -z "$output" ]]; then
+  echo "*** PASS ***: freevxfs is disabled"
+  exit 0
+else
+  echo "*** FAIL ***: freevxfs is enabled"
   exit 1
 fi`,
   },
@@ -36,10 +51,10 @@ fi`,
     content: `#!/bin/bash
 echo "§1.2.1.2 Ensure gpgcheck is globally activated"
 if grep -q "^gpgcheck=1" /etc/dnf/dnf.conf; then
-  echo "PASS: gpgcheck is enabled in /etc/dnf/dnf.conf"
+  echo "*** PASS ***: gpgcheck is enabled in /etc/dnf/dnf.conf"
   exit 0
 else
-  echo "FAIL: gpgcheck is NOT enabled in /etc/dnf/dnf.conf"
+  echo "*** FAIL ***: gpgcheck is NOT enabled in /etc/dnf/dnf.conf"
   exit 1
 fi`,
   },
@@ -50,10 +65,10 @@ fi`,
     content: `#!/bin/bash
 echo "§2.3.1 Ensure chrony is configured"
 if systemctl is-active --quiet chronyd; then
-  echo "PASS: chronyd is active"
+  echo "*** PASS ***: chronyd is active"
   exit 0
 else
-  echo "FAIL: chronyd is NOT active"
+  echo "*** FAIL ***: chronyd is NOT active"
   exit 1
 fi`,
   },
