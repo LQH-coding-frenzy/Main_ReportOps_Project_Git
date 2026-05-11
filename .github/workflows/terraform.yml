@@ -94,6 +94,30 @@ jobs:
         with:
           terraform_version: 1.5.0
 
+      - name: Ensure Shared Firewalls Exist
+        run: |
+          # Create HTTP rule if missing
+          if ! gcloud compute firewall-rules describe "reportops-lab-allow-http" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Creating shared HTTP firewall rule..."
+            gcloud compute firewall-rules create "reportops-lab-allow-http" \
+              --project="${{ secrets.GCP_PROJECT_ID }}" \
+              --network="default" \
+              --allow="tcp:80" \
+              --target-tags="reportops-lab" \
+              --description="Shared HTTP rule for ReportOps Lab (Managed via Workflow)"
+          fi
+
+          # Create SSH rule if missing
+          if ! gcloud compute firewall-rules describe "reportops-lab-allow-ssh" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Creating shared SSH firewall rule..."
+            gcloud compute firewall-rules create "reportops-lab-allow-ssh" \
+              --project="${{ secrets.GCP_PROJECT_ID }}" \
+              --network="default" \
+              --allow="tcp:22" \
+              --target-tags="reportops-lab" \
+              --description="Shared SSH rule for ReportOps Lab (Managed via Workflow)"
+          fi
+
       - name: Terraform Init
         working-directory: infra/terraform/environments/dev
         run: |
@@ -101,36 +125,12 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="prefix=lab-vm/$VM_ID"
 
-      - name: Import existing resources if needed
+      - name: Import existing VM if needed
         working-directory: infra/terraform/environments/dev
         run: |
           if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_instance.lab_vm'; then
             if gcloud compute instances describe "$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" --zone="$TF_ZONE" >/dev/null 2>&1; then
               terraform import -input=false module.lab_vm.google_compute_instance.lab_vm "projects/${{ secrets.GCP_PROJECT_ID }}/zones/$TF_ZONE/instances/$VM_NAME"
-            fi
-          fi
-
-          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_http'; then
-            if gcloud compute firewall-rules describe "reportops-allow-http-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
-              terraform import -input=false module.lab_vm.google_compute_firewall.allow_http "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-http-$VM_NAME"
-            fi
-          fi
-
-          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_ssh'; then
-            if gcloud compute firewall-rules describe "reportops-allow-ssh-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
-              terraform import -input=false module.lab_vm.google_compute_firewall.allow_ssh "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-ssh-$VM_NAME"
-            fi
-          fi
-
-          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_https'; then
-            if gcloud compute firewall-rules describe "reportops-allow-https-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
-              terraform import -input=false module.lab_vm.google_compute_firewall.allow_https "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-https-$VM_NAME"
-            fi
-          fi
-
-          if ! terraform state list | grep -Fxq 'module.lab_vm.google_compute_firewall.allow_icmp'; then
-            if gcloud compute firewall-rules describe "reportops-allow-icmp-$VM_NAME" --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
-              terraform import -input=false module.lab_vm.google_compute_firewall.allow_icmp "projects/${{ secrets.GCP_PROJECT_ID }}/global/firewalls/reportops-allow-icmp-$VM_NAME"
             fi
           fi
 

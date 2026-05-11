@@ -19,34 +19,5 @@ module "lab_vm" {
   audit_runner_ssh_public_key = var.audit_runner_ssh_public_key
 }
 
-# Shared Firewall Rules (Defined here but can be toggled)
-# Note: In a production auto-scaling setup, these should be in a separate base infra plan.
-resource "google_compute_firewall" "shared_allow_http" {
-  count   = var.create_shared_firewall ? 1 : 0
-  name    = "reportops-lab-allow-http"
-  network = "default"
-  project = var.project_id
-
-  allow {
-    protocol = "tcp"
-    ports    = ["80"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["reportops-lab"]
-}
-
-resource "google_compute_firewall" "shared_allow_ssh" {
-  count   = var.create_shared_firewall ? 1 : 0
-  name    = "reportops-lab-allow-ssh"
-  network = "default"
-  project = var.project_id
-
-  allow {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["reportops-lab"]
-}
+# Shared firewall rules are now managed as persistent infrastructure via gcloud in the workflow 
+# to ensure they are not deleted when a single VM is destroyed.
