@@ -90,8 +90,8 @@ export class AuditJobExecutor {
           const decodedString = decodedBuffer.toString('utf-8');
           
           if (decodedString.includes('-----BEGIN')) {
-            privateKeyBuffer = decodedBuffer; // Use the raw Buffer!
-            this.addLog('Detected and decoded Base64 SSH key (using raw Buffer).');
+            privateKeyBuffer = decodedString; // Use the string!
+            this.addLog('Detected and decoded Base64 SSH key.');
           }
         } catch {
           this.addLog('Warning: Failed to decode Base64 key, using as-is.');
