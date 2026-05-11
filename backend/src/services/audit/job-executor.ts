@@ -85,13 +85,24 @@ export class AuditJobExecutor {
       // Clean up literal \n if they still exist
       privateKey = privateKey.replace(/\\n/g, '\n');
 
+      this.addLog(`Connecting to VM at ${job.vm.publicIp} as audituser...`);
       this.runner = new SSHRunner({
         host: job.vm.publicIp,
         username: 'audituser',
         privateKey: privateKey.trim(),
       });
 
-      await this.runner.connect();
+      try {
+        await this.runner.connect();
+        this.addLog('SSH connection established.');
+      } catch (connError) {
+        const msg = connError instanceof Error ? connError.message : String(connError);
+        this.addLog(`SSH Connection Failed: ${msg}`);
+        if (msg.includes('Authentication failed')) {
+          this.addLog('TIP: This usually means the VM is still initializing or the SSH key is incorrect.');
+        }
+        throw connError;
+      }
 
       // Create remote directory
       const remoteDir = `/tmp/audit-run-${this.jobId}`;
@@ -390,18 +401,51 @@ export class AuditJobExecutor {
       });
 
     } catch (error) {
-      console.error(`Audit Job ${this.jobId} Failed:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.addLog(`FATAL ERROR: ${errorMessage}`);
       
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await prisma.auditJob.update({
         where: { id: this.jobId },
         data: {
           status: 'FAILED',
-          errorMessage,
           finishedAt: new Date(),
-        }
+          errorMessage: errorMessage.slice(0, 1000),
+        },
       });
     } finally {
+      // Always attempt to upload logs at the end
+      try {
+        if (this.logs.length > 0) {
+          const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+          const logContent = this.logs.join('\n');
+          const logPath = `archives/audits/${this.jobId}/audit-log.txt`;
+          
+          await supabase.storage.from(bucket).upload(logPath, logContent, { 
+            contentType: 'text/plain', 
+            upsert: true 
+          });
+          
+          // Check if evidence already exists to avoid duplication
+          const existing = await prisma.auditEvidence.findFirst({
+            where: { auditJobId: this.jobId, artifactType: 'AUDIT_LOG' }
+          });
+
+          if (!existing) {
+            await prisma.auditEvidence.create({
+              data: {
+                auditJobId: this.jobId,
+                artifactType: 'AUDIT_LOG',
+                artifactName: 'Audit Execution Log',
+                storagePath: logPath,
+                mimeType: 'text/plain',
+                sizeBytes: Buffer.byteLength(logContent, 'utf-8'),
+              }
+            });
+          }
+        }
+      } catch (logFinalError) {
+        console.error('Failed to upload final logs:', logFinalError);
+      }
       if (this.runner) {
         await this.runner.disconnect();
       }

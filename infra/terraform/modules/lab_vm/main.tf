@@ -36,7 +36,7 @@ resource "google_compute_instance" "lab_vm" {
 
   labels = var.labels
 
-  tags = ["reportops-lab", "http-server"]
+  tags = ["reportops-lab", "http-server", var.vm_name]
 
   metadata = merge(
     {
@@ -51,23 +51,33 @@ resource "google_compute_instance" "lab_vm" {
     set -e
     exec > /var/log/startup-script.log 2>&1
 
-    echo "==> Updating packages and installing prerequisites"
+    echo "[$(date)] ==> Starting setup for ${var.vm_name}"
+    
+    # Wait for network
+    until ping -c 1 google.com >/dev/null 2>&1; do
+      echo "[$(date)] ==> Waiting for internet connectivity..."
+      sleep 5
+    done
+
+    echo "[$(date)] ==> Installing packages"
     dnf install -y epel-release || true
     dnf install -y nginx openscap-scanner openscap-utils scap-security-guide jq policycoreutils-python-utils || true
 
-    echo "==> Creating audituser"
-    useradd -m -s /bin/bash audituser || true
+    echo "[$(date)] ==> Creating audituser"
+    if ! id "audituser" &>/dev/null; then
+      useradd -m -s /bin/bash audituser
+    fi
     echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
     chmod 0440 /etc/sudoers.d/audituser
 
-    echo "==> Setting up SSH for audituser"
+    echo "[$(date)] ==> Setting up SSH for audituser"
     mkdir -p /home/audituser/.ssh
     echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
     chmod 700 /home/audituser/.ssh
     chmod 600 /home/audituser/.ssh/authorized_keys
     chown -R audituser:audituser /home/audituser/.ssh
 
-    echo "==> Generating Welcome Page"
+    echo "[$(date)] ==> Generating Welcome Page"
     mkdir -p /usr/share/nginx/html
     cat << 'HTML' > /usr/share/nginx/html/index.html
     <!DOCTYPE html>
@@ -116,21 +126,27 @@ resource "google_compute_instance" "lab_vm" {
     </html>
     HTML
 
-    echo "==> Configuring Nginx and SELinux"
+    echo "[$(date)] ==> Configuring Nginx"
     restorecon -Rv /usr/share/nginx/html || true
     setsebool -P httpd_can_network_connect 1 || true
 
-    echo "==> Enabling and starting Nginx"
     systemctl enable --now nginx || true
 
-    # Disable firewalld if active - we rely on GCP VPC firewall rules
+    # Disable firewalld
     if systemctl is-active --quiet firewalld; then
-      echo "==> Disabling firewalld"
+      echo "[$(date)] ==> Disabling firewalld"
       systemctl stop firewalld
       systemctl disable firewalld
     fi
 
-    echo "==> Setup complete"
+    # Verify port 80
+    if ss -tuln | grep -q ":80 "; then
+      echo "[$(date)] ==> Nginx is listening on port 80"
+    else
+      echo "[$(date)] ==> ERROR: Nginx is NOT listening on port 80"
+    fi
+
+    echo "[$(date)] ==> Setup complete"
   EOF
 
   allow_stopping_for_update = true

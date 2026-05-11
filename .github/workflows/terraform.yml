@@ -35,7 +35,7 @@ jobs:
 
     env:
       BACKEND_PUBLIC_URL: https://api.automatedprogram.app
-      TF_STATE_BUCKET: reportops-tfstate-cis-uit
+      TF_STATE_BUCKET: cis-benchmark-uit-tfstate
       TF_ZONE: asia-southeast1-c
       GOOGLE_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
 
