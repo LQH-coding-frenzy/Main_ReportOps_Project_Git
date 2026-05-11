@@ -46,7 +46,7 @@ variable "ssh_keys" {
 variable "machine_type" {
   description = "Machine type for the VM"
   type        = string
-  default     = "e2-micro"
+  default     = "e2-small"
 }
 
 variable "enable_oslogin" {

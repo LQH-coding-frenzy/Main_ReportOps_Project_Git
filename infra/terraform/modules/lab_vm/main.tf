@@ -45,7 +45,6 @@ resource "google_compute_instance" "lab_vm" {
     local.combined_ssh_keys != "" ? { "ssh-keys" = local.combined_ssh_keys } : {}
   )
 
-  # Startup script to install required packages, add audituser, and serve welcome page
   metadata_startup_script = <<-EOF
     #!/bin/bash
     set -e
@@ -53,12 +52,7 @@ resource "google_compute_instance" "lab_vm" {
     
     echo "Starting ReportOps Lab initialization..."
     
-    # 1. Install essential packages (no update for speed)
-    echo "Installing essential packages..."
-    dnf install -y epel-release
-    dnf install -y nginx openscap-scanner scap-security-guide curl jq policycoreutils-python-utils
-    
-    # 2. Create audit user for SSH access
+    # 1. Create audit user for SSH access (PRIORITY)
     if ! id "audituser" &>/dev/null; then
       echo "Creating audituser..."
       useradd -m -s /bin/bash audituser
@@ -71,11 +65,16 @@ resource "google_compute_instance" "lab_vm" {
       chmod 0440 /etc/sudoers.d/audituser
     fi
 
-    # 3. Ensure SSH service is running
+    # 2. Ensure SSH service is running immediately
     echo "Configuring SSH..."
     systemctl enable sshd
     systemctl restart sshd
 
+    # 3. Install essential packages (Heavy task)
+    echo "Installing essential packages (this may take 2-3 mins)..."
+    dnf install -y epel-release
+    dnf install -y nginx openscap-scanner scap-security-guide curl jq policycoreutils-python-utils
+    
     # 4. Configure Welcome Page
     echo "Configuring Nginx..."
     mkdir -p /usr/share/nginx/html
