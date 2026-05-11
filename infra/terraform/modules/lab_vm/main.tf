@@ -51,23 +51,28 @@ resource "google_compute_instance" "lab_vm" {
     exec > >(tee /var/log/startup-script.log | logger -t startup-script -s 2>/dev/console) 2>&1
     
     echo "Starting ReportOps Lab initialization..."
-    
-    # 0. DISARM SELINUX IMMEDIATELY
-    echo "Disarming SELinux for setup..."
-    setenforce 0 || true
-    sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
 
-    # 1. Create audit user for SSH access (PRIORITY)
+    # 1. Create audit user for SSH access (TOP PRIORITY)
     if ! id "audituser" &>/dev/null; then
-      echo "Creating audituser..."
-      useradd -m -s /bin/bash audituser
+      echo "Force creating audituser..."
+      useradd -m -s /bin/bash audituser || {
+        echo "Useradd failed, trying with SELinux disabled..."
+        setenforce 0
+        useradd -m -s /bin/bash audituser
+      }
+      
+      # 2. DISARM SELINUX (To allow writing keys and SSH access)
+      echo "Disarming SELinux..."
+      setenforce 0 || true
+      sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
+
       mkdir -p /home/audituser/.ssh
       echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
       chown -R audituser:audituser /home/audituser/.ssh
       chmod 700 /home/audituser/.ssh
       chmod 600 /home/audituser/.ssh/authorized_keys
       
-      # CRITICAL: Set SELinux context for SSH files
+      # 3. CRITICAL: Set SELinux context for SSH files
       echo "Applying SELinux restorecon to /home/audituser/.ssh..."
       if command -v restorecon &>/dev/null; then
         restorecon -Rv /home/audituser/.ssh || true
@@ -77,13 +82,17 @@ resource "google_compute_instance" "lab_vm" {
       chmod 0440 /etc/sudoers.d/audituser
     fi
 
-    # 2. Ensure SSH service is running
+    # 4. Broaden SSH compatibility (RHEL 9 safety)
+    echo "Broadening SSH crypto policies..."
+    update-crypto-policies --set DEFAULT:SHA1 || true
+
+    # 5. Ensure SSH service is running
     echo "Configuring SSH..."
     systemctl enable sshd
     systemctl restart sshd
 
-    # 3. Install essential packages (Heavy task)
-    echo "Installing essential packages (this may take 2-3 mins)..."
+    # 6. Install essential packages
+    echo "Installing essential packages..."
     dnf install -y epel-release
     dnf install -y nginx openscap-scanner scap-security-guide curl jq policycoreutils-python-utils
     
