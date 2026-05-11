@@ -4,7 +4,6 @@ import { parseCisStdout, NormalizedAuditResult } from './cis-stdout-parser';
 import { renderTerminalEvidenceHtml, renderDashboardEvidenceHtml } from './evidence-renderer';
 import { supabase } from '../../config/supabase';
 import { chromium } from 'playwright';
-import { env } from '../../config/env';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -69,7 +68,7 @@ export class AuditJobExecutor {
           if (decoded.includes('-----BEGIN')) {
             privateKey = decoded;
           }
-        } catch (e) {
+        } catch (_e) {
           // Not base64, continue
         }
       }
