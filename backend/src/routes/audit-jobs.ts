@@ -195,4 +195,38 @@ router.get('/:id/logs', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/audit-jobs/:id/evidence/:evidenceId
+ * Get a specific evidence artifact file.
+ */
+router.get('/:id/evidence/:evidenceId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const evidenceId = parseInt(req.params.evidenceId, 10);
+
+    const evidence = await prisma.auditEvidence.findUnique({
+      where: { id: evidenceId },
+    });
+
+    if (!evidence || evidence.auditJobId !== id) {
+      return res.status(404).json({ error: 'Evidence not found', status: 404 });
+    }
+
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+    const { data, error } = await supabase.storage.from(bucket).download(evidence.storagePath);
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'Evidence file not found in storage', status: 404 });
+    }
+
+    // Set content type and send buffer
+    const buffer = Buffer.from(await data.arrayBuffer());
+    res.setHeader('Content-Type', evidence.mimeType || 'application/octet-stream');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Get audit evidence error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
 export default router;

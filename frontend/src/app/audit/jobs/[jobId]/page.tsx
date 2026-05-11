@@ -70,6 +70,8 @@ export default function AuditJobDetailPage() {
     return () => clearInterval(interval);
   }, [jobId, job?.status]);
 
+  const [selectedImage, setSelectedImage] = useState<{ url: string; name: string } | null>(null);
+
   async function handleViewLogs() {
     if (!job) return;
     
@@ -96,6 +98,15 @@ export default function AuditJobDetailPage() {
       setLoadingLogs(false);
     }
   }
+
+  const handleEvidenceClick = (ev: any) => {
+    const url = `/api/audit-jobs/${jobId}/evidence/${ev.id}`;
+    if (ev.mimeType?.startsWith('image/')) {
+      setSelectedImage({ url, name: ev.artifactName });
+    } else {
+      window.open(url, '_blank');
+    }
+  };
 
   if (loading) {
     return (
@@ -258,33 +269,37 @@ export default function AuditJobDetailPage() {
             <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>
               📦 Evidence Artifacts ({job.evidences.length})
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-3)' }}>
               {job.evidences.map((ev) => (
                 <div
                   key={ev.id}
+                  onClick={() => handleEvidenceClick(ev)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 'var(--space-3)',
-                    padding: 'var(--space-2) var(--space-3)',
+                    padding: 'var(--space-3)',
                     background: 'var(--color-bg-glass)',
                     borderRadius: 'var(--radius-md)',
                     border: '1px solid var(--color-border)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
                   }}
+                  className="evidence-item"
                 >
-                  <span style={{ fontSize: '1.25rem' }}>
+                  <span style={{ fontSize: '1.5rem' }}>
                     {ev.artifactType.includes('HTML') ? '🌐' :
                     ev.artifactType.includes('JSON') ? '📊' :
                     ev.artifactType.includes('SCREENSHOT') ? '📸' :
                     ev.artifactType.includes('PDF') ? '📄' : '📁'}
                   </span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{ev.artifactName}</div>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{ev.artifactName}</div>
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                       {ev.artifactType} • {ev.sizeBytes ? `${(ev.sizeBytes / 1024).toFixed(1)} KB` : ''}
                     </div>
                   </div>
-                  <span className="badge badge-info" style={{ fontSize: 10 }}>{ev.mimeType || 'file'}</span>
+                  <span className="badge badge-info" style={{ fontSize: 10 }}>{ev.mimeType?.split('/')[1] || 'file'}</span>
                 </div>
               ))}
             </div>
@@ -308,6 +323,48 @@ export default function AuditJobDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.9)',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 'var(--space-10)',
+          }}
+          onClick={() => setSelectedImage(null)}
+        >
+          <div style={{ position: 'absolute', top: 20, right: 20, color: '#fff', fontSize: 32, cursor: 'pointer', fontWeight: 300 }}>✕</div>
+          <div style={{ color: '#fff', marginBottom: 20, fontSize: 'var(--text-lg)', fontWeight: 600 }}>{selectedImage.name}</div>
+          <img 
+            src={selectedImage.url} 
+            alt={selectedImage.name} 
+            style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 150px)', borderRadius: 'var(--radius-lg)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div style={{ marginTop: 20 }}>
+            <a href={selectedImage.url} download className="btn btn-primary">Download Image</a>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .evidence-item:hover {
+          background: var(--color-bg-glass-hover) !important;
+          border-color: var(--color-accent-primary) !important;
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
+        }
+      `}</style>
     </main>
   );
 }
