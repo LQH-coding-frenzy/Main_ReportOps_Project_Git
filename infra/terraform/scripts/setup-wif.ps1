@@ -1,6 +1,6 @@
 
 
-$ProjectID = "nt542-terraform-gcp"
+$ProjectID = "cis-benchmark-uit"
 $GithubRepo = "LQH-coding-frenzy/Main_ReportOps_Project_Git"
 $SaName = "reportops-terraform-sa"
 $SaEmail = "$SaName@$ProjectID.iam.gserviceaccount.com"
