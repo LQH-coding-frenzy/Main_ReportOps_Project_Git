@@ -57,35 +57,48 @@ resource "google_compute_instance" "lab_vm" {
     chmod 600 /home/audituser/.ssh/authorized_keys
     chown -R audituser:audituser /home/audituser/.ssh
 
-    echo "==> Generating Welcome Page"
     cat << 'HTML' > /usr/share/nginx/html/index.html
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>ReportOps Lab VM</title>
+        <title>ReportOps Lab VM - Active</title>
         <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-            .container { background-color: #1e293b; padding: 2rem 3rem; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); border: 1px solid #334155; max-width: 500px; width: 100%; }
-            h1 { margin-top: 0; color: #60a5fa; font-size: 1.5rem; text-align: center; border-bottom: 1px solid #334155; padding-bottom: 1rem; margin-bottom: 1.5rem; }
-            .info-row { display: flex; justify-content: space-between; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem; }
-            .info-label { color: #94a3b8; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
-            .info-value { font-weight: 600; color: #e2e8f0; }
-            .footer { margin-top: 2rem; text-align: center; font-size: 0.75rem; color: #64748b; }
-            .token { font-family: monospace; background: rgba(59,130,246,0.1); color: #60a5fa; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(59,130,246,0.2); }
+            :root { --primary: #3b82f6; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; }
+            body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+            .container { background-color: var(--card); padding: 40px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 1px solid #334155; max-width: 500px; width: 100%; text-align: center; position: relative; overflow: hidden; }
+            .container::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+            h1 { margin-top: 0; color: #60a5fa; font-size: 1.75rem; margin-bottom: 8px; }
+            .status-badge { display: inline-flex; align-items: center; background: rgba(34, 197, 94, 0.1); color: #22c55e; padding: 4px 12px; border-radius: 99px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 24px; border: 1px solid rgba(34, 197, 94, 0.2); }
+            .status-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 8px #22c55e; }
+            .info-card { background: rgba(15, 23, 42, 0.5); border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: left; }
+            .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
+            .info-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+            .info-label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+            .info-value { font-weight: 600; color: #e2e8f0; font-size: 0.9rem; }
+            .token { font-family: 'JetBrains Mono', monospace; background: rgba(59,130,246,0.1); color: #60a5fa; padding: 2px 6px; border-radius: 4px; }
+            .btn { display: inline-block; background: var(--primary); color: white; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; transition: all 0.2s; border: none; cursor: pointer; width: 100%; box-sizing: border-box; }
+            .btn:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+            .footer { margin-top: 24px; font-size: 0.75rem; color: var(--muted); }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>ReportOps Lab VM</h1>
-            <div class="info-row"><span class="info-label">VM ID</span><span class="info-value">#${var.vm_id}</span></div>
-            <div class="info-row"><span class="info-label">Name</span><span class="info-value">${var.vm_name}</span></div>
-            <div class="info-row"><span class="info-label">Owner</span><span class="info-value">${var.owner_name}</span></div>
-            <div class="info-row"><span class="info-label">Benchmark</span><span class="info-value">CIS AlmaLinux 9 v2.0.0</span></div>
-            <div class="info-row"><span class="info-label">Section</span><span class="info-value">M1</span></div>
-            <div class="info-row"><span class="info-label">Verification Token</span><span class="info-value token">${var.verification_token}</span></div>
-            <div class="footer">Created by ReportOps Web App</div>
+            <div class="status-badge"><span class="status-dot"></span>Active & Protected</div>
+            <h1>${var.vm_name}</h1>
+            <p style="color: var(--muted); margin-bottom: 24px; font-size: 0.9rem;">This virtual machine is managed by ReportOps platform for CIS Benchmark auditing.</p>
+            
+            <div class="info-card">
+                <div class="info-row"><span class="info-label">Owner</span><span class="info-value">${var.owner_name}</span></div>
+                <div class="info-row"><span class="info-label">Section</span><span class="info-value">M1 - Filesystem & Hardening</span></div>
+                <div class="info-row"><span class="info-label">Benchmark</span><span class="info-value">AlmaLinux 9 v2.0.0</span></div>
+                <div class="info-row"><span class="info-label">Token</span><span class="info-value token">${var.verification_token}</span></div>
+            </div>
+
+            <a href="https://automatedprogram.app/dashboard" class="btn">Back to Dashboard</a>
+            
+            <div class="footer">Managed by AutomatedProgram.app</div>
         </div>
     </body>
     </html>
