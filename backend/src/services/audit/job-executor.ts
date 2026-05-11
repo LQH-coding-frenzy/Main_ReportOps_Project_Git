@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, AuditJob, LabVm, AuditScript } from '@prisma/client';
 import { SSHRunner } from './ssh-runner';
 import { parseCisStdout, NormalizedAuditResult } from './cis-stdout-parser';
 import { renderTerminalEvidenceHtml, renderDashboardEvidenceHtml } from './evidence-renderer';
@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 export class AuditJobExecutor {
   private jobId: number;
   private runner?: SSHRunner;
-  private job?: any;
+  private job?: AuditJob & { vm: LabVm };
 
   constructor(jobId: number) {
     this.jobId = jobId;
@@ -41,7 +41,7 @@ export class AuditJobExecutor {
       const isScripts = this.job.mode === 'SCRIPTS_ONLY' || this.job.mode === 'OPENSCAP_AND_SCRIPTS';
 
       // 2. Fetch active scripts if needed
-      let scripts: any[] = [];
+      let scripts: AuditScript[] = [];
       if (isScripts) {
         scripts = await prisma.auditScript.findMany({
           where: {
@@ -68,7 +68,7 @@ export class AuditJobExecutor {
           if (decoded.includes('-----BEGIN')) {
             privateKey = decoded;
           }
-        } catch (_e) {
+        } catch {
           // Not base64, continue
         }
       }
@@ -160,7 +160,7 @@ export class AuditJobExecutor {
               controlId: script.controlId,
               status: parsed.status,
               exitCode: cmdResult.exitCode,
-              normalizedResultJson: parsed as any,
+              normalizedResultJson: JSON.parse(JSON.stringify(parsed)),
               startedAt: new Date(scriptStartTime),
               finishedAt: new Date(scriptEndTime),
               durationMs: scriptEndTime - scriptStartTime,
