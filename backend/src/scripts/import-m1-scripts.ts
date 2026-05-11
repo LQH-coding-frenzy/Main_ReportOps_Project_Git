@@ -82,7 +82,7 @@ async function importScripts() {
       const match = line.match(/^([a-zA-Z0-9_]+)\s+"([0-9.]+)"\s+"([^"]+)"/);
       
       if (match) {
-        const [_, __, controlId, title] = match;
+        const [, , controlId, title] = match;
         
         const section = controlId.split('.').slice(0, 2).join('.');
         console.log(`  - Found control ${controlId}: ${title}`);
