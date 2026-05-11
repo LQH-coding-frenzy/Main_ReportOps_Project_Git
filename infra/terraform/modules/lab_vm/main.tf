@@ -60,6 +60,15 @@ resource "google_compute_instance" "lab_vm" {
     echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
     chmod 0440 /etc/sudoers.d/audituser
 
+    echo "==> Setting up SSH for audituser"
+    mkdir -p /home/audituser/.ssh
+    echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
+    chmod 700 /home/audituser/.ssh
+    chmod 600 /home/audituser/.ssh/authorized_keys
+    chown -R audituser:audituser /home/audituser/.ssh
+
+    echo "==> Generating Welcome Page"
+    mkdir -p /usr/share/nginx/html
     cat << 'HTML' > /usr/share/nginx/html/index.html
     <!DOCTYPE html>
     <html lang="en">
@@ -108,9 +117,7 @@ resource "google_compute_instance" "lab_vm" {
     HTML
 
     echo "==> Configuring Nginx and SELinux"
-    # Ensure SELinux context is correct for web files
     restorecon -Rv /usr/share/nginx/html || true
-    # Allow nginx to connect to network if needed (optional)
     setsebool -P httpd_can_network_connect 1 || true
 
     echo "==> Enabling and starting Nginx"
@@ -141,7 +148,7 @@ resource "google_compute_firewall" "allow_http" {
   }
 
   source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server", "reportops-lab"]
+  target_tags   = ["http-server", "reportops-lab", var.vm_name]
 }
 
 # Firewall rule to allow SSH

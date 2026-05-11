@@ -1,0 +1,50 @@
+{
+  "pack_id": "m1-almalinux9-cis-l1-server-audit-scripts",
+  "source_document": "CIS_AlmaLinux_OS_9_Benchmark_v2.0.0.pdf",
+  "scope": "M1",
+  "benchmark": {
+    "name": "CIS AlmaLinux OS 9 Benchmark",
+    "version": "2.0.0",
+    "profile": "Level 1 - Server"
+  },
+  "mode": "audit-only",
+  "output_style": "CIS-like stdout",
+  "scripts": [
+    {
+      "section": "1.1",
+      "file": "sections/1_1.sh",
+      "topic": "Filesystem"
+    },
+    {
+      "section": "1.2",
+      "file": "sections/1_2.sh",
+      "topic": "Package Management"
+    },
+    {
+      "section": "1.4",
+      "file": "sections/1_4.sh",
+      "topic": "Bootloader"
+    },
+    {
+      "section": "1.5",
+      "file": "sections/1_5.sh",
+      "topic": "Process Hardening"
+    },
+    {
+      "section": "1.6",
+      "file": "sections/1_6.sh",
+      "topic": "System-wide Crypto Policy"
+    },
+    {
+      "section": "2.3",
+      "file": "sections/2_3.sh",
+      "topic": "Time Synchronization"
+    },
+    {
+      "section": "2.4",
+      "file": "sections/2_4.sh",
+      "topic": "Job Schedulers"
+    }
+  ],
+  "note": "These are original audit-only shell scripts derived from the M1 control scope. They are not verbatim CIS benchmark text."
+}

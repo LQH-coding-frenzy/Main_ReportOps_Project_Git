@@ -20,6 +20,9 @@ export default function AuditJobDetailPage() {
   const jobId = parseInt(params.jobId as string, 10);
   const [job, setJob] = useState<AuditJob | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLogs, setShowLogs] = useState(false);
+  const [logs, setLogs] = useState<string | null>(null);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
     if (!jobId) return;
@@ -28,6 +31,23 @@ export default function AuditJobDetailPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [jobId]);
+
+  async function handleViewLogs() {
+    if (logs) {
+      setShowLogs(!showLogs);
+      return;
+    }
+    setLoadingLogs(true);
+    try {
+      const content = await import('../../../../lib/api').then(api => api.getAuditJobLogs(jobId));
+      setLogs(content);
+      setShowLogs(true);
+    } catch (err) {
+      alert('Không tìm thấy log file hoặc job chưa có log.');
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -56,10 +76,17 @@ export default function AuditJobDetailPage() {
 
   return (
     <main className="main-content">
-      <div style={{ marginBottom: 'var(--space-4)' }}>
+      <div style={{ marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
           ← Quay lại danh sách
         </Link>
+        <button 
+          className="btn btn-secondary btn-sm" 
+          onClick={handleViewLogs}
+          disabled={loadingLogs}
+        >
+          {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
+        </button>
       </div>
 
       <div className="page-header">
@@ -68,6 +95,25 @@ export default function AuditJobDetailPage() {
           VM: {job.vm.name} • Mode: {job.mode.replace(/_/g, ' ')} • {job.ownerSection}
         </p>
       </div>
+
+      {job.status === 'FAILED' && (
+        <div className="alert alert-danger" style={{ marginBottom: 'var(--space-6)', borderRadius: 'var(--radius-lg)' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Audit Job Failed</div>
+          <div style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)' }}>{job.errorMessage || 'No error message provided.'}</div>
+        </div>
+      )}
+
+      {showLogs && logs && (
+        <div className="card" style={{ marginBottom: 'var(--space-6)', background: '#000', border: '1px solid #333' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={{ color: '#888', fontSize: 12, fontWeight: 700 }}>SYSTEM EXECUTION LOG</span>
+            <button onClick={() => setShowLogs(false)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>✕</button>
+          </div>
+          <pre style={{ margin: 0, padding: 0, color: '#0f0', fontSize: 12, overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto' }}>
+            {logs}
+          </pre>
+        </div>
+      )}
 
       {/* Score + Stats */}
       <div className="grid grid-4" style={{ marginBottom: 'var(--space-8)' }}>

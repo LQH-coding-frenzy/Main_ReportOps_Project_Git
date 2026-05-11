@@ -14,9 +14,16 @@ export class AuditJobExecutor {
   private jobId: number;
   private runner?: SSHRunner;
   private job: (AuditJob & { vm: LabVm }) | null = null;
+  private logs: string[] = [];
 
   constructor(jobId: number) {
     this.jobId = jobId;
+  }
+
+  private addLog(message: string) {
+    const entry = `[${new Date().toISOString()}] ${message}`;
+    this.logs.push(entry);
+    console.log(`[Job ${this.jobId}] ${message}`);
   }
 
   async execute(): Promise<void> {
@@ -100,7 +107,7 @@ export class AuditJobExecutor {
       // 4. Execute Scripts
       if (isScripts && scripts.length > 0) {
         for (const script of scripts) {
-          if (!script.scriptStoragePath) continue;
+          this.addLog(`Running script: ${script.controlId} (${script.title})`);
           
           const scriptStartTime = Date.now();
 
@@ -110,7 +117,7 @@ export class AuditJobExecutor {
             .download(script.scriptStoragePath);
 
           if (downloadError || !fileData) {
-            console.error(`Failed to download script ${script.controlId}:`, downloadError);
+            this.addLog(`ERROR: Failed to download script ${script.controlId}: ${downloadError?.message}`);
             continue;
           }
 
@@ -123,9 +130,10 @@ export class AuditJobExecutor {
           // Make executable
           await this.runner.execCommand(`chmod +x ${remoteScriptPath}`);
 
-          // Run the script (Audit scripts in M1 read state, running with sudo if required by CIS)
-          // MVP policy: allow_sudo_for_read_only_audit_commands = yes
+          // Run the script
           const cmdResult = await this.runner.execCommand(`sudo ${remoteScriptPath}`);
+          this.addLog(`Script ${script.controlId} finished with exit code ${cmdResult.exitCode}`);
+          if (cmdResult.stderr) this.addLog(`Stderr: ${cmdResult.stderr}`);
           
           const scriptEndTime = Date.now();
 
@@ -339,9 +347,29 @@ export class AuditJobExecutor {
             sizeBytes: screenshotBuffer.length,
           }
         });
+        this.addLog('Dashboard screenshot captured successfully.');
       } catch (screenshotError) {
-        console.error('Failed to capture dashboard screenshot:', screenshotError);
-        // Do not fail the job if screenshot fails
+        this.addLog(`Warning: Failed to capture dashboard screenshot: ${screenshotError}`);
+      }
+
+      // 6.6 Upload Audit Log
+      try {
+        const logContent = this.logs.join('\n');
+        const logPath = `archives/audits/${this.jobId}/audit-log.txt`;
+        await supabase.storage.from(bucket).upload(logPath, logContent, { contentType: 'text/plain', upsert: true });
+        
+        await prisma.auditEvidence.create({
+          data: {
+            auditJobId: this.jobId,
+            artifactType: 'AUDIT_LOG',
+            artifactName: 'Audit Execution Log',
+            storagePath: logPath,
+            mimeType: 'text/plain',
+            sizeBytes: Buffer.byteLength(logContent, 'utf-8'),
+          }
+        });
+      } catch (logError) {
+        console.error('Failed to upload audit log:', logError);
       }
 
       // 7. Complete Job

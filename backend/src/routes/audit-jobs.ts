@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { AuditJobExecutor } from '../services/audit/job-executor';
+import { supabase } from '../config/supabase';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -166,6 +167,30 @@ router.get('/stats/summary', requireAuth, async (_req: Request, res: Response) =
     });
   } catch (error) {
     console.error('Audit stats error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * GET /api/audit-jobs/:id/logs
+ * Get the raw execution logs from Supabase.
+ */
+router.get('/:id/logs', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const logPath = `archives/audits/${id}/audit-log.txt`;
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'reportops-documents';
+
+    const { data, error } = await supabase.storage.from(bucket).download(logPath);
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'Log file not found', status: 404 });
+    }
+
+    const logContent = await data.text();
+    res.json({ data: { content: logContent }, status: 200 });
+  } catch (error) {
+    console.error('Get audit logs error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
   }
 });

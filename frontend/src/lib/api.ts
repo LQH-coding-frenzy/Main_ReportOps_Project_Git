@@ -218,6 +218,11 @@ export async function getAuditJob(id: number): Promise<AuditJob> {
   return res.data;
 }
 
+export async function getAuditJobLogs(id: number): Promise<string> {
+  const res = await apiFetch<ApiResponse<{ content: string }>>(`/api/audit-jobs/${id}/logs`);
+  return res.data.content;
+}
+
 export async function createAuditJob(vmId: number, mode: string): Promise<AuditJob> {
   const res = await apiFetch<ApiResponse<AuditJob>>('/api/audit-jobs', {
     method: 'POST',
