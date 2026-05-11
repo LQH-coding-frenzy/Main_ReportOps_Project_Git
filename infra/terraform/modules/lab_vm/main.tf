@@ -52,13 +52,29 @@ resource "google_compute_instance" "lab_vm" {
     
     echo "Starting ReportOps Lab initialization..."
     
-    # 1. Broaden SSH compatibility for RHEL 9 (Keep this as it's safe)
+    # 1. Create audit user for SSH access (CRITICAL)
+    if ! id "audituser" &>/dev/null; then
+      echo "Creating audituser manually..."
+      useradd -m -s /bin/bash audituser
+      mkdir -p /home/audituser/.ssh
+      echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
+      chown -R audituser:audituser /home/audituser/.ssh
+      chmod 700 /home/audituser/.ssh
+      chmod 600 /home/audituser/.ssh/authorized_keys
+      
+      # Fix SELinux labels for the new files
+      if command -v restorecon &>/dev/null; then
+        restorecon -Rv /home/audituser/.ssh || true
+      fi
+    fi
+
+    # 2. Broaden SSH compatibility for RHEL 9
     update-crypto-policies --set DEFAULT:SHA1 || true
 
-    # 2. Disable SELinux temporarily for smooth setup
+    # 3. Disable SELinux temporarily for smooth setup
     setenforce 0 || true
     
-    # 3. Ensure audituser has sudo permissions (Guest Agent creates the user)
+    # 4. Ensure audituser has sudo permissions
     echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
     chmod 0440 /etc/sudoers.d/audituser
 
