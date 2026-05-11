@@ -52,6 +52,11 @@ resource "google_compute_instance" "lab_vm" {
     
     echo "Starting ReportOps Lab initialization..."
     
+    # 0. DISARM SELINUX IMMEDIATELY
+    echo "Disarming SELinux for setup..."
+    setenforce 0 || true
+    sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
+
     # 1. Create audit user for SSH access (PRIORITY)
     if ! id "audituser" &>/dev/null; then
       echo "Creating audituser..."
@@ -63,17 +68,17 @@ resource "google_compute_instance" "lab_vm" {
       chmod 600 /home/audituser/.ssh/authorized_keys
       
       # CRITICAL: Set SELinux context for SSH files
+      echo "Applying SELinux restorecon to /home/audituser/.ssh..."
       if command -v restorecon &>/dev/null; then
-        restorecon -Rv /home/audituser/.ssh
+        restorecon -Rv /home/audituser/.ssh || true
       fi
       
       echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
       chmod 0440 /etc/sudoers.d/audituser
     fi
 
-    # 2. Ensure SSH service is running and not blocked by SELinux
-    echo "Configuring SSH and SELinux..."
-    setenforce 0 || true # Set to permissive for setup
+    # 2. Ensure SSH service is running
+    echo "Configuring SSH..."
     systemctl enable sshd
     systemctl restart sshd
 
