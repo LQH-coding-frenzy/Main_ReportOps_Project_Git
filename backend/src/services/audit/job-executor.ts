@@ -67,18 +67,20 @@ export class AuditJobExecutor {
 
       // 3. Connect via SSH
       let privateKey = process.env.AUDIT_RUNNER_SSH_KEY;
-      if (!privateKey) throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
-
-      // Robust key parsing (handle Base64 or literal \n)
+      if (!privateKey) {
+        throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
+      }
+      
+      // Robust Base64 detection and cleaning: strip all whitespace/newlines
       if (!privateKey.includes('-----BEGIN')) {
-        // Might be base64
         try {
-          const decoded = Buffer.from(privateKey, 'base64').toString('utf-8');
+          const cleaned = privateKey.replace(/\s/g, '');
+          const decoded = Buffer.from(cleaned, 'base64').toString('utf-8');
           if (decoded.includes('-----BEGIN')) {
             privateKey = decoded;
           }
-        } catch {
-          // Not base64, continue
+        } catch (e) {
+          this.addLog('Warning: Failed to decode Base64 key, using raw string.');
         }
       }
       
