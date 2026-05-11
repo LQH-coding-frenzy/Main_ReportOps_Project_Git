@@ -66,7 +66,10 @@ export class AuditJobExecutor {
       }
 
       // 3. Connect via SSH
-      let privateKey = process.env.AUDIT_RUNNER_SSH_KEY;
+      let privateKey = process.env.AUDIT_RUNNER_SSH_KEY || '';
+      
+      // If the key is missing or seems truncated, it might be due to a mangled .env file.
+      // We can't easily fix a broken .env at runtime, but we can try to be robust.
       if (!privateKey) {
         throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
       }
@@ -74,7 +77,7 @@ export class AuditJobExecutor {
       // Robust Base64 detection and cleaning
       if (!privateKey.includes('-----BEGIN')) {
         try {
-          // Remove all whitespace and non-base64 characters
+          // Remove ALL whitespace including newlines that might have leaked into the .env value
           const cleaned = privateKey.replace(/[^A-Za-z0-9+/=]/g, '');
           
           // Add padding if missing
