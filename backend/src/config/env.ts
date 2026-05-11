@@ -106,6 +106,7 @@ export const env = {
 
   // Audit Runner
   AUDIT_RUNNER_SSH_KEY: process.env.AUDIT_RUNNER_SSH_KEY || '',
+  AUDIT_RUNNER_SSH_PUBLIC_KEY: process.env.AUDIT_RUNNER_SSH_PUBLIC_KEY || '',
 
   // Preview merge worker memory budget (MB)
   REPORT_MERGE_WORKER_MAX_OLD_GENERATION_MB: parsePositiveInt(

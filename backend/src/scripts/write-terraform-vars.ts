@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getProjectAnswers } from '../config/project-answers';
+import { env } from '../config/env';
 
 const answers = getProjectAnswers();
 const appName = answers.project?.app_name || 'reportops';
@@ -24,7 +25,7 @@ const out = {
   frontend_url: frontendUrl,
   verification_token: 'placeholder',
   ssh_keys: '',
-  audit_runner_ssh_public_key: '',
+  audit_runner_ssh_public_key: env.AUDIT_RUNNER_SSH_PUBLIC_KEY,
 };
 
 const target = path.resolve(__dirname, '../../../infra/terraform/environments/dev/auto.tfvars.json');
