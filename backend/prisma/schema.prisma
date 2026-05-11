@@ -254,6 +254,7 @@ model AuditJob {
   score          Float?         // PASS / (PASS + FAIL + ERROR) * 100
   riskLevel      String?        // "Critical" | "High" | "Medium" | "Low"
   summaryJson    Json?          // full summary
+  executionLog   String?        // Real-time execution logs
   errorMessage   String?
   startedAt      DateTime?
   finishedAt     DateTime?

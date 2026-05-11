@@ -289,6 +289,7 @@ export interface AuditJob {
   unknownCount: number;
   score: number | null;
   riskLevel: string | null;
+  executionLog: string | null;
   errorMessage: string | null;
   startedAt: string | null;
   finishedAt: string | null;

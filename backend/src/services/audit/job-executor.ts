@@ -20,10 +20,22 @@ export class AuditJobExecutor {
     this.jobId = jobId;
   }
 
-  private addLog(message: string) {
+  private async addLog(message: string) {
     const entry = `[${new Date().toISOString()}] ${message}`;
     this.logs.push(entry);
     console.log(`[Job ${this.jobId}] ${message}`);
+
+    // Update database incrementally
+    try {
+      await prisma.auditJob.update({
+        where: { id: this.jobId },
+        data: {
+          executionLog: this.logs.join('\n')
+        }
+      });
+    } catch (err) {
+      console.error(`Failed to update incremental log for job ${this.jobId}:`, err);
+    }
   }
 
   async execute(): Promise<void> {
@@ -91,17 +103,17 @@ export class AuditJobExecutor {
           
           if (decodedString.includes('-----BEGIN')) {
             privateKeyBuffer = decodedString; // Use the string!
-            this.addLog('Detected and decoded Base64 SSH key.');
+            await this.addLog('Detected and decoded Base64 SSH key.');
           }
         } catch {
-          this.addLog('Warning: Failed to decode Base64 key, using as-is.');
+          await this.addLog('Warning: Failed to decode Base64 key, using as-is.');
         }
       } else {
         // If it's already a PEM string, ensure literal \n are handled
         privateKeyBuffer = rawPrivateKey.replace(/\\n/g, '\n').trim();
       }
       
-      this.addLog(`Connecting to VM at ${job.vm.publicIp} as audituser...`);
+      await this.addLog(`Connecting to VM at ${job.vm.publicIp} as audituser...`);
       this.runner = new SSHRunner({
         host: job.vm.publicIp,
         username: 'audituser',
@@ -116,20 +128,20 @@ export class AuditJobExecutor {
         try {
           attempts++;
           if (attempts > 1) {
-            this.addLog(`Retry connection attempt ${attempts}/${maxAttempts}...`);
+            await this.addLog(`Retry connection attempt ${attempts}/${maxAttempts}...`);
           }
           await this.runner.connect();
           connected = true;
-          this.addLog('SSH connection established.');
+          await this.addLog('SSH connection established.');
         } catch (connError) {
           const msg = connError instanceof Error ? connError.message : String(connError);
           if (attempts < maxAttempts && (msg.includes('Timed out') || msg.includes('ECONNREFUSED'))) {
-            this.addLog(`Connection attempt ${attempts} failed: ${msg}. Waiting 10s...`);
+            await this.addLog(`Connection attempt ${attempts} failed: ${msg}. Waiting 10s...`);
             await new Promise(resolve => setTimeout(resolve, 10000));
           } else {
-            this.addLog(`SSH Connection Failed: ${msg}`);
+            await this.addLog(`SSH Connection Failed: ${msg}`);
             if (msg.includes('Authentication failed')) {
-              this.addLog('TIP: This usually means the VM is still initializing or the SSH key is incorrect.');
+              await this.addLog('TIP: This usually means the VM is still initializing or the SSH key is incorrect.');
             }
             throw connError;
           }
@@ -150,7 +162,7 @@ export class AuditJobExecutor {
       // 4. Execute Scripts
       if (isScripts && scripts.length > 0) {
         for (const script of scripts) {
-          this.addLog(`Running script: ${script.controlId} (${script.title})`);
+          await this.addLog(`Running script: ${script.controlId} (${script.title})`);
           
           const scriptStartTime = Date.now();
 
@@ -160,7 +172,7 @@ export class AuditJobExecutor {
             .download(script.scriptStoragePath);
 
           if (downloadError || !fileData) {
-            this.addLog(`ERROR: Failed to download script ${script.controlId}: ${downloadError?.message}`);
+            await this.addLog(`ERROR: Failed to download script ${script.controlId}: ${downloadError?.message}`);
             continue;
           }
 
@@ -175,8 +187,8 @@ export class AuditJobExecutor {
 
           // Run the script
           const cmdResult = await this.runner.execCommand(`sudo ${remoteScriptPath}`);
-          this.addLog(`Script ${script.controlId} finished with exit code ${cmdResult.exitCode}`);
-          if (cmdResult.stderr) this.addLog(`Stderr: ${cmdResult.stderr}`);
+          await this.addLog(`Script ${script.controlId} finished with exit code ${cmdResult.exitCode}`);
+          if (cmdResult.stderr) await this.addLog(`Stderr: ${cmdResult.stderr}`);
           
           const scriptEndTime = Date.now();
 
@@ -390,9 +402,9 @@ export class AuditJobExecutor {
             sizeBytes: screenshotBuffer.length,
           }
         });
-        this.addLog('Dashboard screenshot captured successfully.');
+        await this.addLog('Dashboard screenshot captured successfully.');
       } catch (screenshotError) {
-        this.addLog(`Warning: Failed to capture dashboard screenshot: ${screenshotError}`);
+        await this.addLog(`Warning: Failed to capture dashboard screenshot: ${screenshotError}`);
       }
 
       // 6.6 Upload Audit Log
@@ -434,7 +446,7 @@ export class AuditJobExecutor {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.addLog(`FATAL ERROR: ${errorMessage}`);
+      await this.addLog(`FATAL ERROR: ${errorMessage}`);
       
       await prisma.auditJob.update({
         where: { id: this.jobId },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getAuditJob } from '../../../../lib/api';
@@ -23,20 +23,65 @@ export default function AuditJobDetailPage() {
   const [showLogs, setShowLogs] = useState(false);
   const [logs, setLogs] = useState<string | null>(null);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const logContainerRef = useRef<HTMLPreElement>(null);
+
+  // Auto-scroll logs to bottom
+  useEffect(() => {
+    if (showLogs && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs, showLogs]);
 
   useEffect(() => {
     if (!jobId) return;
-    getAuditJob(jobId)
-      .then(setJob)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [jobId]);
+
+    let interval: NodeJS.Timeout;
+
+    const fetchJob = async () => {
+      try {
+        const data = await getAuditJob(jobId);
+        setJob(data);
+        
+        // If job is running, auto-show and fetch logs
+        if (data.status === 'RUNNING') {
+          // Use executionLog from the job record itself for realtime
+          setLogs(data.executionLog || 'Đang chuẩn bị log...');
+          setShowLogs(true);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJob();
+
+    // Poll every 2 seconds if job is running
+    interval = setInterval(() => {
+      if (job?.status === 'PENDING' || job?.status === 'RUNNING') {
+        fetchJob();
+      } else if (job && job.status !== 'PENDING' && job.status !== 'RUNNING') {
+        clearInterval(interval);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [jobId, job?.status]);
 
   async function handleViewLogs() {
-    if (logs) {
-      setShowLogs(!showLogs);
+    if (showLogs) {
+      setShowLogs(false);
       return;
     }
+
+    // Prioritize the real-time executionLog if available
+    if (job.executionLog) {
+      setLogs(job.executionLog);
+      setShowLogs(true);
+      return;
+    }
+
     setLoadingLogs(true);
     try {
       const content = await import('../../../../lib/api').then(api => api.getAuditJobLogs(jobId));
@@ -76,183 +121,188 @@ export default function AuditJobDetailPage() {
 
   return (
     <main className="main-content">
-      <div style={{ marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
-          ← Quay lại danh sách
-        </Link>
-        <button 
-          className="btn btn-secondary btn-sm" 
-          onClick={handleViewLogs}
-          disabled={loadingLogs}
-        >
-          {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
-        </button>
-      </div>
-
-      <div className="page-header">
-        <h1 className="page-title">Audit Job #{job.id}</h1>
-        <p className="page-subtitle">
-          VM: {job.vm.name} • Mode: {job.mode.replace(/_/g, ' ')} • {job.ownerSection}
-        </p>
-      </div>
-
-      {job.status === 'FAILED' && (
-        <div className="alert alert-danger" style={{ marginBottom: 'var(--space-6)', borderRadius: 'var(--radius-lg)' }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Audit Job Failed</div>
-          <div style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)' }}>{job.errorMessage || 'No error message provided.'}</div>
+      <div className="container page">
+        <div style={{ marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+            ← Quay lại danh sách
+          </Link>
+          <button 
+            className="btn btn-secondary btn-sm" 
+            onClick={handleViewLogs}
+            disabled={loadingLogs}
+          >
+            {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
+          </button>
         </div>
-      )}
 
-      {showLogs && logs && (
-        <div className="card" style={{ marginBottom: 'var(--space-6)', background: '#000', border: '1px solid #333' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ color: '#888', fontSize: 12, fontWeight: 700 }}>SYSTEM EXECUTION LOG</span>
-            <button onClick={() => setShowLogs(false)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>✕</button>
-          </div>
-          <pre style={{ margin: 0, padding: 0, color: '#0f0', fontSize: 12, overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto' }}>
-            {logs}
-          </pre>
+        <div className="page-header">
+          <h1 className="page-title">Audit Job #{job.id}</h1>
+          <p className="page-subtitle">
+            VM: {job.vm.name} • Mode: {job.mode.replace(/_/g, ' ')} • {job.ownerSection}
+          </p>
         </div>
-      )}
 
-      {/* Score + Stats */}
-      <div className="grid grid-4" style={{ marginBottom: 'var(--space-8)' }}>
-        <div className="card" style={{ textAlign: 'center', gridColumn: 'span 2' }}>
-          <div style={{ fontSize: '4rem', fontWeight: 800, color: scoreColor }}>
-            {job.score != null ? `${job.score.toFixed(1)}%` : '—'}
+        {job.status === 'FAILED' && (
+          <div className="alert alert-danger" style={{ marginBottom: 'var(--space-6)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Audit Job Failed</div>
+            <div style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)' }}>{job.errorMessage || 'No error message provided.'}</div>
           </div>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-            Compliance Score
-          </div>
-          {job.riskLevel && (
-            <div style={{ marginTop: 8 }}>
-              <span className={`badge ${
-                job.riskLevel === 'Critical' ? 'badge-danger' :
-                job.riskLevel === 'High' ? 'badge-warning' :
-                job.riskLevel === 'Medium' ? 'badge-info' : 'badge-success'
-              }`}>
-                Risk: {job.riskLevel}
-              </span>
+        )}
+
+        {showLogs && logs && (
+          <div className="card" style={{ marginBottom: 'var(--space-6)', background: '#000', border: '1px solid #333' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ color: '#888', fontSize: 12, fontWeight: 700 }}>SYSTEM EXECUTION LOG</span>
+              <button onClick={() => setShowLogs(false)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>✕</button>
             </div>
-          )}
-        </div>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', fontWeight: 800, color: '#4ade80' }}>{job.passCount}</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: '#4ade80', textTransform: 'uppercase' }}>Pass</div>
-          <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f87171', marginTop: 12 }}>{job.failCount}</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: '#f87171', textTransform: 'uppercase' }}>Fail</div>
-        </div>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fbbf24' }}>{job.manualCount}</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: '#fbbf24', textTransform: 'uppercase' }}>Manual</div>
-          <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fca5a5', marginTop: 12 }}>{job.errorCount}</div>
-          <div style={{ fontSize: 'var(--text-xs)', color: '#fca5a5', textTransform: 'uppercase' }}>Error</div>
-        </div>
-      </div>
-
-      {/* Script Runs */}
-      {job.scriptRuns && job.scriptRuns.length > 0 && (
-        <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 'var(--space-6)' }}>
-          <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)' }}>
-            <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>
-              📋 Control Results ({job.scriptRuns.length})
-            </h3>
+            <pre 
+              ref={logContainerRef}
+              style={{ margin: 0, padding: 0, color: '#0f0', fontSize: 12, overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto' }}
+            >
+              {logs}
+            </pre>
           </div>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Control ID</th>
-                <th>Title</th>
-                <th>Section</th>
-                <th>Status</th>
-                <th>Exit Code</th>
-                <th>Duration</th>
-              </tr>
-            </thead>
-            <tbody>
-              {job.scriptRuns.map((run) => {
-                const style = RESULT_STYLE[run.status] || RESULT_STYLE.UNKNOWN;
-                return (
-                  <tr key={run.id} style={{ background: style.bg }}>
-                    <td>
-                      <code className="admin-code" style={{ color: style.color, fontWeight: 700 }}>
-                        {run.controlId}
-                      </code>
-                    </td>
-                    <td style={{ fontSize: 'var(--text-sm)' }}>{run.script.title}</td>
-                    <td><span className="admin-chip">{run.script.section}</span></td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: style.color }}>
-                        {style.icon} {run.status}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
-                      {run.exitCode ?? '—'}
-                    </td>
-                    <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                      {run.durationMs ? `${(run.durationMs / 1000).toFixed(1)}s` : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        )}
 
-      {/* Evidence Artifacts */}
-      {job.evidences && job.evidences.length > 0 && (
-        <div className="card">
-          <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>
-            📦 Evidence Artifacts ({job.evidences.length})
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {job.evidences.map((ev) => (
-              <div
-                key={ev.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-3)',
-                  padding: 'var(--space-2) var(--space-3)',
-                  background: 'var(--color-bg-glass)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <span style={{ fontSize: '1.25rem' }}>
-                  {ev.artifactType.includes('HTML') ? '🌐' :
-                   ev.artifactType.includes('JSON') ? '📊' :
-                   ev.artifactType.includes('SCREENSHOT') ? '📸' :
-                   ev.artifactType.includes('PDF') ? '📄' : '📁'}
+        {/* Score + Stats */}
+        <div className="grid grid-4" style={{ marginBottom: 'var(--space-8)' }}>
+          <div className="card" style={{ textAlign: 'center', gridColumn: 'span 2' }}>
+            <div style={{ fontSize: '4rem', fontWeight: 800, color: scoreColor }}>
+              {job.score != null ? `${job.score.toFixed(1)}%` : '—'}
+            </div>
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
+              Compliance Score
+            </div>
+            {job.riskLevel && (
+              <div style={{ marginTop: 8 }}>
+                <span className={`badge ${
+                  job.riskLevel === 'Critical' ? 'badge-danger' :
+                  job.riskLevel === 'High' ? 'badge-warning' :
+                  job.riskLevel === 'Medium' ? 'badge-info' : 'badge-success'
+                }`}>
+                  Risk: {job.riskLevel}
                 </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{ev.artifactName}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                    {ev.artifactType} • {ev.sizeBytes ? `${(ev.sizeBytes / 1024).toFixed(1)} KB` : ''}
-                  </div>
-                </div>
-                <span className="badge badge-info" style={{ fontSize: 10 }}>{ev.mimeType || 'file'}</span>
               </div>
-            ))}
+            )}
+          </div>
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#4ade80' }}>{job.passCount}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: '#4ade80', textTransform: 'uppercase' }}>Pass</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f87171', marginTop: 12 }}>{job.failCount}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: '#f87171', textTransform: 'uppercase' }}>Fail</div>
+          </div>
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fbbf24' }}>{job.manualCount}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: '#fbbf24', textTransform: 'uppercase' }}>Manual</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fca5a5', marginTop: 12 }}>{job.errorCount}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: '#fca5a5', textTransform: 'uppercase' }}>Error</div>
           </div>
         </div>
-      )}
 
-      {/* Job Meta */}
-      <div className="card" style={{ marginTop: 'var(--space-6)' }}>
-        <h4 style={{ marginBottom: 'var(--space-3)' }}>ℹ️ Job Info</h4>
-        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>Triggered by:</span>
-          <span>{job.triggeredBy.displayName || job.triggeredBy.githubUsername}</span>
-          <span style={{ color: 'var(--color-text-muted)' }}>Created:</span>
-          <span>{new Date(job.createdAt).toLocaleString('vi-VN')}</span>
-          <span style={{ color: 'var(--color-text-muted)' }}>Started:</span>
-          <span>{job.startedAt ? new Date(job.startedAt).toLocaleString('vi-VN') : '—'}</span>
-          <span style={{ color: 'var(--color-text-muted)' }}>Finished:</span>
-          <span>{job.finishedAt ? new Date(job.finishedAt).toLocaleString('vi-VN') : '—'}</span>
-          <span style={{ color: 'var(--color-text-muted)' }}>Duration:</span>
-          <span>{job.durationMs ? `${(job.durationMs / 1000).toFixed(1)}s` : '—'}</span>
+        {/* Script Runs */}
+        {job.scriptRuns && job.scriptRuns.length > 0 && (
+          <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 'var(--space-6)' }}>
+            <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)' }}>
+              <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>
+                📋 Control Results ({job.scriptRuns.length})
+              </h3>
+            </div>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Control ID</th>
+                  <th>Title</th>
+                  <th>Section</th>
+                  <th>Status</th>
+                  <th>Exit Code</th>
+                  <th>Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {job.scriptRuns.map((run) => {
+                  const style = RESULT_STYLE[run.status] || RESULT_STYLE.UNKNOWN;
+                  return (
+                    <tr key={run.id} style={{ background: style.bg }}>
+                      <td>
+                        <code className="admin-code" style={{ color: style.color, fontWeight: 700 }}>
+                          {run.controlId}
+                        </code>
+                      </td>
+                      <td style={{ fontSize: 'var(--text-sm)' }}>{run.script.title}</td>
+                      <td><span className="admin-chip">{run.script.section}</span></td>
+                      <td>
+                        <span style={{ fontWeight: 600, color: style.color }}>
+                          {style.icon} {run.status}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+                        {run.exitCode ?? '—'}
+                      </td>
+                      <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                        {run.durationMs ? `${(run.durationMs / 1000).toFixed(1)}s` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Evidence Artifacts */}
+        {job.evidences && job.evidences.length > 0 && (
+          <div className="card">
+            <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 'var(--space-4)' }}>
+              📦 Evidence Artifacts ({job.evidences.length})
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              {job.evidences.map((ev) => (
+                <div
+                  key={ev.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-3)',
+                    padding: 'var(--space-2) var(--space-3)',
+                    background: 'var(--color-bg-glass)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  <span style={{ fontSize: '1.25rem' }}>
+                    {ev.artifactType.includes('HTML') ? '🌐' :
+                    ev.artifactType.includes('JSON') ? '📊' :
+                    ev.artifactType.includes('SCREENSHOT') ? '📸' :
+                    ev.artifactType.includes('PDF') ? '📄' : '📁'}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{ev.artifactName}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                      {ev.artifactType} • {ev.sizeBytes ? `${(ev.sizeBytes / 1024).toFixed(1)} KB` : ''}
+                    </div>
+                  </div>
+                  <span className="badge badge-info" style={{ fontSize: 10 }}>{ev.mimeType || 'file'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Job Meta */}
+        <div className="card" style={{ marginTop: 'var(--space-6)' }}>
+          <h4 style={{ marginBottom: 'var(--space-3)' }}>ℹ️ Job Info</h4>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 16px' }}>
+            <span style={{ color: 'var(--color-text-muted)' }}>Triggered by:</span>
+            <span>{job.triggeredBy.displayName || job.triggeredBy.githubUsername}</span>
+            <span style={{ color: 'var(--color-text-muted)' }}>Created:</span>
+            <span>{new Date(job.createdAt).toLocaleString('vi-VN')}</span>
+            <span style={{ color: 'var(--color-text-muted)' }}>Started:</span>
+            <span>{job.startedAt ? new Date(job.startedAt).toLocaleString('vi-VN') : '—'}</span>
+            <span style={{ color: 'var(--color-text-muted)' }}>Finished:</span>
+            <span>{job.finishedAt ? new Date(job.finishedAt).toLocaleString('vi-VN') : '—'}</span>
+            <span style={{ color: 'var(--color-text-muted)' }}>Duration:</span>
+            <span>{job.durationMs ? `${(job.durationMs / 1000).toFixed(1)}s` : '—'}</span>
+          </div>
         </div>
       </div>
     </main>
