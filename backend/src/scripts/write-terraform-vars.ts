@@ -8,6 +8,7 @@ const appName = answers.project?.app_name || 'reportops';
 const environment = answers.project?.environment || 'dev';
 const defaultMachineType = answers.vm_defaults?.machine_type || 'e2-micro';
 const frontendUrl = answers.project?.frontend_url || 'https://automatedprogram.app';
+const labVmSshKeys = process.env.LAB_VM_SSH_KEYS || '';
 
 const out = {
   project_id: answers.project?.gcp_project_id || 'cis-benchmark-uit',
@@ -24,7 +25,7 @@ const out = {
   benchmark_profile: answers.benchmark?.profile || 'Level 1 - Server',
   frontend_url: frontendUrl,
   verification_token: 'placeholder',
-  ssh_keys: '',
+  ssh_keys: labVmSshKeys,
   audit_runner_ssh_public_key: env.AUDIT_RUNNER_SSH_PUBLIC_KEY,
 };
 

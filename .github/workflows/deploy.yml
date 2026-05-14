@@ -77,6 +77,10 @@ jobs:
             sudo sed -i '/^AUDIT_RUNNER_SSH_KEY=/d' /opt/reportops/backend/.env
             echo "AUDIT_RUNNER_SSH_KEY=${{ secrets.AUDIT_RUNNER_SSH_KEY }}" | sudo tee -a /opt/reportops/backend/.env > /dev/null
 
+            echo "🔑 Updating AUDIT_RUNNER_SSH_PUBLIC_KEY in .env..."
+            sudo sed -i '/^AUDIT_RUNNER_SSH_PUBLIC_KEY=/d' /opt/reportops/backend/.env
+            echo "AUDIT_RUNNER_SSH_PUBLIC_KEY=${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}" | sudo tee -a /opt/reportops/backend/.env > /dev/null
+
             # Run Audit Bootstrap to ensure scripts are in DB and Storage
             echo "🌱 Bootstrapping audit data..."
             cd $APP_DIR/backend

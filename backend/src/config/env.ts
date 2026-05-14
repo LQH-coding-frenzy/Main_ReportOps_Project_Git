@@ -126,7 +126,7 @@ export function validateEnv(): void {
   ];
 
   if (env.NODE_ENV === 'production') {
-    required.push('JWT_SECRET', 'ONLYOFFICE_JWT_SECRET', 'AUDIT_RUNNER_SSH_KEY');
+    required.push('JWT_SECRET', 'ONLYOFFICE_JWT_SECRET', 'AUDIT_RUNNER_SSH_KEY', 'AUDIT_RUNNER_SSH_PUBLIC_KEY');
   }
 
   const missing = required.filter((key) => !process.env[key]);

@@ -61,7 +61,12 @@ resource "google_compute_instance" "lab_vm" {
     # 2. FORCE update SSH keys and permissions (Always run)
     echo "Updating SSH keys for audituser..."
     mkdir -p /home/audituser/.ssh
-    echo "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
+    if [ -n "${var.audit_runner_ssh_public_key}" ]; then
+      printf '%s\n' "${var.audit_runner_ssh_public_key}" > /home/audituser/.ssh/authorized_keys
+    else
+      echo "WARNING: AUDIT runner SSH public key is empty. Preserving existing authorized_keys if present."
+      touch /home/audituser/.ssh/authorized_keys
+    fi
     chown -R audituser:audituser /home/audituser/.ssh
     chmod 700 /home/audituser/.ssh
     chmod 600 /home/audituser/.ssh/authorized_keys

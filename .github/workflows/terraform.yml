@@ -58,6 +58,9 @@ jobs:
 
       - name: Generate Terraform vars from answers
         working-directory: backend
+        env:
+          AUDIT_RUNNER_SSH_PUBLIC_KEY: ${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}
+          LAB_VM_SSH_KEYS: ${{ secrets.LAB_VM_SSH_KEYS }}
         run: npm run answers:write-tfvars
 
       # Normalize inputs from both workflow_dispatch and repository_dispatch
@@ -143,14 +146,20 @@ jobs:
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
-              -var="verification_token=$VERIFICATION_TOKEN"
+              -var="verification_token=$VERIFICATION_TOKEN" \
+              -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
+              -var="enable_oslogin=false" \
+              -var="audit_runner_ssh_public_key=${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}"
           else
             terraform apply -auto-approve \
               -var-file="auto.tfvars.json" \
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
-              -var="verification_token=$VERIFICATION_TOKEN"
+              -var="verification_token=$VERIFICATION_TOKEN" \
+              -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
+              -var="enable_oslogin=false" \
+              -var="audit_runner_ssh_public_key=${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}"
           fi
 
       - name: Capture Terraform outputs
