@@ -114,8 +114,16 @@ router.post(
         return res.status(400).json({ error: 'Missing required fields: packId, controlId, title, section', status: 400 });
       }
 
+      if (assessmentType === 'Manual') {
+        return res.status(400).json({ error: 'Manual audits are disabled. Only automated controls are accepted.', status: 400 });
+      }
+
       // Validate script
       const validation = validateAuditScript(file.originalname, file.buffer, controlId);
+
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.errors.join(' '), status: 400 });
+      }
 
       // Calculate SHA-256
       const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');

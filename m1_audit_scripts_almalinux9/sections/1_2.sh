@@ -73,13 +73,6 @@ have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
 echo "## M1 §1.2 Package Management Audit"
 
-print_manual "1.2.1.1" "Ensure GPG keys are configured" \
-  " - Manual review required: verify repository gpgkey URLs and installed GPG public keys match site policy." \
-  " - Repository gpgkey entries:" \
-  "$(grep -rH '^\s*gpgkey\s*=' /etc/yum.repos.d/* /etc/dnf/dnf.conf 2>/dev/null || true)" \
-  " - Installed RPM GPG keys:" \
-  "$(rpm -q gpg-pubkey 2>/dev/null || true)"
-
 fail=(); ok=()
 if grep -Piq '^\s*gpgcheck\s*=\s*(1|true|yes)\b' /etc/dnf/dnf.conf 2>/dev/null; then
   ok+=(" - global gpgcheck is enabled in /etc/dnf/dnf.conf")
@@ -97,19 +90,5 @@ else
   print_fail "1.2.1.2" "Ensure gpgcheck is globally activated" "${fail[@]}"
   [ "${#ok[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${ok[@]}"
 fi
-
-print_manual "1.2.1.4" "Ensure package manager repositories are configured" \
-  " - Manual review required: verify configured repositories match site policy." \
-  " - dnf repolist output:" \
-  "$(dnf repolist 2>/dev/null || true)"
-
-updates_output="$(dnf check-update 2>&1 || true)"
-reboot_output="$(dnf needs-restarting -r 2>&1 || true)"
-print_manual "1.2.2.1" "Ensure updates, patches, and additional security software are installed" \
-  " - Manual review required: verify pending updates and reboot requirement according to site patch policy." \
-  " - dnf check-update output:" \
-  "$updates_output" \
-  " - dnf needs-restarting -r output:" \
-  "$reboot_output"
 
 section_summary

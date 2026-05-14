@@ -112,8 +112,8 @@ export default function AdminAuditPacksPage() {
             <strong>{currentBenchmarkLabel} — {profileLabel}</strong>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
               Upload các file .sh theo format CIS stdout. Script phải có shebang bash,
-              không chứa lệnh phá hoại, và phải thuộc scope M1. Parser sẽ tự detect
-              PASS/FAIL/MANUAL/ERROR từ stdout.
+              không chứa lệnh phá hoại, không chứa manual review, và phải thuộc scope M1.
+              Parser sẽ chỉ chấp nhận PASS/FAIL/ERROR cho automated audit.
             </p>
           </div>
         </div>
@@ -152,10 +152,8 @@ export default function AdminAuditPacksPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-              <select className="admin-input" name="assessmentType" defaultValue="Automated" style={{ maxWidth: 180 }}>
-                <option value="Automated">Automated</option>
-                <option value="Manual">Manual</option>
-              </select>
+              <input type="hidden" name="assessmentType" value="Automated" />
+              <span className="badge badge-info" style={{ alignSelf: 'center' }}>Automated only</span>
               <button className="btn btn-primary" type="submit" disabled={uploading}>
                 {uploading ? 'Uploading...' : 'Upload Script'}
               </button>

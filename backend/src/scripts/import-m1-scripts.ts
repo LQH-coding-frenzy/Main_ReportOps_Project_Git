@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectAnswers } from '../config/project-answers';
 import { env } from '../config/env';
+import { isManualM1Control } from '../services/audit/m1-manual-controls';
 
 dotenv.config();
 
@@ -71,6 +72,11 @@ async function importScripts() {
     console.log(`  - Found ${controlIds.size} controls in this file.`);
 
     for (const controlId of controlIds) {
+      if (isManualM1Control(controlId)) {
+        console.log(`    - Skipping manual-only control ${controlId}`);
+        continue;
+      }
+
       // Find the title for this control (usually on the same line or next line)
       const titleRegex = new RegExp(`["']${controlId.replace(/\./g, '\\.')}["']\\s*,?\\s*["']([^"']+)["']`);
       const titleMatch = content.match(titleRegex);

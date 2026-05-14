@@ -170,10 +170,6 @@ check_kernel_module_unavailable "1.1.1.4" "Ensure hfsplus kernel module is not a
 check_kernel_module_unavailable "1.1.1.5" "Ensure jffs2 kernel module is not available" "jffs2" "fs"
 check_kernel_module_unavailable "1.1.1.8" "Ensure usb-storage kernel module is not available" "usb-storage" "drivers"
 
-print_manual "1.1.1.9" "Ensure unused filesystems kernel modules are not available" \
-  " - Manual review required: list available filesystem kernel modules and confirm unused/CVE-affected modules are disabled." \
-  " - Available top-level filesystem modules: $(find /lib/modules/$(uname -r)/kernel/fs -mindepth 1 -maxdepth 1 -type d -printf '%f ' 2>/dev/null || true)"
-
 check_mount_exists "1.1.2.1.1" "Ensure /tmp is a separate partition" "/tmp"
 check_mount_option_if_mounted "1.1.2.1.2" "Ensure nodev option set on /tmp partition" "/tmp" "nodev"
 check_mount_option_if_mounted "1.1.2.1.3" "Ensure nosuid option set on /tmp partition" "/tmp" "nosuid"

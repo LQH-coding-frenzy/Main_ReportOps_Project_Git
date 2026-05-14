@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { usePolling } from '../../../hooks/usePolling';
-import { getLabVm, deleteLabVm } from '../../../lib/api';
+import { getLabVm, deleteLabVm, purgeLabVmIndex } from '../../../lib/api';
 import type { LabVm, AuditJob } from '../../../lib/types';
 
 export default function LabVmDetailPage() {
@@ -40,6 +40,18 @@ export default function LabVmDetailPage() {
     } catch (err) {
       console.error(err);
       alert('Không thể hủy VM');
+    }
+  }
+
+  async function handlePurge() {
+    if (!vm) return;
+    if (!confirm(`Xóa index cũ của VM "${vm.name}"?`)) return;
+    try {
+      await purgeLabVmIndex(vm.id);
+      window.location.href = '/lab';
+    } catch (err) {
+      console.error(err);
+      alert('Không thể xóa index VM cũ');
     }
   }
 
@@ -127,6 +139,11 @@ export default function LabVmDetailPage() {
             {vm.status !== 'DESTROYED' && vm.status !== 'DESTROYING' && (
               <button className="btn btn-danger btn-sm" onClick={handleDestroy}>
                 🗑️ Destroy
+              </button>
+            )}
+            {vm.status === 'DESTROYED' && (
+              <button className="btn btn-danger btn-sm" onClick={handlePurge}>
+                🗑️ Xóa Index
               </button>
             )}
           </div>

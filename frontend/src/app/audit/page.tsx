@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getAuditJobs } from '../../lib/api';
+import { cancelAuditJob, deleteAuditJob, getAuditJobs } from '../../lib/api';
 import type { AuditJob } from '../../lib/types';
 import { benchmarkLabel, projectConfig } from '../../lib/project-config';
 
@@ -27,6 +27,33 @@ export default function AuditPage() {
 
   const completedJobs = jobs.filter((j) => j.status === 'COMPLETED');
   const latestScore = completedJobs[0]?.score;
+
+  async function reloadJobs() {
+    const data = await getAuditJobs();
+    setJobs(data.jobs);
+  }
+
+  async function handleCancel(job: AuditJob) {
+    if (!confirm(`Hủy audit job #${job.id}?`)) return;
+    try {
+      const updated = await cancelAuditJob(job.id);
+      setJobs((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (error) {
+      console.error(error);
+      alert('Không thể hủy audit job');
+    }
+  }
+
+  async function handleDelete(job: AuditJob) {
+    if (!confirm(`Xóa index cũ của audit job #${job.id}?`)) return;
+    try {
+      await deleteAuditJob(job.id);
+      await reloadJobs();
+    } catch (error) {
+      console.error(error);
+      alert('Không thể xóa audit job');
+    }
+  }
 
   return (
     <main className="main-content">
@@ -154,9 +181,21 @@ export default function AuditPage() {
                         {new Date(job.createdAt).toLocaleString('vi-VN')}
                       </td>
                       <td>
-                        <Link href={`/audit/jobs/${job.id}`} className="btn btn-secondary btn-sm">
-                          Chi tiết →
-                        </Link>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <Link href={`/audit/jobs/${job.id}`} className="btn btn-secondary btn-sm">
+                            Chi tiết →
+                          </Link>
+                          {(job.status === 'PENDING' || job.status === 'RUNNING') && (
+                            <button className="btn btn-secondary btn-sm" onClick={() => handleCancel(job)}>
+                              ⏹ Cancel
+                            </button>
+                          )}
+                          {job.status !== 'PENDING' && job.status !== 'RUNNING' && (
+                            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(job)}>
+                              🗑️ Xóa
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

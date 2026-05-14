@@ -6,6 +6,7 @@
  */
 
 import { getProjectAnswers } from '../../config/project-answers';
+import { isManualM1Control } from './m1-manual-controls';
 
 // ── Types ──
 
@@ -114,6 +115,10 @@ export function validateAuditScript(
     );
   }
 
+  if (isManualM1Control(controlId)) {
+    errors.push(`Control ${controlId} requires manual review and is disabled in this automated-only system`);
+  }
+
   // 6. Path traversal check
   if (/\.\.\//g.test(textContent)) {
     errors.push('Script contains path traversal pattern (../)');
@@ -131,6 +136,10 @@ export function validateAuditScript(
     errors.push(
       `Script contains blocked destructive commands (audit-only mode): ${foundBlocked.join(', ')}`
     );
+  }
+
+  if (/(\*{2,3}\s*REVIEW\s*\*{2,3})|manual review required|print_manual\s*\(/i.test(textContent)) {
+    errors.push('Manual review patterns are not allowed. This system accepts automated-only audits.');
   }
 
   // 8. CIS audit result pattern check (warn if missing)

@@ -107,13 +107,13 @@ if [ -r "$current_pol" ]; then
   fi
 
   if grep -Piq 'CHACHA20-POLY1305|chacha20-poly1305' "$current_pol"; then
-    print_manual "1.6.6" "Ensure system wide crypto policy disables chacha20-poly1305 for ssh" " - chacha20-poly1305 appears in $current_pol; review policy against local requirement"
+    print_fail "1.6.6" "Ensure system wide crypto policy disables chacha20-poly1305 for ssh" " - chacha20-poly1305 appears in $current_pol"
   else
     print_pass "1.6.6" "Ensure system wide crypto policy disables chacha20-poly1305 for ssh" " - chacha20-poly1305 not found in effective policy"
   fi
 
   if grep -Piq 'mac@SSH\s*=.*-etm' "$current_pol"; then
-    print_manual "1.6.7" "Ensure system wide crypto policy disables EtM for ssh" " - EtM MAC appears in $current_pol; review policy against local requirement"
+    print_fail "1.6.7" "Ensure system wide crypto policy disables EtM for ssh" " - EtM MAC appears in $current_pol"
   else
     print_pass "1.6.7" "Ensure system wide crypto policy disables EtM for ssh" " - EtM MAC not found in effective policy"
   fi

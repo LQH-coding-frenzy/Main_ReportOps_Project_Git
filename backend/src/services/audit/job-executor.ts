@@ -2,6 +2,7 @@ import { PrismaClient, AuditJob, LabVm, AuditScript } from '@prisma/client';
 import { SSHRunner } from './ssh-runner';
 import { parseCisStdout, NormalizedAuditResult } from './cis-stdout-parser';
 import { renderTerminalEvidenceHtml, renderDashboardEvidenceHtml } from './evidence-renderer';
+import { MANUAL_M1_CONTROL_IDS } from './m1-manual-controls';
 import { env } from '../../config/env';
 import { getProjectAnswers } from '../../config/project-answers';
 import { supabase } from '../../config/supabase';
@@ -64,11 +65,29 @@ function buildOpenScapFilteredJson(input: {
   );
 }
 
+class AuditJobCancelledError extends Error {}
+
 export class AuditJobExecutor {
+  private static activeExecutors = new Map<number, AuditJobExecutor>();
   private jobId: number;
   private runner?: SSHRunner;
   private job: (AuditJob & { vm: LabVm }) | null = null;
   private logs: string[] = [];
+  private cancellationRequested = false;
+
+  static requestCancel(jobId: number): void {
+    const executor = AuditJobExecutor.activeExecutors.get(jobId);
+    if (!executor) {
+      return;
+    }
+
+    executor.cancellationRequested = true;
+    if (executor.runner) {
+      executor.runner.disconnect().catch(() => {
+        // Best-effort interruption only.
+      });
+    }
+  }
 
   constructor(jobId: number) {
     this.jobId = jobId;
@@ -92,7 +111,25 @@ export class AuditJobExecutor {
     }
   }
 
+  private async isJobMarkedCancelled(): Promise<boolean> {
+    const current = await prisma.auditJob.findUnique({
+      where: { id: this.jobId },
+      select: { status: true },
+    });
+
+    return current?.status === 'CANCELLED';
+  }
+
+  private async ensureNotCancelled(): Promise<void> {
+    if (this.cancellationRequested || await this.isJobMarkedCancelled()) {
+      this.cancellationRequested = true;
+      throw new AuditJobCancelledError('Audit job cancelled by user');
+    }
+  }
+
   async execute(): Promise<void> {
+    AuditJobExecutor.activeExecutors.set(this.jobId, this);
+
     try {
       // 1. Fetch Job and VM details
       this.job = await prisma.auditJob.findUnique({
@@ -103,6 +140,7 @@ export class AuditJobExecutor {
       if (!this.job) throw new Error(`Audit Job ${this.jobId} not found`);
       const job = this.job; // Local narrowing
 
+      if (job.status === 'CANCELLED') throw new AuditJobCancelledError('Audit job cancelled before execution started');
       if (job.status !== 'PENDING') throw new Error(`Job is already in status ${job.status}`);
       if (!job.vm.publicIp) throw new Error('VM does not have a public IP address');
 
@@ -111,6 +149,8 @@ export class AuditJobExecutor {
         where: { id: this.jobId },
         data: { status: 'RUNNING', startedAt: new Date() }
       });
+
+      await this.ensureNotCancelled();
 
       const isOpenscap = job.mode === 'OPENSCAP_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS';
       const isScripts = job.mode === 'SCRIPTS_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS';
@@ -121,6 +161,8 @@ export class AuditJobExecutor {
         scripts = await prisma.auditScript.findMany({
           where: {
             enabled: true,
+            assessmentType: { not: 'Manual' },
+            controlId: { notIn: [...MANUAL_M1_CONTROL_IDS] },
             pack: { ownerSection: job.ownerSection, enabled: true }
           },
           orderBy: { controlId: 'asc' }
@@ -179,6 +221,7 @@ export class AuditJobExecutor {
       const maxAttempts = 3;
 
       while (!connected && attempts < maxAttempts) {
+        await this.ensureNotCancelled();
         try {
           attempts++;
           if (attempts > 1) {
@@ -216,6 +259,7 @@ export class AuditJobExecutor {
       // 4. Execute Scripts
       if (isScripts && scripts.length > 0) {
         for (const script of scripts) {
+          await this.ensureNotCancelled();
           await this.addLog(`Running script: ${script.controlId} (${script.title})`);
           
           const scriptStartTime = Date.now();
@@ -241,6 +285,7 @@ export class AuditJobExecutor {
 
           // Run the script
           const cmdResult = await this.runner.execCommand(`sudo ${remoteScriptPath}`);
+          await this.ensureNotCancelled();
           await this.addLog(`Script ${script.controlId} finished with exit code ${cmdResult.exitCode}`);
           if (cmdResult.stderr) await this.addLog(`Stderr: ${cmdResult.stderr}`);
           
@@ -290,6 +335,7 @@ export class AuditJobExecutor {
 
       // 4.5 Execute OpenSCAP Baseline if requested
       if (isOpenscap) {
+        await this.ensureNotCancelled();
         console.log(`Executing OpenSCAP baseline scan for job ${this.jobId}...`);
         const profile = 'xccdf_org.ssgproject.content_profile_cis';
         const dsPath = '/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml';
@@ -305,6 +351,7 @@ export class AuditJobExecutor {
         
         // oscap exit code is 2 if there are failures, 0 if 100% pass, 1 on error
         await this.runner.execCommand(oscapCmd);
+        await this.ensureNotCancelled();
         
         // Count pass/fail directly from XML
         const passOutput = await this.runner.execCommand(`grep -c '<result>pass</result>' ${oscapResultsXmlPath} || echo 0`);
@@ -416,6 +463,7 @@ export class AuditJobExecutor {
 
       // Cleanup VM temp dir
       await this.runner.execCommand(`sudo rm -rf ${remoteDir}`);
+      await this.ensureNotCancelled();
 
       // 5. Generate Evidence Artifacts
       const timestamp = new Date().toLocaleString('vi-VN');
@@ -572,6 +620,19 @@ export class AuditJobExecutor {
       });
 
     } catch (error) {
+      if (error instanceof AuditJobCancelledError || await this.isJobMarkedCancelled()) {
+        await this.addLog('Audit job cancelled by user.');
+        await prisma.auditJob.update({
+          where: { id: this.jobId },
+          data: {
+            status: 'CANCELLED',
+            finishedAt: new Date(),
+            errorMessage: 'Cancelled by user',
+          },
+        });
+        return;
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       await this.addLog(`FATAL ERROR: ${errorMessage}`);
       
@@ -620,6 +681,7 @@ export class AuditJobExecutor {
       if (this.runner) {
         await this.runner.disconnect();
       }
+      AuditJobExecutor.activeExecutors.delete(this.jobId);
     }
   }
 }

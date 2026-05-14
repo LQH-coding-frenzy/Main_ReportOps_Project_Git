@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePolling } from '../../hooks/usePolling';
-import { getLabVms } from '../../lib/api';
+import { getLabVms, purgeLabVmIndex } from '../../lib/api';
 import type { LabVm } from '../../lib/types';
 
 const VM_STATUS_STYLE: Record<string, { cls: string; icon: string }> = {
@@ -36,6 +36,20 @@ export default function LabPage() {
   }, 5000, true);
 
   const runningVms = vms.filter((v) => v.status === 'RUNNING');
+
+  async function handlePurge(vm: LabVm) {
+    if (!confirm(`Xóa index cũ của VM "${vm.name}"? Thao tác này sẽ xóa luôn lịch sử audit gắn với VM này.`)) {
+      return;
+    }
+
+    try {
+      await purgeLabVmIndex(vm.id);
+      setVms((current) => current.filter((item) => item.id !== vm.id));
+    } catch (error) {
+      console.error(error);
+      alert('Không thể xóa index VM cũ');
+    }
+  }
 
   return (
     <main className="main-content">
@@ -120,6 +134,11 @@ export default function LabPage() {
                       >
                         🌐 Welcome Page
                       </a>
+                    )}
+                    {vm.status === 'DESTROYED' && (
+                      <button className="btn btn-danger btn-sm" onClick={() => handlePurge(vm)}>
+                        🗑️ Xóa Index
+                      </button>
                     )}
                     <Link href={`/lab/${vm.id}`} className="btn btn-secondary btn-sm">
                       Chi tiết →

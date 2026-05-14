@@ -259,6 +259,17 @@ export async function createAuditJob(vmId: number, mode: string): Promise<AuditJ
   return res.data;
 }
 
+export async function cancelAuditJob(id: number): Promise<AuditJob> {
+  const res = await apiFetch<ApiResponse<AuditJob>>(`/api/audit-jobs/${id}/cancel`, {
+    method: 'POST',
+  });
+  return res.data;
+}
+
+export async function deleteAuditJob(id: number): Promise<void> {
+  await apiFetch(`/api/audit-jobs/${id}`, { method: 'DELETE' });
+}
+
 // ═══════════════════════════════════════════════════
 // Lab VM API
 // ═══════════════════════════════════════════════════
@@ -283,6 +294,10 @@ export async function createLabVm(name: string, machineType?: string): Promise<L
 
 export async function deleteLabVm(id: number): Promise<void> {
   await apiFetch(`/api/lab/vms/${id}`, { method: 'DELETE' });
+}
+
+export async function purgeLabVmIndex(id: number): Promise<void> {
+  await apiFetch(`/api/lab/vms/${id}/index`, { method: 'DELETE' });
 }
 
 // ═══════════════════════════════════════════════════

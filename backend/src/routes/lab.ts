@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient, VmStatus } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
+import { purgeAuditJobArtifacts } from '../services/audit/archive-cleanup';
 import { env } from '../config/env';
 
 const router = Router();
@@ -329,6 +330,51 @@ router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: 
     res.json({ data: { message: 'VM destruction initiated' }, status: 200 });
   } catch (error) {
     console.error('Delete VM error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * DELETE /api/lab/vms/:id/index
+ * Permanently remove a destroyed VM record and its historical audit indexes.
+ */
+router.delete('/vms/:id/index', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const id = parseInt(req.params.id, 10);
+
+    const vm = await prisma.labVm.findUnique({ where: { id } });
+    if (!vm) {
+      return res.status(404).json({ error: 'VM not found', status: 404 });
+    }
+
+    if (vm.status !== 'DESTROYED') {
+      return res.status(400).json({ error: 'Only destroyed VMs can be removed from index', status: 400 });
+    }
+
+    const jobs = await prisma.auditJob.findMany({
+      where: { vmId: id },
+      select: { id: true },
+    });
+
+    for (const job of jobs) {
+      await purgeAuditJobArtifacts(prisma, job.id);
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'purge_lab_vm_index',
+        details: { vmId: id, name: vm.name, deletedAuditJobs: jobs.length },
+        ipAddress: req.ip,
+      },
+    });
+
+    await prisma.labVm.delete({ where: { id } });
+
+    res.json({ data: { deleted: true }, status: 200 });
+  } catch (error) {
+    console.error('Purge VM index error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
   }
 });

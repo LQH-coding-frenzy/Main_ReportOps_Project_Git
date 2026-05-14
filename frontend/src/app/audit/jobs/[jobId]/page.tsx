@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getAuditJob } from '../../../../lib/api';
+import { cancelAuditJob, deleteAuditJob, getAuditJob } from '../../../../lib/api';
 import type { AuditJob, AuditResultStatus } from '../../../../lib/types';
 
 const RESULT_STYLE: Record<AuditResultStatus, { bg: string; color: string; icon: string }> = {
@@ -101,6 +101,28 @@ export default function AuditJobDetailPage() {
     }
   }
 
+  async function handleCancelJob() {
+    if (!job || !confirm(`Hủy audit job #${job.id}?`)) return;
+    try {
+      const updated = await cancelAuditJob(job.id);
+      setJob(updated);
+    } catch (err) {
+      console.error(err);
+      alert('Không thể hủy audit job');
+    }
+  }
+
+  async function handleDeleteJob() {
+    if (!job || !confirm(`Xóa index cũ của audit job #${job.id}?`)) return;
+    try {
+      await deleteAuditJob(job.id);
+      window.location.href = '/audit';
+    } catch (err) {
+      console.error(err);
+      alert('Không thể xóa audit job');
+    }
+  }
+
   const handleEvidenceClick = (ev: any) => {
     const url = `/api/audit-jobs/${jobId}/evidence/${ev.id}`;
     if (ev.mimeType?.startsWith('image/')) {
@@ -142,13 +164,25 @@ export default function AuditJobDetailPage() {
           <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
             ← Quay lại danh sách
           </Link>
-          <button 
-            className="btn btn-secondary btn-sm" 
-            onClick={handleViewLogs}
-            disabled={loadingLogs}
-          >
-            {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button 
+              className="btn btn-secondary btn-sm" 
+              onClick={handleViewLogs}
+              disabled={loadingLogs}
+            >
+              {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
+            </button>
+            {(job.status === 'PENDING' || job.status === 'RUNNING') && (
+              <button className="btn btn-secondary btn-sm" onClick={handleCancelJob}>
+                ⏹ Cancel
+              </button>
+            )}
+            {job.status !== 'PENDING' && job.status !== 'RUNNING' && (
+              <button className="btn btn-danger btn-sm" onClick={handleDeleteJob}>
+                🗑️ Xóa Index
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="page-header">

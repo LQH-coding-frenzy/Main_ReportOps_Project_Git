@@ -3,6 +3,8 @@ import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { AuditJobExecutor } from '../services/audit/job-executor';
+import { purgeAuditJobArtifacts } from '../services/audit/archive-cleanup';
+import { MANUAL_M1_CONTROL_IDS } from '../services/audit/m1-manual-controls';
 import { env } from '../config/env';
 import { supabase } from '../config/supabase';
 
@@ -21,6 +23,15 @@ async function downloadFromAnyBucket(storagePath: string): Promise<Blob | null> 
   }
 
   return null;
+}
+
+function automatedScriptFilter(ownerSection: string) {
+  return {
+    enabled: true,
+    assessmentType: { not: 'Manual' },
+    controlId: { notIn: [...MANUAL_M1_CONTROL_IDS] },
+    pack: { ownerSection, enabled: true },
+  };
 }
 
 /**
@@ -143,8 +154,7 @@ router.post('/', requireAuth, requireLeader, async (req: Request, res: Response)
     // Count active scripts
     const scriptCount = await prisma.auditScript.count({
       where: {
-        enabled: true,
-        pack: { ownerSection: ownerSection || 'M1', enabled: true },
+        ...automatedScriptFilter(ownerSection || 'M1'),
       },
     });
 
@@ -182,6 +192,91 @@ router.post('/', requireAuth, requireLeader, async (req: Request, res: Response)
     res.status(201).json({ data: job, status: 201 });
   } catch (error) {
     console.error('Create audit job error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * POST /api/audit-jobs/:id/cancel
+ * Cancel a pending or running audit job.
+ */
+router.post('/:id/cancel', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const job = await prisma.auditJob.findUnique({ where: { id } });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Audit job not found', status: 404 });
+    }
+
+    if (job.status !== 'PENDING' && job.status !== 'RUNNING') {
+      return res.status(400).json({ error: 'Only pending or running jobs can be cancelled', status: 400 });
+    }
+
+    const finishedAt = new Date();
+    const durationMs = job.startedAt ? finishedAt.getTime() - job.startedAt.getTime() : null;
+
+    const updated = await prisma.auditJob.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        finishedAt,
+        durationMs,
+        errorMessage: 'Cancelled by user',
+      },
+    });
+
+    AuditJobExecutor.requestCancel(id);
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'cancel_audit_job',
+        details: { jobId: id },
+        ipAddress: req.ip,
+      },
+    });
+
+    res.json({ data: updated, status: 200 });
+  } catch (error) {
+    console.error('Cancel audit job error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * DELETE /api/audit-jobs/:id
+ * Delete a completed historical audit job and its archive artifacts.
+ */
+router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const job = await prisma.auditJob.findUnique({ where: { id } });
+
+    if (!job) {
+      return res.status(404).json({ error: 'Audit job not found', status: 404 });
+    }
+
+    if (job.status === 'PENDING' || job.status === 'RUNNING') {
+      return res.status(400).json({ error: 'Running jobs must be cancelled before deletion', status: 400 });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'delete_audit_job',
+        details: { jobId: id, status: job.status },
+        ipAddress: req.ip,
+      },
+    });
+
+    await purgeAuditJobArtifacts(prisma, id);
+
+    res.json({ data: { deleted: true }, status: 200 });
+  } catch (error) {
+    console.error('Delete audit job error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
   }
 });

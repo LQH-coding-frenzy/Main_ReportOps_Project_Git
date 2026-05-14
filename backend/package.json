@@ -15,6 +15,7 @@
     "db:push": "prisma db push",
     "audit:bootstrap": "ts-node src/scripts/bootstrap-audit.ts",
     "audit:import-m1": "ts-node src/scripts/import-m1-scripts.ts",
+    "audit:cleanup-manual": "ts-node src/scripts/cleanup-manual-audits.ts",
     "answers:write-tfvars": "ts-node src/scripts/write-terraform-vars.ts"
   },
   "prisma": {
