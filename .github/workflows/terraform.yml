@@ -188,6 +188,25 @@ jobs:
             echo "WELCOME_ERROR=Welcome page did not become reachable on http://${PUBLIC_IP}" >> $GITHUB_ENV
           fi
 
+      - name: Wait for SSH banner readiness
+        if: ${{ success() && github.event.inputs.action != 'destroy' && github.event.client_payload.action != 'destroy' }}
+        run: |
+          SSH_READY=0
+          for attempt in $(seq 1 24); do
+            BANNER=$(timeout 5 bash -lc "exec 3<>/dev/tcp/${PUBLIC_IP}/22; IFS= read -r line <&3; printf '%s' \"\$line\"; exec 3>&- 3<&-" || true)
+            if printf '%s' "$BANNER" | grep -q '^SSH-'; then
+              SSH_READY=1
+              break
+            fi
+            echo "Waiting for SSH banner... attempt $attempt/24"
+            sleep 5
+          done
+
+          echo "SSH_READY=$SSH_READY" >> $GITHUB_ENV
+          if [ "$SSH_READY" != "1" ]; then
+            echo "SSH_ERROR=SSH daemon did not become reachable on ${PUBLIC_IP}:22" >> $GITHUB_ENV
+          fi
+
       - name: Notify backend of VM result
         if: always()
         run: |
@@ -197,12 +216,12 @@ jobs:
           TOKEN_RAW="${{ github.event.inputs.verification_token || github.event.client_payload.verification_token }}"
 
           if [ "${{ job.status }}" = "success" ] && [ "${ACTION_RAW}" = "apply" ]; then
-            if [ "${WELCOME_READY:-1}" = "1" ]; then
+            if [ "${WELCOME_READY:-1}" = "1" ] && [ "${SSH_READY:-1}" = "1" ]; then
               STATUS="RUNNING"
               ERROR_MESSAGE=""
             else
               STATUS="ERROR"
-              ERROR_MESSAGE="${WELCOME_ERROR:-Welcome page readiness check failed}"
+              ERROR_MESSAGE="${WELCOME_ERROR:-${SSH_ERROR:-Instance readiness check failed}}"
             fi
           elif [ "${{ job.status }}" = "success" ] && [ "${ACTION_RAW}" = "destroy" ]; then
             STATUS="DESTROYED"

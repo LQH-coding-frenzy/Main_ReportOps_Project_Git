@@ -85,20 +85,35 @@ resource "google_compute_instance" "lab_vm" {
     echo "audituser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/audituser
     chmod 0440 /etc/sudoers.d/audituser
 
-    # 4. Configure SSH
+    # 6. Configure SSH for stable non-interactive access.
+    cat > /etc/ssh/sshd_config.d/99-reportops.conf <<'SSHD'
+UseDNS no
+GSSAPIAuthentication no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+ClientAliveInterval 120
+ClientAliveCountMax 2
+MaxStartups 50:30:100
+SSHD
+
     systemctl enable sshd
     systemctl restart sshd
 
-    # 5. Disable guest firewall early so public HTTP works as soon as nginx is ready.
+    # 7. Disable guest firewall early so public HTTP works as soon as nginx is ready.
     systemctl stop firewalld || true
     systemctl disable firewalld || true
 
-    # 6. Install only the minimum packages needed for the welcome page first.
+    # 8. Disable background package timers on small lab VMs to avoid lock contention and SSH stalls.
+    systemctl disable --now dnf-makecache.timer dnf-automatic.timer || true
+
+    # 9. Install only the minimum packages needed for the welcome page first.
     # Avoid slow third-party repos during first boot.
     echo "Installing minimum packages for welcome page..."
     dnf --disablerepo='google-cloud*' install -y nginx curl || true
     
-    # 7. Configure Welcome Page early so HTTP is available even if later packages fail
+    # 10. Configure Welcome Page early so HTTP is available even if later packages fail
     echo "Configuring Nginx..."
     mkdir -p /usr/share/nginx/html
     cat > /usr/share/nginx/html/index.html <<HTML
@@ -163,7 +178,16 @@ HTML
       sleep 5
     done
 
-    # 8. Install audit packages best-effort after HTTP is already available.
+    for attempt in $(seq 1 24); do
+      if timeout 5 bash -lc 'exec 3<>/dev/tcp/127.0.0.1/22; IFS= read -r line <&3; echo "$line" | grep -q "^SSH-"' >/dev/null 2>&1; then
+        echo "SSH banner is reachable on localhost."
+        break
+      fi
+      echo "Waiting for sshd banner... attempt $attempt/24"
+      sleep 5
+    done
+
+    # 11. Install audit packages best-effort after HTTP is already available.
     echo "Installing audit packages..."
     dnf --disablerepo='google-cloud*' install -y jq policycoreutils-python-utils openscap-scanner scap-security-guide || true
 
