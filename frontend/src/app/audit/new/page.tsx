@@ -45,21 +45,22 @@ export default function NewAuditPage() {
 
   return (
     <main className="main-content">
-      <div style={{ marginBottom: 'var(--space-4)' }}>
-        <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
-          ← Quay lại danh sách
-        </Link>
-      </div>
+      <div className="container page">
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+            ← Quay lại danh sách
+          </Link>
+        </div>
 
         <div className="page-header">
           <h1 className="page-title">🚀 Tạo Audit Job mới</h1>
           <p className="page-subtitle">
-          Chọn VM target và chế độ kiểm thử cho {benchmarkLabel} • {projectConfig.benchmarkProfile}
+            Chọn VM target và chế độ kiểm thử cho {benchmarkLabel} • {projectConfig.benchmarkProfile}
           </p>
         </div>
 
-      {/* Step 1: Choose VM */}
-      <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+        {/* Step 1: Choose VM */}
+        <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
         <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ background: 'var(--color-accent-primary)', color: 'white', borderRadius: '50%', width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800 }}>1</span>
           Chọn VM Target
@@ -109,10 +110,10 @@ export default function NewAuditPage() {
             ))}
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Step 2: Choose Mode */}
-      <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+        {/* Step 2: Choose Mode */}
+        <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
         <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ background: 'var(--color-accent-primary)', color: 'white', borderRadius: '50%', width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800 }}>2</span>
           Chọn chế độ Audit
@@ -147,21 +148,22 @@ export default function NewAuditPage() {
             </div>
           ))}
         </div>
-      </div>
+        </div>
 
-      {/* Submit */}
-      <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
-        <Link href="/audit" className="btn btn-secondary">
-          Hủy
-        </Link>
-        <button
-          className="btn btn-primary"
-          disabled={!selectedVm || creating}
-          onClick={handleCreate}
-          style={{ minWidth: 160 }}
-        >
-          {creating ? '⏳ Đang tạo...' : '🚀 Bắt đầu Audit'}
-        </button>
+        {/* Submit */}
+        <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
+          <Link href="/audit" className="btn btn-secondary">
+            Hủy
+          </Link>
+          <button
+            className="btn btn-primary"
+            disabled={!selectedVm || creating}
+            onClick={handleCreate}
+            style={{ minWidth: 160 }}
+          >
+            {creating ? '⏳ Đang tạo...' : '🚀 Bắt đầu Audit'}
+          </button>
+        </div>
       </div>
     </main>
   );

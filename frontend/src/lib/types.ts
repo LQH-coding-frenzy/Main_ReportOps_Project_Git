@@ -241,6 +241,26 @@ export interface LabVm {
   updatedAt: string;
 }
 
+export interface LabVmObservability {
+  collectedAt: string;
+  cpuCount: number;
+  cpuModel: string;
+  load1: number;
+  load5: number;
+  load15: number;
+  cpuPressurePercent: number;
+  memoryTotalMb: number;
+  memoryAvailableMb: number;
+  memoryUsedMb: number;
+  memoryUsagePercent: number;
+  rootDiskTotalMb: number;
+  rootDiskUsedMb: number;
+  rootDiskUsagePercent: number;
+  uptimeHuman: string;
+  nginxStatus: string;
+  sshdStatus: string;
+}
+
 export interface AuditPack {
   id: number;
   packId: string;

@@ -15,6 +15,7 @@ module "lab_vm" {
   verification_token = var.verification_token
   ssh_keys           = var.ssh_keys
   machine_type       = var.machine_type
+  disk_size_gb       = var.disk_size_gb
   enable_oslogin     = var.enable_oslogin
   audit_runner_ssh_public_key = var.audit_runner_ssh_public_key
 }

@@ -35,7 +35,7 @@ infrastructure:
   ai_create_archive_bucket: yes
 
 vm_defaults:
-  machine_type: "e2-micro"
+  machine_type: "e2-medium"
   disk_size_gb: 20
   os_family: "almalinux-9"
   public_http_port: 80

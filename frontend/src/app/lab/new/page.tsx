@@ -5,17 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createLabVm } from '../../../lib/api';
 import { benchmarkLabel } from '../../../lib/project-config';
-
-const MACHINE_TYPES = [
-  { value: 'e2-micro', label: 'e2-micro (0.25 vCPU, 1 GB)', cost: '~$6/mo' },
-  { value: 'e2-small', label: 'e2-small (0.5 vCPU, 2 GB)', cost: '~$12/mo' },
-  { value: 'e2-medium', label: 'e2-medium (1 vCPU, 4 GB)', cost: '~$24/mo' },
-];
+import { LAB_VM_MACHINE_TYPES } from '../../../lib/lab-vm-hardware';
 
 export default function NewLabVmPage() {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [machineType, setMachineType] = useState('e2-micro');
+  const [machineType, setMachineType] = useState('e2-medium');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
@@ -82,24 +77,30 @@ export default function NewLabVmPage() {
               Loại máy
             </label>
             <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
-              {MACHINE_TYPES.map((mt) => (
+              {LAB_VM_MACHINE_TYPES.map((mt) => (
                 <div
-                  key={mt.value}
-                  onClick={() => setMachineType(mt.value)}
+                  key={mt.machineType}
+                  onClick={() => setMachineType(mt.machineType)}
                   style={{
                     padding: 'var(--space-3)',
                     borderRadius: 'var(--radius-md)',
-                    border: `2px solid ${machineType === mt.value ? 'var(--color-accent-primary)' : 'var(--color-border)'}`,
-                    background: machineType === mt.value ? 'rgba(59,130,246,0.08)' : 'transparent',
+                    border: `2px solid ${machineType === mt.machineType ? 'var(--color-accent-primary)' : 'var(--color-border)'}`,
+                    background: machineType === mt.machineType ? 'rgba(59,130,246,0.08)' : 'transparent',
                     cursor: 'pointer',
                     transition: 'all var(--transition-fast)',
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
+                    alignItems: 'start',
+                    gap: 'var(--space-3)',
                   }}
                 >
-                  <span style={{ fontSize: 'var(--text-sm)' }}>{mt.label}</span>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{mt.cost}</span>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{mt.label}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 4 }}>
+                      {mt.vcpu} vCPU • {mt.memoryGb} GB RAM • {mt.note}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>{mt.monthlyCost}</span>
                 </div>
               ))}
             </div>
@@ -114,7 +115,7 @@ export default function NewLabVmPage() {
               📦 AlmaLinux 9 • 💾 20 GB disk • 🌐 Public IP • 🔒 SSH enabled
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-              Sẽ tự cài: nginx, openscap-scanner, scap-security-guide, jq
+              Gói này ưu tiên welcome page và SSH ổn định trước, sau đó mới cài audit packages.
             </div>
           </div>
 

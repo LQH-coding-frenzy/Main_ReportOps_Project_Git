@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { usePolling } from '../../../hooks/usePolling';
-import { getLabVm, deleteLabVm, purgeLabVmIndex } from '../../../lib/api';
-import type { LabVm, AuditJob } from '../../../lib/types';
+import { getLabVm, getLabVmObservability, deleteLabVm, purgeLabVmIndex } from '../../../lib/api';
+import { getLabVmHardwareProfile } from '../../../lib/lab-vm-hardware';
+import type { LabVm, AuditJob, LabVmObservability } from '../../../lib/types';
 
 function withGoogleAccountChooser(targetUrl: string): string {
   return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(targetUrl)}`;
@@ -15,7 +16,11 @@ export default function LabVmDetailPage() {
   const params = useParams();
   const vmId = parseInt(params.vmId as string, 10);
   const [vm, setVm] = useState<(LabVm & { auditJobs?: Pick<AuditJob, 'id' | 'status' | 'score' | 'riskLevel' | 'createdAt' | 'finishedAt' | 'mode'>[] }) | null>(null);
+  const [observability, setObservability] = useState<LabVmObservability | null>(null);
+  const [observabilityError, setObservabilityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const observableVmId = vm?.id ?? null;
+  const isObservabilityEnabled = !!vm && vm.status === 'RUNNING' && !!vm.publicIp;
 
   useEffect(() => {
     if (!vmId) return;
@@ -34,6 +39,45 @@ export default function LabVmDetailPage() {
       console.error('Failed to refresh VM detail:', err);
     }
   }, 5000, !!vm && (vm.status === 'PROVISIONING' || vm.status === 'DESTROYING'));
+
+  useEffect(() => {
+    if (!observableVmId || !isObservabilityEnabled) {
+      return;
+    }
+
+    let isMounted = true;
+    const currentVmId = observableVmId;
+
+    async function loadObservability() {
+      try {
+        const data = await getLabVmObservability(currentVmId);
+        if (!isMounted) return;
+        setObservability(data);
+        setObservabilityError(null);
+      } catch (error) {
+        if (!isMounted) return;
+        setObservability(null);
+        setObservabilityError(error instanceof Error ? error.message : 'Không thể tải observability');
+      }
+    }
+
+    loadObservability();
+    return () => {
+      isMounted = false;
+    };
+  }, [observableVmId, isObservabilityEnabled]);
+
+  usePolling(async () => {
+    if (!observableVmId || !isObservabilityEnabled) return;
+    try {
+      const data = await getLabVmObservability(observableVmId);
+      setObservability(data);
+      setObservabilityError(null);
+    } catch (error) {
+      setObservability(null);
+      setObservabilityError(error instanceof Error ? error.message : 'Không thể tải observability');
+    }
+  }, 10000, isObservabilityEnabled);
 
   async function handleDestroy() {
     if (!vm) return;
@@ -85,6 +129,7 @@ export default function LabVmDetailPage() {
   const gcpSshUrl = withGoogleAccountChooser(
     `https://ssh.cloud.google.com/v2/ssh/projects/${vm.gcpProjectId || ''}/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}`
   );
+  const hardwareProfile = getLabVmHardwareProfile(vm.machineType);
 
   return (
     <main className="main-content">
@@ -194,6 +239,90 @@ export default function LabVmDetailPage() {
               </pre>
             </div>
           )}
+        </div>
+
+        <div className="grid grid-2" style={{ marginBottom: 'var(--space-6)' }}>
+          <div className="card">
+            <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-4)' }}>🧩 Hardware Profile</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Machine Type</div>
+                <div style={{ fontWeight: 700 }}>{vm.machineType}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>vCPU</div>
+                <div style={{ fontWeight: 700 }}>{hardwareProfile ? hardwareProfile.vcpu : '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>RAM</div>
+                <div style={{ fontWeight: 700 }}>{hardwareProfile ? `${hardwareProfile.memoryGb} GB` : '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Disk</div>
+                <div style={{ fontWeight: 700 }}>{vm.diskSizeGb} GB</div>
+              </div>
+            </div>
+            {hardwareProfile && (
+              <div style={{ marginTop: 'var(--space-3)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                {hardwareProfile.note} • {hardwareProfile.monthlyCost}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-4)' }}>📈 Live Observability</h3>
+            {observability ? (
+              <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Model</div>
+                    <div style={{ fontWeight: 700 }}>{observability.cpuModel || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Threads</div>
+                    <div style={{ fontWeight: 700 }}>{observability.cpuCount}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Pressure</div>
+                    <div style={{ fontWeight: 700 }}>{observability.cpuPressurePercent}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Uptime</div>
+                    <div style={{ fontWeight: 700 }}>{observability.uptimeHuman || '—'}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Load Avg</div>
+                    <div style={{ fontWeight: 700 }}>{observability.load1.toFixed(2)} / {observability.load5.toFixed(2)} / {observability.load15.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>RAM Used</div>
+                    <div style={{ fontWeight: 700 }}>{observability.memoryUsedMb} MB / {observability.memoryTotalMb} MB</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>RAM Usage</div>
+                    <div style={{ fontWeight: 700 }}>{observability.memoryUsagePercent}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Root Disk</div>
+                    <div style={{ fontWeight: 700 }}>{observability.rootDiskUsedMb} MB / {observability.rootDiskTotalMb} MB ({observability.rootDiskUsagePercent}%)</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                  <span className={`badge ${observability.nginxStatus === 'active' ? 'badge-success' : 'badge-danger'}`}>nginx: {observability.nginxStatus}</span>
+                  <span className={`badge ${observability.sshdStatus === 'active' ? 'badge-success' : 'badge-danger'}`}>sshd: {observability.sshdStatus}</span>
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                  Updated: {new Date(observability.collectedAt).toLocaleString('vi-VN')}
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 'var(--text-sm)', color: observabilityError ? '#f87171' : 'var(--color-text-muted)' }}>
+                {observabilityError || 'Đang tải observability...'}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Recent Audit Jobs */}

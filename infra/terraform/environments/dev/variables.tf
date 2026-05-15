@@ -76,7 +76,13 @@ variable "ssh_keys" {
 variable "machine_type" {
   description = "Machine type for the VM"
   type        = string
-  default     = "e2-small"
+  default     = "e2-medium"
+}
+
+variable "disk_size_gb" {
+  description = "Boot disk size in GB"
+  type        = number
+  default     = 20
 }
 
 variable "enable_oslogin" {

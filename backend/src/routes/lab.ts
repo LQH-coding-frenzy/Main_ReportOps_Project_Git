@@ -3,10 +3,89 @@ import { PrismaClient, VmStatus } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { purgeAuditJobArtifacts } from '../services/audit/archive-cleanup';
+import { SSHRunner } from '../services/audit/ssh-runner';
 import { env } from '../config/env';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+const ALLOWED_MACHINE_TYPES = ['e2-small', 'e2-medium', 'e2-standard-2'];
+
+function resolveAuditRunnerPrivateKey(): string {
+  const rawPrivateKey = env.AUDIT_RUNNER_SSH_KEY;
+
+  if (!rawPrivateKey) {
+    throw new Error('AUDIT_RUNNER_SSH_KEY is not configured');
+  }
+
+  if (!rawPrivateKey.includes('-----BEGIN')) {
+    const cleaned = rawPrivateKey.replace(/[^A-Za-z0-9+/=]/g, '');
+    const decoded = Buffer.from(cleaned, 'base64').toString('utf-8').trim();
+    if (decoded.includes('-----BEGIN')) {
+      return decoded;
+    }
+
+    return rawPrivateKey;
+  }
+
+  return rawPrivateKey.replace(/\\n/g, '\n').trim();
+}
+
+async function collectVmObservability(publicIp: string) {
+  const runner = new SSHRunner({
+    host: publicIp,
+    username: 'audituser',
+    privateKey: resolveAuditRunnerPrivateKey(),
+    port: 22,
+  });
+
+  try {
+    await runner.connect();
+
+    const cpuCount = parseInt((await runner.execCommand('nproc')).stdout.trim(), 10) || 0;
+    const cpuModel = (await runner.execCommand("grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//'" )).stdout.trim();
+    const loadOutput = (await runner.execCommand('cat /proc/loadavg')).stdout.trim().split(/\s+/);
+    const memOutput = (await runner.execCommand("awk '/MemTotal:/ {t=int($2/1024)} /MemAvailable:/ {a=int($2/1024)} END {print t, a}' /proc/meminfo")).stdout.trim().split(/\s+/);
+    const diskOutput = (await runner.execCommand("df -BM / | awk 'NR==2 {gsub(/M/,\"\", $2); gsub(/M/,\"\", $3); gsub(/%/,\"\", $5); print $2, $3, $5}'")).stdout.trim().split(/\s+/);
+    const uptimeHuman = (await runner.execCommand('uptime -p || true')).stdout.trim();
+    const nginxStatus = (await runner.execCommand('systemctl is-active nginx || true')).stdout.trim() || 'unknown';
+    const sshdStatus = (await runner.execCommand('systemctl is-active sshd || true')).stdout.trim() || 'unknown';
+
+    const memoryTotalMb = parseInt(memOutput[0] || '0', 10) || 0;
+    const memoryAvailableMb = parseInt(memOutput[1] || '0', 10) || 0;
+    const memoryUsedMb = Math.max(0, memoryTotalMb - memoryAvailableMb);
+    const memoryUsagePercent = memoryTotalMb > 0 ? Math.round((memoryUsedMb / memoryTotalMb) * 100) : 0;
+    const rootDiskTotalMb = parseInt(diskOutput[0] || '0', 10) || 0;
+    const rootDiskUsedMb = parseInt(diskOutput[1] || '0', 10) || 0;
+    const rootDiskUsagePercent = parseInt(diskOutput[2] || '0', 10) || 0;
+    const load1 = Number.parseFloat(loadOutput[0] || '0') || 0;
+    const load5 = Number.parseFloat(loadOutput[1] || '0') || 0;
+    const load15 = Number.parseFloat(loadOutput[2] || '0') || 0;
+    const cpuPressurePercent = cpuCount > 0 ? Math.min(100, Math.round((load1 / cpuCount) * 100)) : 0;
+
+    return {
+      collectedAt: new Date().toISOString(),
+      cpuCount,
+      cpuModel,
+      load1,
+      load5,
+      load15,
+      cpuPressurePercent,
+      memoryTotalMb,
+      memoryAvailableMb,
+      memoryUsedMb,
+      memoryUsagePercent,
+      rootDiskTotalMb,
+      rootDiskUsedMb,
+      rootDiskUsagePercent,
+      uptimeHuman,
+      nginxStatus,
+      sshdStatus,
+    };
+  } finally {
+    await runner.disconnect();
+  }
+}
 
 /**
  * GET /api/lab/vms
@@ -79,6 +158,10 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
       return res.status(400).json({ error: 'VM name is required', status: 400 });
     }
 
+    if (machineType && !ALLOWED_MACHINE_TYPES.includes(machineType)) {
+      return res.status(400).json({ error: 'Unsupported machine type', status: 400 });
+    }
+
     // Check name uniqueness
     const existing = await prisma.labVm.findUnique({ where: { name } });
     if (existing) {
@@ -91,7 +174,7 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
     const vm = await prisma.labVm.create({
       data: {
         name,
-        machineType: machineType || 'e2-micro',
+        machineType: machineType || 'e2-medium',
         diskSizeGb: diskSizeGb || 20,
         status: 'PROVISIONING',
         verificationToken,
@@ -106,13 +189,13 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
 
     // Audit log
     await prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'create_lab_vm',
-        details: { vmId: vm.id, name, machineType: machineType || 'e2-micro' },
-        ipAddress: req.ip,
-      },
-    });
+        data: {
+          userId,
+          action: 'create_lab_vm',
+          details: { vmId: vm.id, name, machineType: machineType || 'e2-medium' },
+          ipAddress: req.ip,
+        },
+      });
 
     // Trigger Terraform GitHub Action if configured
     if (env.GITHUB_TOKEN && env.GITHUB_REPO_OWNER && env.GITHUB_REPO_NAME) {
@@ -130,6 +213,8 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
             action: 'apply',
             vm_id: vm.id.toString(),
             vm_name: vm.name,
+            machine_type: vm.machineType,
+            disk_size_gb: vm.diskSizeGb.toString(),
             verification_token: verificationToken,
           }
         })
@@ -184,6 +269,31 @@ router.patch('/vms/:id/status', requireAuth, requireLeader, async (req: Request,
   } catch (error) {
     console.error('Update VM status error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+/**
+ * GET /api/lab/vms/:id/observability
+ * Collect live VM hardware/service observability over SSH.
+ */
+router.get('/vms/:id/observability', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const vm = await prisma.labVm.findUnique({ where: { id } });
+
+    if (!vm) {
+      return res.status(404).json({ error: 'VM not found', status: 404 });
+    }
+
+    if (vm.status !== 'RUNNING' || !vm.publicIp) {
+      return res.status(400).json({ error: 'VM is not ready for observability', status: 400 });
+    }
+
+    const observability = await collectVmObservability(vm.publicIp);
+    res.json({ data: observability, status: 200 });
+  } catch (error) {
+    console.error('Get VM observability error:', error);
+    res.status(500).json({ error: 'Failed to collect VM observability', status: 500 });
   }
 });
 
@@ -304,6 +414,8 @@ router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: 
             action: 'destroy',
             vm_id: vm.id.toString(),
             vm_name: vm.name,
+            machine_type: vm.machineType,
+            disk_size_gb: vm.diskSizeGb.toString(),
             verification_token: vm.verificationToken || 'none',
           }
         })

@@ -15,6 +15,7 @@ export type ProjectAnswers = {
   };
   vm_defaults?: {
     machine_type?: string;
+    disk_size_gb?: number;
   };
   benchmark?: {
     name?: string;

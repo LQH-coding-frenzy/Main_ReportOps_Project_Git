@@ -11,6 +11,7 @@ import type {
   AuditLogEntry,
   PerformanceData,
   LabVm,
+  LabVmObservability,
   AuditPack,
   AuditJob,
   AuditEvidence,
@@ -284,10 +285,15 @@ export async function getLabVm(id: number): Promise<LabVm> {
   return res.data;
 }
 
+export async function getLabVmObservability(id: number): Promise<LabVmObservability> {
+  const res = await apiFetch<ApiResponse<LabVmObservability>>(`/api/lab/vms/${id}/observability`);
+  return res.data;
+}
+
 export async function createLabVm(name: string, machineType?: string): Promise<LabVm> {
   const res = await apiFetch<ApiResponse<LabVm>>('/api/lab/vms', {
     method: 'POST',
-    body: JSON.stringify({ name, machineType: machineType || 'e2-micro' }),
+    body: JSON.stringify({ name, machineType: machineType || 'e2-medium' }),
   });
   return res.data;
 }

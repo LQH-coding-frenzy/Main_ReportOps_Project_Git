@@ -19,6 +19,16 @@ on:
         description: 'Name of the VM to create'
         required: true
         type: string
+      machine_type:
+        description: 'Machine type of the VM'
+        required: true
+        default: 'e2-medium'
+        type: string
+      disk_size_gb:
+        description: 'Boot disk size in GB'
+        required: true
+        default: '20'
+        type: string
       verification_token:
         description: 'Token for the welcome page'
         required: true
@@ -59,6 +69,11 @@ jobs:
       - name: Generate Terraform vars from answers
         working-directory: backend
         env:
+          VM_ID: ${{ github.event.inputs.vm_id || github.event.client_payload.vm_id }}
+          VM_NAME: ${{ github.event.inputs.vm_name || github.event.client_payload.vm_name }}
+          MACHINE_TYPE: ${{ github.event.inputs.machine_type || github.event.client_payload.machine_type }}
+          DISK_SIZE_GB: ${{ github.event.inputs.disk_size_gb || github.event.client_payload.disk_size_gb }}
+          VERIFICATION_TOKEN: ${{ github.event.inputs.verification_token || github.event.client_payload.verification_token }}
           AUDIT_RUNNER_SSH_PUBLIC_KEY: ${{ secrets.AUDIT_RUNNER_SSH_PUBLIC_KEY }}
           LAB_VM_SSH_KEYS: ${{ secrets.LAB_VM_SSH_KEYS }}
         run: npm run answers:write-tfvars
@@ -70,6 +85,8 @@ jobs:
           echo "ACTION=${{ github.event.inputs.action || github.event.client_payload.action }}" >> $GITHUB_ENV
           echo "VM_ID=${{ github.event.inputs.vm_id || github.event.client_payload.vm_id }}" >> $GITHUB_ENV
           echo "VM_NAME=${{ github.event.inputs.vm_name || github.event.client_payload.vm_name }}" >> $GITHUB_ENV
+          echo "MACHINE_TYPE=${{ github.event.inputs.machine_type || github.event.client_payload.machine_type }}" >> $GITHUB_ENV
+          echo "DISK_SIZE_GB=${{ github.event.inputs.disk_size_gb || github.event.client_payload.disk_size_gb }}" >> $GITHUB_ENV
           echo "VERIFICATION_TOKEN=${{ github.event.inputs.verification_token || github.event.client_payload.verification_token }}" >> $GITHUB_ENV
 
       - name: Report Run URL to Backend
@@ -146,6 +163,8 @@ jobs:
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
+              -var="machine_type=$MACHINE_TYPE" \
+              -var="disk_size_gb=$DISK_SIZE_GB" \
               -var="verification_token=$VERIFICATION_TOKEN" \
               -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
               -var="enable_oslogin=false" \
@@ -156,6 +175,8 @@ jobs:
               -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
               -var="vm_id=$VM_ID" \
               -var="vm_name=$VM_NAME" \
+              -var="machine_type=$MACHINE_TYPE" \
+              -var="disk_size_gb=$DISK_SIZE_GB" \
               -var="verification_token=$VERIFICATION_TOKEN" \
               -var="ssh_keys=${{ secrets.LAB_VM_SSH_KEYS }}" \
               -var="enable_oslogin=false" \
