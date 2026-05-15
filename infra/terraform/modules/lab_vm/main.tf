@@ -89,12 +89,12 @@ resource "google_compute_instance" "lab_vm" {
     systemctl enable sshd
     systemctl restart sshd
 
-    # 5. Install essential packages
-    echo "Installing essential packages..."
-    dnf install -y epel-release
-    dnf install -y nginx openscap-scanner scap-security-guide curl jq policycoreutils-python-utils
+    # 5. Install minimum packages for the welcome page first
+    echo "Installing minimum packages for welcome page..."
+    dnf install -y epel-release || true
+    dnf install -y nginx curl jq policycoreutils-python-utils
     
-    # 4. Configure Welcome Page
+    # 6. Configure Welcome Page early so HTTP is available even if later packages fail
     echo "Configuring Nginx..."
     mkdir -p /usr/share/nginx/html
     cat > /usr/share/nginx/html/index.html <<HTML
@@ -149,6 +149,19 @@ HTML
     restorecon -Rv /usr/share/nginx/html || true
     setsebool -P httpd_can_network_connect 1 || true
     systemctl enable --now nginx || true
+
+    for attempt in $(seq 1 12); do
+      if curl -fsS http://127.0.0.1 >/dev/null 2>&1; then
+        echo "Welcome page is reachable on localhost."
+        break
+      fi
+      echo "Waiting for nginx welcome page... attempt $attempt/12"
+      sleep 5
+    done
+
+    # 7. Install audit packages best-effort after HTTP is already available
+    echo "Installing OpenSCAP packages..."
+    dnf install -y openscap-scanner scap-security-guide || true
 
     # Disable firewalld inside VM to prevent conflicts
     systemctl stop firewalld || true

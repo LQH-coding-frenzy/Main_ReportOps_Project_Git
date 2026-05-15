@@ -7,7 +7,6 @@ set -u
 
 pass_count=0
 fail_count=0
-manual_count=0
 na_count=0
 error_count=0
 
@@ -27,15 +26,6 @@ print_fail() {
   echo "### $control_id - $title"
   printf '%s\n' "" "- Audit Result:" " ** FAIL **" " - Reason(s) for audit failure:" "$@"
   fail_count=$((fail_count + 1))
-}
-
-print_manual() {
-  local control_id="$1"; shift
-  local title="$1"; shift
-  echo
-  echo "### $control_id - $title"
-  printf '%s\n' "" "- Audit Result:" " ** REVIEW **" "$@"
-  manual_count=$((manual_count + 1))
 }
 
 print_na() {
@@ -62,7 +52,6 @@ section_summary() {
   echo "Section summary"
   echo "PASS: $pass_count"
   echo "FAIL: $fail_count"
-  echo "REVIEW: $manual_count"
   echo "NOT_APPLICABLE: $na_count"
   echo "ERROR: $error_count"
   echo "=============================="

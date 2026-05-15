@@ -170,6 +170,24 @@ jobs:
           echo "INSTANCE_NAME=$(terraform output -raw instance_name)" >> $GITHUB_ENV
           echo "ZONE=$(terraform output -raw zone)" >> $GITHUB_ENV
 
+      - name: Wait for welcome page readiness
+        if: ${{ success() && github.event.inputs.action != 'destroy' && github.event.client_payload.action != 'destroy' }}
+        run: |
+          READY=0
+          for attempt in $(seq 1 24); do
+            if curl -fsS --max-time 5 "http://${PUBLIC_IP}" | grep -q "ReportOps Lab VM"; then
+              READY=1
+              break
+            fi
+            echo "Waiting for welcome page... attempt $attempt/24"
+            sleep 5
+          done
+
+          echo "WELCOME_READY=$READY" >> $GITHUB_ENV
+          if [ "$READY" != "1" ]; then
+            echo "WELCOME_ERROR=Welcome page did not become reachable on http://${PUBLIC_IP}" >> $GITHUB_ENV
+          fi
+
       - name: Notify backend of VM result
         if: always()
         run: |
@@ -179,8 +197,13 @@ jobs:
           TOKEN_RAW="${{ github.event.inputs.verification_token || github.event.client_payload.verification_token }}"
 
           if [ "${{ job.status }}" = "success" ] && [ "${ACTION_RAW}" = "apply" ]; then
-            STATUS="RUNNING"
-            ERROR_MESSAGE=""
+            if [ "${WELCOME_READY:-1}" = "1" ]; then
+              STATUS="RUNNING"
+              ERROR_MESSAGE=""
+            else
+              STATUS="ERROR"
+              ERROR_MESSAGE="${WELCOME_ERROR:-Welcome page readiness check failed}"
+            fi
           elif [ "${{ job.status }}" = "success" ] && [ "${ACTION_RAW}" = "destroy" ]; then
             STATUS="DESTROYED"
             ERROR_MESSAGE=""

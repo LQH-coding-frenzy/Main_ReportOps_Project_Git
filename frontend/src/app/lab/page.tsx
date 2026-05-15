@@ -125,7 +125,7 @@ export default function LabPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
-                    {vm.status === 'RUNNING' && vm.publicIp && (
+                    {vm.publicIp && vm.status !== 'DESTROYED' && vm.status !== 'DESTROYING' && (
                       <a
                         href={`http://${vm.publicIp}`}
                         target="_blank"

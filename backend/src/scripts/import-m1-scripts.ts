@@ -26,8 +26,52 @@ const supabase = createClient(
 const BUCKET = env.SUPABASE_STORAGE_BUCKET;
 const SCRIPTS_DIR = path.join(__dirname, '../../../m1_audit_scripts_almalinux9/sections');
 
+function findFirstControlInvocationIndex(lines: string[]): number {
+  return lines.findIndex((line) => /["'][0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*["']/.test(line));
+}
+
+function extractControlInvocation(lines: string[], controlId: string): string[] {
+  const matcher = new RegExp(`["']${controlId.replace(/\./g, '\\.')}["']`);
+  const startIndex = lines.findIndex((line) => matcher.test(line));
+
+  if (startIndex === -1) {
+    return [];
+  }
+
+  const invocation: string[] = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    invocation.push(line);
+    if (!line.trim().endsWith('\\')) {
+      break;
+    }
+    index += 1;
+  }
+
+  return invocation;
+}
+
+function buildIsolatedControlScript(content: string, controlId: string): string | null {
+  const lines = content.split('\n');
+  const firstControlIndex = findFirstControlInvocationIndex(lines);
+  if (firstControlIndex === -1) {
+    return null;
+  }
+
+  const header = lines.slice(0, firstControlIndex);
+  const invocation = extractControlInvocation(lines, controlId);
+
+  if (invocation.length === 0) {
+    return null;
+  }
+
+  return [...header, ...invocation, '', 'section_summary', ''].join('\n');
+}
+
 async function importScripts() {
-  console.log('🚀 Starting M1 Scripts Import (Whole File Strategy)...');
+  console.log('🚀 Starting M1 Scripts Import (Isolated Control Strategy)...');
 
   const leader = await prisma.user.findFirst({ where: { role: Role.LEADER } });
   if (!leader) {
@@ -86,12 +130,18 @@ async function importScripts() {
       
       console.log(`    - Registering ${controlId}: ${title}`);
 
+      const isolatedScript = buildIsolatedControlScript(content, controlId);
+      if (!isolatedScript) {
+        console.warn(`      ⚠️ Could not isolate control ${controlId} from ${file}`);
+        continue;
+      }
+
       const storagePath = `audit-scripts/m1/${controlId}.sh`;
 
-      // Upload the WHOLE file content
+      // Upload only the isolated control wrapper script.
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
-        .upload(storagePath, Buffer.from(content), {
+        .upload(storagePath, Buffer.from(isolatedScript), {
           contentType: 'text/x-shellscript',
           upsert: true,
         });
@@ -127,7 +177,7 @@ async function importScripts() {
     }
   }
 
-  console.log('\n✨ All M1 scripts imported using Whole File Strategy!');
+  console.log('\n✨ All M1 scripts imported using Isolated Control Strategy!');
 }
 
 importScripts()

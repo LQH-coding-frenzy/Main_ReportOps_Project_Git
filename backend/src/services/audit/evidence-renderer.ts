@@ -224,7 +224,6 @@ export interface DashboardEvidenceInput {
   score: number;
   passCount: number;
   failCount: number;
-  manualCount: number;
   errorCount: number;
   unknownCount: number;
   riskLevel: string;
@@ -250,19 +249,6 @@ export function renderDashboardEvidenceHtml(input: DashboardEvidenceInput): stri
       <td>${escapeHtml(r.title)}</td>
       <td>${escapeHtml(r.section)}</td>
       <td>${r.failReasons.map((f) => escapeHtml(f)).join('<br>') || '—'}</td>
-    </tr>`
-    )
-    .join('\n');
-
-  const manualRows = input.results
-    .filter((r) => r.status === 'MANUAL')
-    .map(
-      (r) => `
-    <tr>
-      <td><span class="control-id">${escapeHtml(r.controlId)}</span></td>
-      <td>${escapeHtml(r.title)}</td>
-      <td>${escapeHtml(r.section)}</td>
-      <td>${escapeHtml(r.assessmentType)}</td>
     </tr>`
     )
     .join('\n');
@@ -296,7 +282,6 @@ export function renderDashboardEvidenceHtml(input: DashboardEvidenceInput): stri
   <div class="stats-grid">
     <div class="stat-card"><div class="stat-value" style="color:#4ade80">${input.passCount}</div><div class="stat-label">Pass</div></div>
     <div class="stat-card"><div class="stat-value" style="color:#f87171">${input.failCount}</div><div class="stat-label">Fail</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:#fbbf24">${input.manualCount}</div><div class="stat-label">Manual</div></div>
     <div class="stat-card"><div class="stat-value" style="color:#fca5a5">${input.errorCount}</div><div class="stat-label">Error</div></div>
     <div class="stat-card"><div class="stat-value" style="color:#94a3b8">${input.unknownCount}</div><div class="stat-label">Unknown</div></div>
   </div>
@@ -311,15 +296,6 @@ export function renderDashboardEvidenceHtml(input: DashboardEvidenceInput): stri
       : ''
   }
 
-  ${
-    manualRows
-      ? `<h2 style="margin:2rem 0 1rem;font-size:1.1rem">📋 Manual Review Controls</h2>
-  <table>
-    <thead><tr><th>ID</th><th>Title</th><th>Section</th><th>Type</th></tr></thead>
-    <tbody>${manualRows}</tbody>
-  </table>`
-      : ''
-  }
 </body>
 </html>`;
 }

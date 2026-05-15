@@ -134,7 +134,7 @@ export default function AuditPage() {
                   <th>Mode</th>
                   <th>Status</th>
                   <th>Score</th>
-                  <th>P / F / M / E</th>
+                      <th>P / F / E / U</th>
                   <th>Risk</th>
                   <th>Thời gian</th>
                   <th></th>
@@ -163,8 +163,8 @@ export default function AuditPage() {
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
                         <span style={{ color: '#4ade80' }}>{job.passCount}</span>{' / '}
                         <span style={{ color: '#f87171' }}>{job.failCount}</span>{' / '}
-                        <span style={{ color: '#fbbf24' }}>{job.manualCount}</span>{' / '}
-                        <span style={{ color: '#fca5a5' }}>{job.errorCount}</span>
+                        <span style={{ color: '#fca5a5' }}>{job.errorCount}</span>{' / '}
+                        <span style={{ color: '#94a3b8' }}>{job.unknownCount}</span>
                       </td>
                       <td>
                         {job.riskLevel && (

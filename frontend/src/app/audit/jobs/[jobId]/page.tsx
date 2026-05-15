@@ -10,7 +10,6 @@ import type { AuditJob, AuditResultStatus } from '../../../../lib/types';
 const RESULT_STYLE: Record<AuditResultStatus, { bg: string; color: string; icon: string }> = {
   PASS: { bg: 'rgba(34,197,94,0.12)', color: '#4ade80', icon: '✅' },
   FAIL: { bg: 'rgba(239,68,68,0.12)', color: '#f87171', icon: '❌' },
-  MANUAL: { bg: 'rgba(245,158,11,0.12)', color: '#fbbf24', icon: '📋' },
   NOT_APPLICABLE: { bg: 'rgba(100,116,139,0.1)', color: '#94a3b8', icon: '➖' },
   ERROR: { bg: 'rgba(239,68,68,0.2)', color: '#fca5a5', icon: '⚠️' },
   UNKNOWN: { bg: 'rgba(100,116,139,0.1)', color: '#64748b', icon: '❓' },
@@ -242,10 +241,10 @@ export default function AuditJobDetailPage() {
             <div style={{ fontSize: 'var(--text-xs)', color: '#f87171', textTransform: 'uppercase' }}>Fail</div>
           </div>
           <div className="card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fbbf24' }}>{job.manualCount}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: '#fbbf24', textTransform: 'uppercase' }}>Manual</div>
-            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fca5a5', marginTop: 12 }}>{job.errorCount}</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fca5a5' }}>{job.errorCount}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: '#fca5a5', textTransform: 'uppercase' }}>Error</div>
+            <div style={{ fontSize: '2rem', fontWeight: 800, color: '#94a3b8', marginTop: 12 }}>{job.unknownCount}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: '#94a3b8', textTransform: 'uppercase' }}>Unknown</div>
           </div>
         </div>
 

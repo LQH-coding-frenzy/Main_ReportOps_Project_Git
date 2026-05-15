@@ -8,8 +8,7 @@
  * - exitCode != 0 → ERROR
  * - stdout contains "** PASS **" or "*** PASS ***" → PASS
  * - stdout contains "** FAIL **" or "*** FAIL ***" → FAIL
- * - assessmentType == Manual → MANUAL
- * - stdout contains "REVIEW" or "Review the generated output" → MANUAL
+ * - manual/review outputs are treated as invalid in the automated-only system
  * - else → UNKNOWN
  */
 
@@ -20,7 +19,7 @@ export type CisStdoutParserInput = {
   title: string;
   section: string;
   ownerSection: 'M1';
-  assessmentType: 'Automated' | 'Manual';
+  assessmentType: 'Automated';
   stdout: string;
   stderr: string;
   exitCode: number;
@@ -31,7 +30,6 @@ export type CisStdoutParserInput = {
 export type AuditStatus =
   | 'PASS'
   | 'FAIL'
-  | 'MANUAL'
   | 'NOT_APPLICABLE'
   | 'ERROR'
   | 'UNKNOWN';
@@ -42,7 +40,7 @@ export type NormalizedAuditResult = {
   section: string;
   ownerSection: 'M1';
   status: AuditStatus;
-  assessmentType: 'Automated' | 'Manual';
+  assessmentType: 'Automated';
   info: string[];
   failReasons: string[];
   correctlySet: string[];
@@ -99,7 +97,7 @@ function extractSection(
 
 export function parseCisStdout(input: CisStdoutParserInput): NormalizedAuditResult {
   let { stdout } = input;
-  const { stderr, exitCode, assessmentType, controlId } = input;
+  const { stderr, exitCode, controlId } = input;
   const warnings: string[] = [];
 
   // 0. Segment Filtering: If stdout contains section headers (### 1.1.1.1), isolate the relevant part
@@ -141,11 +139,9 @@ export function parseCisStdout(input: CisStdoutParserInput): NormalizedAuditResu
     status = 'FAIL';
   } else if (/\*{2,3}\s*NOT_APPLICABLE\s*\*{2,3}/.test(stdout)) {
     status = 'NOT_APPLICABLE';
-  } else if (assessmentType === 'Manual') {
-    status = 'MANUAL';
   } else if (/REVIEW|Review the generated output/i.test(stdout)) {
-    status = 'MANUAL';
-    warnings.push('Automated control returned REVIEW status — marked as MANUAL');
+    status = 'ERROR';
+    warnings.push('Manual or REVIEW-style output is not allowed in the automated-only system');
   } else {
     status = 'UNKNOWN';
     warnings.push('Could not determine PASS/FAIL/NA status from stdout');
@@ -205,7 +201,7 @@ export function parseCisStdout(input: CisStdoutParserInput): NormalizedAuditResu
     section: input.section,
     ownerSection: input.ownerSection,
     status,
-    assessmentType: input.assessmentType,
+    assessmentType: 'Automated',
     info,
     failReasons,
     correctlySet,

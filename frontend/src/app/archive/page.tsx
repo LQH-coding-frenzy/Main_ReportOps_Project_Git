@@ -75,7 +75,7 @@ export default function ArchivePage() {
                       Score: {job.score != null ? `${job.score.toFixed(0)}%` : '—'}
                     </span>
                     <span>
-                      ✅{job.passCount} ❌{job.failCount} 📋{job.manualCount} ⚠️{job.errorCount}
+                      ✅{job.passCount} ❌{job.failCount} ⚠️{job.errorCount} ❓{job.unknownCount}
                     </span>
                     <span>{job.finishedAt ? new Date(job.finishedAt).toLocaleString('vi-VN') : ''}</span>
                   </div>

@@ -7,6 +7,10 @@ import { usePolling } from '../../../hooks/usePolling';
 import { getLabVm, deleteLabVm, purgeLabVmIndex } from '../../../lib/api';
 import type { LabVm, AuditJob } from '../../../lib/types';
 
+function withGoogleAccountChooser(targetUrl: string): string {
+  return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(targetUrl)}`;
+}
+
 export default function LabVmDetailPage() {
   const params = useParams();
   const vmId = parseInt(params.vmId as string, 10);
@@ -75,6 +79,13 @@ export default function LabVmDetailPage() {
     );
   }
 
+  const gcpConsoleUrl = withGoogleAccountChooser(
+    `https://console.cloud.google.com/compute/instancesDetail/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}?project=${vm.gcpProjectId || ''}`
+  );
+  const gcpSshUrl = withGoogleAccountChooser(
+    `https://ssh.cloud.google.com/v2/ssh/projects/${vm.gcpProjectId || ''}/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}`
+  );
+
   return (
     <main className="main-content">
       <div className="container page">
@@ -99,30 +110,36 @@ export default function LabVmDetailPage() {
             </span>
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            {vm.status === 'RUNNING' && vm.publicIp && (
+            {vm.publicIp && vm.status !== 'DESTROYED' && vm.status !== 'DESTROYING' && (
               <>
                 <a href={`http://${vm.publicIp}`} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
                   🌐 Welcome Page
                 </a>
+                {vm.gcpProjectId && (
                 <a
-                  href={`https://console.cloud.google.com/compute/instancesDetail/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}?project=${vm.gcpProjectId || ''}`}
+                  href={gcpConsoleUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-secondary btn-sm"
                 >
                   ☁️ GCP Console
                 </a>
+                )}
+                {vm.gcpProjectId && (
                 <a
-                  href={`https://ssh.cloud.google.com/v2/ssh/projects/${vm.gcpProjectId || ''}/zones/${vm.gcpZone || 'asia-southeast1-c'}/instances/${vm.gcpInstanceName || vm.name}`}
+                  href={gcpSshUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-secondary btn-sm"
                 >
                   📟 SSH
                 </a>
+                )}
+                {vm.status === 'RUNNING' && (
                 <Link href={`/audit/new`} className="btn btn-primary btn-sm">
                   🚀 Run Audit
                 </Link>
+                )}
               </>
             )}
             {vm.latestRunUrl && (

@@ -212,7 +212,7 @@ export interface PaginatedResponse<T> {
 
 export type VmStatus = 'PROVISIONING' | 'RUNNING' | 'STOPPED' | 'DESTROYING' | 'DESTROYED' | 'ERROR';
 export type AuditJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
-export type AuditResultStatus = 'PASS' | 'FAIL' | 'MANUAL' | 'NOT_APPLICABLE' | 'ERROR' | 'UNKNOWN';
+export type AuditResultStatus = 'PASS' | 'FAIL' | 'NOT_APPLICABLE' | 'ERROR' | 'UNKNOWN';
 export type AuditMode = 'OPENSCAP_ONLY' | 'SCRIPTS_ONLY' | 'OPENSCAP_AND_SCRIPTS';
 
 export interface LabVm {
@@ -285,7 +285,6 @@ export interface AuditJob {
   totalControls: number;
   passCount: number;
   failCount: number;
-  manualCount: number;
   errorCount: number;
   unknownCount: number;
   score: number | null;

@@ -147,11 +147,11 @@ export function validateAuditScript(
     /\*{2,3}\s*(PASS|FAIL)\s*\*{2,3}/.test(textContent) ||
     /echo.*\*\*(PASS|FAIL)\*\*/.test(textContent) ||
     /printf.*\*\*(PASS|FAIL)\*\*/.test(textContent) ||
-    /MANUAL/i.test(textContent);
+    /NOT_APPLICABLE|ERROR/i.test(textContent);
 
   if (!hasCisPattern) {
     warnings.push(
-      'Script does not contain recognizable CIS result patterns (** PASS **, ** FAIL **, MANUAL). ' +
+      'Script does not contain recognizable CIS result patterns (** PASS **, ** FAIL **, ** NOT_APPLICABLE **). ' +
         'Parser may return UNKNOWN status.'
     );
   }

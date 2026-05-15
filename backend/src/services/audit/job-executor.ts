@@ -252,7 +252,7 @@ export class AuditJobExecutor {
       const results: NormalizedAuditResult[] = [];
       let passCount = 0;
       let failCount = 0;
-      let manualCount = 0;
+      const manualCount = 0;
       let errorCount = 0;
       let unknownCount = 0;
 
@@ -297,7 +297,7 @@ export class AuditJobExecutor {
             title: script.title,
             section: script.section,
             ownerSection: job.ownerSection as 'M1',
-            assessmentType: script.assessmentType as 'Automated' | 'Manual',
+            assessmentType: 'Automated',
             stdout: cmdResult.stdout,
             stderr: cmdResult.stderr,
             exitCode: cmdResult.exitCode,
@@ -311,7 +311,6 @@ export class AuditJobExecutor {
           switch(parsed.status) {
             case 'PASS': passCount++; break;
             case 'FAIL': failCount++; break;
-            case 'MANUAL': manualCount++; break;
             case 'ERROR': errorCount++; break;
             default: unknownCount++; break;
           }
@@ -491,7 +490,7 @@ export class AuditJobExecutor {
         benchmark: benchmarkLabel,
         scope: job.ownerSection,
         score: score || 0,
-        passCount, failCount, manualCount, errorCount, unknownCount,
+        passCount, failCount, errorCount, unknownCount,
         riskLevel: riskLevel || 'Unknown',
         auditJobId: this.jobId,
         timestamp,

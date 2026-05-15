@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { validateAuditScript } from '../services/audit/script-validator';
+import { MANUAL_M1_CONTROL_IDS } from '../services/audit/m1-manual-controls';
 import { env } from '../config/env';
 import { getProjectAnswers } from '../config/project-answers';
 import { supabase } from '../config/supabase';
@@ -31,6 +32,10 @@ router.get('/packs', requireAuth, async (_req: Request, res: Response) => {
       include: {
         _count: { select: { scripts: true } },
         scripts: {
+          where: {
+            assessmentType: { not: 'Manual' },
+            controlId: { notIn: [...MANUAL_M1_CONTROL_IDS] },
+          },
           select: {
             id: true,
             controlId: true,
@@ -109,13 +114,9 @@ router.post(
         return res.status(400).json({ error: 'No script file uploaded', status: 400 });
       }
 
-      const { packId, controlId, title, section, assessmentType, risk } = req.body;
+      const { packId, controlId, title, section, risk } = req.body;
       if (!packId || !controlId || !title || !section) {
         return res.status(400).json({ error: 'Missing required fields: packId, controlId, title, section', status: 400 });
-      }
-
-      if (assessmentType === 'Manual') {
-        return res.status(400).json({ error: 'Manual audits are disabled. Only automated controls are accepted.', status: 400 });
       }
 
       // Validate script
@@ -165,7 +166,7 @@ router.post(
           controlId,
           title,
           section,
-          assessmentType: assessmentType || 'Automated',
+          assessmentType: 'Automated',
           risk: risk || 'medium',
           scriptStoragePath: storagePath,
           scriptSha256: sha256,
@@ -174,7 +175,7 @@ router.post(
         update: {
           title,
           section,
-          assessmentType: assessmentType || 'Automated',
+          assessmentType: 'Automated',
           risk: risk || 'medium',
           scriptStoragePath: storagePath,
           scriptSha256: sha256,
