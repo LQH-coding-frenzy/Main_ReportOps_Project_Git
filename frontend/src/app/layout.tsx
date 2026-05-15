@@ -1,7 +1,9 @@
+import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import 'xterm/css/xterm.css';
-import { Metadata } from 'next';
+import { ClientLayout } from '../components/ClientLayout';
+import { benchmarkLabel, projectConfig } from '../lib/project-config';
 
 const inter = Inter({
   subsets: ['latin', 'vietnamese'],
@@ -15,19 +17,54 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
 });
 
-import { ClientLayout } from '../components/ClientLayout';
+const siteUrl = projectConfig.frontendUrl;
+const siteDescription = `ReportOps is an operational intelligence platform for collaborative ${benchmarkLabel} reporting, lab VM provisioning, automated audits, evidence archiving, and GitHub-backed report releases.`;
 
 export const metadata: Metadata = {
-  title: 'CIS Benchmark Report Platform - Built based on ReportOps structure',
-  description:
-    'Collaborative platform for writing and managing CIS Benchmark security reports. Built for remote teams with role-based section editing, ONLYOFFICE integration, and automated report generation.',
-  keywords: ['CIS Benchmark', 'AlmaLinux', 'security report', 'ONLYOFFICE', 'collaboration'],
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: 'ReportOps',
+    template: '%s | ReportOps',
+  },
+  description: siteDescription,
+  applicationName: 'ReportOps',
+  keywords: [
+    'ReportOps',
+    'CIS Benchmark',
+    'AlmaLinux',
+    'ONLYOFFICE',
+    'security report',
+    'lab vm',
+    'OpenSCAP',
+    'audit evidence',
+    'GitHub release',
+  ],
   authors: [{ name: 'ReportOps Team' }],
+  creator: 'ReportOps Team',
+  publisher: 'ReportOps Team',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+  },
   openGraph: {
-    title: 'ReportOps — CIS Benchmark Report Platform',
-    description: 'Collaborative CIS Benchmark security report editing platform',
+    title: 'ReportOps',
+    description: siteDescription,
+    url: siteUrl,
+    siteName: 'ReportOps',
+    locale: 'vi_VN',
     type: 'website',
   },
+  twitter: {
+    card: 'summary',
+    title: 'ReportOps',
+    description: siteDescription,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0a0e1a',
+  colorScheme: 'dark',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

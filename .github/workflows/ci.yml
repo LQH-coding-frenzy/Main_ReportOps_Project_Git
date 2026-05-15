@@ -1,4 +1,4 @@
-name: CI
+name: Repository CI
 on:
   pull_request:
     branches: [main, develop]
@@ -6,8 +6,8 @@ on:
     branches: [main, develop]
 
 jobs:
-  lint-typecheck-build:
-    name: Lint, Typecheck & Build
+  lint-build:
+    name: Lint & Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
 

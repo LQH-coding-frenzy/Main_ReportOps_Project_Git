@@ -1,4 +1,4 @@
-name: Security
+name: Repository Security
 on:
   pull_request:
   push:
@@ -19,7 +19,7 @@ jobs:
 
       - name: Install frontend
         working-directory: frontend
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Audit frontend
         working-directory: frontend
@@ -27,7 +27,7 @@ jobs:
 
       - name: Install backend
         working-directory: backend
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Audit backend
         working-directory: backend

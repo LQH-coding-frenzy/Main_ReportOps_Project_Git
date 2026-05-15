@@ -1,263 +1,272 @@
-# 📋 ReportOps
+<p align="center">
+  <img src="./.github/reportops-banner.svg" alt="ReportOps banner" width="100%" />
+</p>
 
-> Nền tảng cộng tác viết báo cáo CIS Benchmark — CIS AlmaLinux OS 9 v2.0.0 Level 1 Server
+<h1 align="center">ReportOps</h1>
 
-[![CI](https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/ci.yml/badge.svg)](https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions)
+<p align="center">
+  Operational intelligence platform for collaborative CIS Benchmark reporting, lab VM orchestration, and automated audit evidence management.
+</p>
 
-## ✨ Tính năng nổi bật
+<p align="center">
+  <a href="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/ci.yml">
+    <img alt="CI" src="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/ci.yml/badge.svg" />
+  </a>
+  <a href="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/deploy.yml">
+    <img alt="Deploy Backend and ONLYOFFICE" src="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/deploy.yml/badge.svg" />
+  </a>
+  <a href="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/security.yml">
+    <img alt="Security" src="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/security.yml/badge.svg" />
+  </a>
+  <a href="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/release.yml">
+    <img alt="Repository Source Release" src="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/release.yml/badge.svg" />
+  </a>
+  <a href="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/terraform.yml">
+    <img alt="Lab VM Provisioning" src="https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git/actions/workflows/terraform.yml/badge.svg" />
+  </a>
+  <img alt="Visibility: Private" src="https://img.shields.io/badge/visibility-private-7c3aed" />
+</p>
 
-- 🔐 **GitHub OAuth** — Đăng nhập bảo mật qua GitHub
-- ✏️ **ONLYOFFICE Editor** — Chỉnh sửa `.docx` trực tiếp với trải nghiệm gần như Microsoft Word
-- 🛡️ **Hạ tầng bảo mật** — RLS (Supabase), Secret Scanning, Pre-commit Hooks
-- 🤖 **CI/CD Automation** — Tự động kiểm tra, build và deploy khi push code lên GitHub
-- 📊 **Auto Report Generation** — Tự động hợp nhất các section thành báo cáo tổng quát
-- 🚀 **GitHub Releases** — Quản lý phiên bản và lưu trữ artifact chuyên nghiệp
-- 🕵️ **Audit Logs** — Truy vết toàn bộ hành động chỉnh sửa của người dùng
+<details>
+  <summary><strong>Table of Contents</strong></summary>
 
-## 🏗️ Architecture
+  - [About the Project](#about-the-project)
+  - [Key Features](#key-features)
+  - [System Overview](#system-overview)
+  - [Tech Stack](#tech-stack)
+  - [Project Structure](#project-structure)
+  - [GitHub Actions](#github-actions)
+  - [Getting Started](#getting-started)
+  - [Documentation](#documentation)
+  - [Team](#team)
+  - [Repository Status](#repository-status)
+</details>
 
-> Production topology của ReportOps, đồng bộ visual language với website hiện tại.
+## About the Project
 
-```mermaid
-flowchart LR
-    %% Client
-    U([Users<br/>Browser / Mobile])
+ReportOps is a private collaborative platform built for CIS Benchmark delivery workflows. It combines structured `.docx` authoring, leader-controlled report generation, GitHub-backed release publishing, and a newer automated audit pipeline that provisions lab VMs, runs security checks, archives evidence, and tracks operational results inside the same application.
 
-    %% Experience
-    subgraph FE["Experience Layer - Vercel"]
-        WEB["Next.js 16 App Router<br/>automatedprogram.app"]
-    end
+The repository now covers two closely related tracks:
 
-    %% Service
-    subgraph BE["Service Layer - GCP VM"]
-        NGINX["Nginx Gateway<br/>TLS + Reverse Proxy"]
-        API["Express API + Prisma<br/>api.automatedprogram.app"]
-        DOCS["ONLYOFFICE Document Server<br/>docs.automatedprogram.app"]
-        NGINX --> API
-        NGINX --> DOCS
-    end
+- Collaborative report editing with section-based ownership, ONLYOFFICE integration, preview builds, and final release freeze.
+- Operational audit workflows with Lab VM provisioning, OpenSCAP plus shell-script execution, evidence archiving, audit-pack management, and leader-facing observability dashboards.
 
-    %% Data
-    subgraph DATA["Data Layer - Supabase"]
-        DB[("PostgreSQL<br/>RLS Enabled")]
-        ST[("Private Storage Bucket<br/>.docx Files")]
-    end
+`project.answers.yaml` is the current source of truth for shared project metadata such as public URLs, benchmark labels, and infrastructure defaults.
 
-    %% Delivery
-    subgraph GH["Delivery Layer - GitHub"]
-        OAUTH["GitHub OAuth"]
-        CICD["GitHub Actions<br/>CI/CD Pipeline"]
-        REL["GitHub Releases"]
-    end
+## Key Features
 
-    %% Runtime flows
-    U -->|HTTPS| WEB
-    WEB -->|/api proxy| NGINX
-    API -->|Auth Verify| OAUTH
-    API -->|ORM Queries| DB
-    API -->|File Upload/Download| ST
-    API -->|Release Artifacts| REL
+- ✍️ Collaborative ONLYOFFICE editing for assigned CIS sections.
+- 🔐 GitHub OAuth authentication with role-based access control.
+- 🧩 Writing-guide aware report workflow to keep merged `.docx` output stable.
+- 🚀 Preview builds and final report freeze flow with GitHub Releases integration.
+- 🖥️ Lab VM lifecycle management driven by GitHub Actions and Terraform.
+- 🛡️ Automated audits with OpenSCAP, uploaded shell scripts, and per-job evidence tracking.
+- 🗃️ Archive views for artifacts, screenshots, raw logs, and execution evidence.
+- 📊 Admin dashboards for audit packs, release settings, platform stats, and performance analytics.
+- 🔍 Security automation with dependency audit, secret scanning, and CodeQL.
 
-    %% Dev flows
-    U -.->|Push / PR| CICD
-    CICD -.->|Deploy Frontend| WEB
-    CICD -.->|Deploy Backend| API
-    CICD -.->|Deploy Docs| DOCS
+## System Overview
 
-    %% Brand palette from app CSS variables
-    classDef user fill:#0a0e1a,stroke:#818cf8,color:#f1f5f9,stroke-width:1.5px;
-    classDef fe fill:#111827,stroke:#6366f1,color:#f1f5f9,stroke-width:1.5px;
-    classDef svc fill:#1a2235,stroke:#8b5cf6,color:#f1f5f9,stroke-width:1.5px;
-    classDef data fill:#0f2a22,stroke:#22c55e,color:#ecfdf5,stroke-width:1.5px;
-    classDef gh fill:#0b2545,stroke:#06b6d4,color:#ecfeff,stroke-width:1.5px;
+| Layer | Runtime / Service | Endpoint / Scope | Responsibility |
+| --- | --- | --- | --- |
+| Frontend | Next.js 16 App Router on Vercel | `https://automatedprogram.app` | UI, session-aware routing, API proxy, leader dashboards |
+| Backend API | Express + Prisma on GCP VM | `https://api.automatedprogram.app/api` | Auth, report workflow, lab orchestration, audit/job APIs |
+| Document Editing | ONLYOFFICE Document Server | `https://docs.automatedprogram.app` | Browser-based `.docx` editing and save callbacks |
+| Data | Supabase Postgres + Storage | Managed service | App data, report files, archived evidence |
+| Lab Automation | GitHub Actions + Terraform + GCP Compute Engine | Manual and app-triggered workflows | Create or destroy audit VMs and report status back to the app |
+| Release Delivery | GitHub Releases | Repository and in-app release flows | Publish repository bundles and frozen report artifacts |
 
-    class U user;
-    class WEB fe;
-    class NGINX,API,DOCS svc;
-    class DB,ST data;
-    class OAUTH,CICD,REL gh;
+### Production Topology
 
-    linkStyle default stroke:#94a3b8,stroke-width:1.2px;
+- Frontend production deployment is handled by Vercel Git integration.
+- Backend and ONLYOFFICE runtime are deployed from GitHub Actions to the GCP VM.
+- Lab VM provisioning is executed by `terraform.yml` through `workflow_dispatch` or `repository_dispatch`.
+- Final report releases created inside the app use `/api/releases/freeze` and are separate from repository source-package releases triggered by Git tags.
+
+## Tech Stack
+
+### Frontend
+
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-18-20232a?logo=react&logoColor=61dafb)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
+![ONLYOFFICE](https://img.shields.io/badge/ONLYOFFICE-Editor-f36b21?logo=onlyoffice&logoColor=white)
+
+### Backend
+
+![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-2d3748?logo=prisma&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-Evidence-2ead33?logo=playwright&logoColor=white)
+![OpenSCAP](https://img.shields.io/badge/OpenSCAP-Baseline-4b5563)
+
+### Data and Infra
+
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-3ecf8e?logo=supabase&logoColor=white)
+![GCP](https://img.shields.io/badge/GCP-Compute%20Engine-4285f4?logo=googlecloud&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?logo=docker&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-Lab%20VMs-7b42bc?logo=terraform&logoColor=white)
+
+### Automation
+
+![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Automation-2088ff?logo=githubactions&logoColor=white)
+![CodeQL](https://img.shields.io/badge/CodeQL-SAST-0c4b7f?logo=github&logoColor=white)
+![TruffleHog](https://img.shields.io/badge/TruffleHog-Secret%20Scan-c026d3)
+![Vercel](https://img.shields.io/badge/Vercel-Frontend%20Hosting-000000?logo=vercel&logoColor=white)
+
+## Project Structure
+
+```text
+.
+├── frontend/                    # Next.js 16 frontend deployed on Vercel
+│   ├── src/app/                 # login, dashboard, guide, editor, reports, releases, lab, audit, archive, admin
+│   ├── src/lib/                 # API client, project config, shared types
+│   ├── public/                  # Static assets
+│   └── .env.example             # Frontend env template
+├── backend/                     # Express API, Prisma, GitHub release services, lab orchestration
+│   ├── src/routes/              # auth, sections, editor, reports, releases, admin, audit-jobs, audit-scripts, lab
+│   ├── src/services/            # report generation, ONLYOFFICE, GitHub releases, SSH websocket, storage
+│   ├── src/config/              # env resolution and project.answers.yaml integration
+│   ├── prisma/                  # Schema and seed
+│   └── .env.example             # Backend env template
+├── infra/
+│   ├── onlyoffice/              # Docker Compose stack for Document Server
+│   ├── terraform/               # Lab VM provisioning definitions
+│   ├── deploy.sh                # Deployment helper
+│   └── setup-vm.sh              # VM bootstrap helper
+├── .github/workflows/           # CI, security, deploy, source releases, lab VM automation
+├── database/                    # Database notes and supporting docs
+├── m1_audit_scripts_almalinux9/ # M1 shell script reference set
+├── project.answers.yaml         # Shared project metadata and defaults
+├── WRITING_GUIDE.md             # Mandatory formatting guide for report authors
+├── AGENTS.md                    # Repo-specific engineering context
+└── README.md                    # This document
 ```
 
-### Architecture (Compact)
+## GitHub Actions
 
-> Phiên bản rút gọn để xem nhanh trên mobile và GitHub preview.
+| Workflow | Trigger | Current Responsibility |
+| --- | --- | --- |
+| `ci.yml` | Push and pull request on `main` / `develop` | Install, lint, and build both frontend and backend |
+| `security.yml` | Push, pull request, weekly schedule | Dependency audit, TruffleHog secret scan, CodeQL analysis |
+| `deploy.yml` | Push to `main` when backend, infra, or `project.answers.yaml` changes | Build backend, deploy to GCP VM, restart ONLYOFFICE stack, verify `/api/health` |
+| `terraform.yml` | `workflow_dispatch` and `repository_dispatch` | Provision or destroy Lab VMs and callback results into ReportOps |
+| `release.yml` | Push tag matching `v*` | Publish repository source and deployment bundles for tagged versions |
 
-```mermaid
-flowchart TB
-    U([Users])
-    WEB[Frontend<br/>Vercel + Next.js]
-    API[Backend API<br/>GCP + Express]
-    DOCS[ONLYOFFICE<br/>Document Server]
-    DATA[(Supabase<br/>Postgres + Storage)]
-    GH[GitHub<br/>OAuth + CI/CD + Releases]
+### Workflow Notes
 
-    U -->|HTTPS| WEB
-    WEB -->|/api| API
-    API --> DOCS
-    API --> DATA
-    API --> GH
+- Frontend production delivery is intentionally handled by Vercel Git integration, not by a GitHub Actions deploy workflow.
+- `release.yml` is for repository source packages.
+- In-app report publishing is a separate product workflow backed by `POST /api/releases/freeze` and the backend GitHub release service.
 
-    classDef cUser fill:#0a0e1a,stroke:#818cf8,color:#f1f5f9,stroke-width:1.5px;
-    classDef cApp fill:#111827,stroke:#6366f1,color:#f1f5f9,stroke-width:1.5px;
-    classDef cSvc fill:#1a2235,stroke:#8b5cf6,color:#f1f5f9,stroke-width:1.5px;
-    classDef cData fill:#0f2a22,stroke:#22c55e,color:#ecfdf5,stroke-width:1.5px;
-    classDef cDev fill:#0b2545,stroke:#06b6d4,color:#ecfeff,stroke-width:1.5px;
+### Required GitHub Secrets
 
-    class U cUser;
-    class WEB cApp;
-    class API,DOCS cSvc;
-    class DATA cData;
-    class GH cDev;
+| Workflow | Secrets in Use |
+| --- | --- |
+| `deploy.yml` | `GCP_VM_HOST`, `GCP_VM_USER`, `GCP_VM_SSH_KEY`, `AUDIT_RUNNER_SSH_KEY`, `AUDIT_RUNNER_SSH_PUBLIC_KEY` |
+| `terraform.yml` | `GCP_PROJECT_ID`, `GCP_SA_KEY`, `LAB_VM_SSH_KEYS`, `AUDIT_RUNNER_SSH_PUBLIC_KEY` |
+| Backend release features | `GITHUB_TOKEN` in `backend/.env` for app-driven GitHub Release operations |
 
-    linkStyle default stroke:#94a3b8,stroke-width:1.2px;
-```
+## Getting Started
 
-### Ma trận kiến trúc
-
-| Tầng | Runtime / Stack | Public Endpoint | Vai trò |
-|---|---|---|---|
-| Trải nghiệm | Vercel + Next.js 16 | `automatedprogram.app` | Giao diện người dùng, điều hướng, API proxy |
-| Dịch vụ | GCP VM + Nginx + Express | `api.automatedprogram.app` | Xác thực, business logic, điều phối báo cáo |
-| Tài liệu | GCP VM + ONLYOFFICE | `docs.automatedprogram.app` | Chỉnh sửa `.docx` thời gian thực |
-| Dữ liệu | Supabase Postgres + Storage | Supabase managed service | Lưu trữ dữ liệu với RLS và file private |
-| Phân phối | GitHub Actions + Releases | GitHub | CI/CD, quản lý phiên bản và release artifacts |
-
-## 🌐 Môi trường Production
-
-- **Website**: [https://automatedprogram.app](https://automatedprogram.app)
-- **API Endpoint**: `https://api.automatedprogram.app`
-- **Document Server**: `https://docs.automatedprogram.app`
-
----
-## 🚀 Khởi động nhanh (Development)
-
-### Điều kiện cần
+### Prerequisites
 
 - Node.js 20+
-- Supabase project (free tier)
-- GitHub OAuth App
+- npm
+- Docker Desktop or Docker Engine with Compose support
+- Supabase project for Postgres and Storage
+- GitHub OAuth App for login
+- Optional: GitHub token with repository write access for release publishing
+- Optional: GCP credentials and GitHub secrets if you want to exercise deploy or lab automation workflows
 
-### 1. Clone và cài đặt
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/LQH-coding-frenzy/Main_ReportOps_Project_Git.git
 cd Main_ReportOps_Project_Git
 ```
 
-### 2. Cấu hình Backend
+### 2. Configure the backend
 
 ```bash
 cd backend
 cp .env.example .env
-# Edit .env with your Supabase + GitHub OAuth credentials
-
-npm install
-npx prisma generate
-npx prisma db push     # Push schema to Supabase
-npm run db:seed        # Seed 4 users + 4 sections
-npm run dev            # Start on http://localhost:4000
+npm ci
+npm run db:generate
+npm run db:push
+npm run db:seed
+npm run dev
 ```
 
-### 3. Cấu hình Frontend
+Important backend variables to review in `backend/.env`:
+
+- `DATABASE_URL`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_STORAGE_BUCKET`
+- `SUPABASE_ARCHIVE_BUCKET`
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+- `GITHUB_CALLBACK_URL`
+- `ONLYOFFICE_DOCUMENT_SERVER_URL`
+- `JWT_SECRET`
+- `GITHUB_TOKEN` for report release publishing and deletion
+- `AUDIT_RUNNER_SSH_KEY` and `AUDIT_RUNNER_SSH_PUBLIC_KEY` for production audit automation
+
+If you launch the backend from outside the repository root, set `PROJECT_ANSWERS_PATH` so the server can still read `project.answers.yaml`.
+
+### 3. Configure the frontend
 
 ```bash
 cd frontend
 cp .env.example .env.local
-npm install
-npm run dev            # Start on http://localhost:3000
+npm ci
+npm run dev
 ```
 
-### 4. ONLYOFFICE (Tùy chọn - để dùng editor)
+Frontend defaults resolve to the current production URLs when `NODE_ENV=production`, but local development is expected to use:
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:4000`
+- ONLYOFFICE: `http://localhost:8080`
+
+### 4. Start ONLYOFFICE locally (optional but recommended)
 
 ```bash
 cd infra/onlyoffice
-docker compose up -d   # Start Document Server on http://localhost:8080
-# Wait ~2 minutes for initialization
+docker compose up -d
 ```
 
-## 📘 Tài liệu Hướng dẫn (Member Resources)
-Tất cả các thành viên trong nhóm **bắt buộc** phải đọc [Hướng dẫn Trình bày Báo cáo (Writing Guide)](./WRITING_GUIDE.md) trước khi bắt đầu soát thảo.
+This enables the embedded editor flow used by `/editor/[sectionId]` and `/editor/report/[buildId]`.
 
-## 👥 Team
+### 5. Explore the current modules
 
-| Thành viên | Vai trò | Nhóm section | CIS Chapters |
-|---|---|---|---|
-| **Lại Quang Huy** | 👑 Leader | M1 | 1.1, 1.2, 1.4, 1.5, 1.6, 2.3, 2.4 |
-| **Bao Nguyên** | Member | M2 | 1.3, 2.1, 2.2, 3, 4 |
-| **Trương Duy** | Member | M3 | 5.1, 5.2, 5.3, 5.4 |
-| **Lâm Hoàng Phước** | Member | M4 | 1.7, 1.8, 6, 7 |
+- `/dashboard` for section ownership and report progress.
+- `/guide` for the mandatory writing format guide.
+- `/reports` and `/releases` for preview builds and frozen report releases.
+- `/lab`, `/audit`, and `/archive` for the lab VM and automated audit workflow.
+- `/admin` for audit packs, logs, stats, and release settings.
 
-## 🔑 Thiết lập môi trường
+## Documentation
 
-### GitHub OAuth App
+- [`WRITING_GUIDE.md`](./WRITING_GUIDE.md) - required formatting rules for stable merged report output.
+- [`AGENTS.md`](./AGENTS.md) - repository architecture, conventions, and deployment notes for collaborators and agents.
+- [`project.answers.yaml`](./project.answers.yaml) - shared metadata and environment defaults.
+- [`database/README.md`](./database/README.md) - database-specific notes.
+- [`m1_audit_scripts_almalinux9/README.md`](./m1_audit_scripts_almalinux9/README.md) - script pack reference material.
 
-1. Go to https://github.com/settings/developers
-2. **New OAuth App**
-3. Settings:
-   - Name: `ReportOps`
-   - Homepage: `http://localhost:3000`
-   - Callback: `http://localhost:4000/api/auth/github/callback`
-4. Copy Client ID & Secret to `backend/.env`
+## Team
 
-### Supabase
+| Member | Role | GitHub | Scope |
+| --- | --- | --- | --- |
+| Lại Quang Huy | Leader | `LQH-coding-frenzy` | M1: 1.1, 1.2, 1.4, 1.5, 1.6, 2.3, 2.4 |
+| Bao Nguyên | Member | `baongdqu` | M2: 1.3, 2.1, 2.2, 3, 4 |
+| Trương Duy | Member | `truongdaoanhduy` | M3: 5.1, 5.2, 5.3, 5.4 |
+| Lâm Hoàng Phước | Member | `hpuoc` | M4: 1.7, 1.8, 6, 7 |
 
-1. Create project at https://supabase.com
-2. Go to Settings → Database → Connection string
-3. Copy `DATABASE_URL` to `backend/.env`
-4. Go to Settings → API → Copy `URL` and `service_role` key
+## Repository Status
 
-## 📁 Cấu trúc dự án
-
-```
-├── frontend/               # Next.js 16 App Router
-│   ├── src/app/           # Pages (login, dashboard, editor, reports, releases)
-│   ├── src/lib/           # Types, API client
-│   └── .env.example       # Frontend env template
-│
-├── backend/                # Express + Prisma
-│   ├── src/routes/        # API routes (auth, sections, editor, reports, releases)
-│   ├── src/services/      # Business logic (OAuth, ONLYOFFICE, storage, reports)
-│   ├── src/middleware/     # Auth + RBAC middleware
-│   ├── prisma/            # Schema + seed
-│   └── .env.example       # Backend env template
-│
-├── infra/                  # Infrastructure
-│   ├── onlyoffice/        # Docker Compose + Nginx
-│   └── setup-vm.sh        # GCP VM setup script
-│
-└── .github/workflows/     # CI/CD (lint, security, release)
-```
-
-## 📖 API Endpoints
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/api/auth/github/start` | — | OAuth redirect |
-| GET | `/api/auth/github/callback` | — | OAuth callback |
-| GET | `/api/auth/me` | ✅ | Current user |
-| GET | `/api/sections` | ✅ | List sections |
-| GET | `/api/editor/config/:id` | ✅ | ONLYOFFICE config |
-| POST | `/api/onlyoffice/callback` | — | Save callback |
-| POST | `/api/reports/preview` | 👑 | Build preview |
-| POST | `/api/releases/freeze` | 👑 | Freeze release |
-| GET | `/api/audit-logs` | 👑 | Audit logs |
-
-## 🛠️ Hạ tầng và bảo mật
-
-### CI/CD Pipeline
-Dự án được triển khai tự động qua **GitHub Actions**:
-- **Frontend**: Tự động build và deploy lên Vercel.
-- **Backend**: SSH Deployment qua chuẩn `ed25519` bảo mật, tự động cập nhật Code, Restart PM2 và Docker Stack trên GCP VM.
-
-### Biện pháp bảo mật
-- **Row Level Security (RLS)**: Cấu hình trên Supabase để chặn mọi truy cập trái phép từ Client.
-- **Git Hooks**: Pre-commit hook ngăn chặn vô tình commit file `.env` hoặc Private Key.
-- **Secret Scanning**: Tự động quét và bảo vệ các chuỗi nhạy cảm trong Repo.
-
-## 📜 License
-
-Private — UIT IoT Team Project (Báo cáo Đồ Án)
-- **Giảng viên hướng dẫn**: [Tên Giảng Viên]
-- **Năm thực hiện**: 2026
+- Visibility: private
+- Context: UIT IoT academic project
+- Benchmark focus: `CIS AlmaLinux OS 9 Benchmark v2.0.0` / `Level 1 - Server`
+- Current public surfaces: `automatedprogram.app`, `api.automatedprogram.app`, `docs.automatedprogram.app`

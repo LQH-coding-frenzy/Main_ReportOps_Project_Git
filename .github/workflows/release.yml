@@ -1,4 +1,4 @@
-name: Release
+name: Repository Source Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    name: Build & Release
+    name: Build and Publish Source Bundles
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -49,10 +49,16 @@ jobs:
             dist/ package.json package-lock.json prisma/
           cd ..
 
-      - name: Package infrastructure
+      - name: Package frontend source
+        run: |
+          tar -czf release-artifacts/frontend-${{ github.ref_name }}.tar.gz \
+            frontend/src/ frontend/package.json frontend/package-lock.json frontend/tsconfig.json \
+            frontend/next.config.js frontend/eslint.config.cjs frontend/next-env.d.ts
+
+      - name: Package infrastructure and metadata
         run: |
           tar -czf release-artifacts/infra-${{ github.ref_name }}.tar.gz \
-            infra/ .github/workflows/
+            infra/ .github/workflows/ project.answers.yaml README.md WRITING_GUIDE.md AGENTS.md
 
       # ── Create GitHub Release ──
       - name: Create GitHub Release
@@ -64,15 +70,20 @@ jobs:
           files: |
             release-artifacts/*
           body: |
-            ## ReportOps ${{ github.ref_name }}
+            ## ReportOps repository source bundles for ${{ github.ref_name }}
 
             ### 📦 Artifacts
-            - `backend-${{ github.ref_name }}.tar.gz` — Compiled backend (dist + prisma)
-            - `infra-${{ github.ref_name }}.tar.gz` — Infrastructure configs
+            - `backend-${{ github.ref_name }}.tar.gz` — Compiled backend bundle (`dist` + Prisma assets)
+            - `frontend-${{ github.ref_name }}.tar.gz` — Frontend source bundle for Vercel-hosted UI
+            - `infra-${{ github.ref_name }}.tar.gz` — Infrastructure, workflow, and metadata bundle
+
+            ### Scope
+            This workflow archives repository deployment assets for a tagged source release.
+            Final report releases created inside the ReportOps web app still use the in-app freeze flow and backend GitHub release service.
 
             ### 🚀 Deploy
             ```bash
-            # On GCP VM:
+            # On GCP VM (backend bundle example):
             cd /opt/reportops
             tar -xzf backend-${{ github.ref_name }}.tar.gz -C backend/
             cd backend && npm ci --production && pm2 restart reportops-api

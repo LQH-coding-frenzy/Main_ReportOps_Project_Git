@@ -1,0 +1,119 @@
+<svg width="1600" height="720" viewBox="0 0 1600 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="64" x2="1440" y2="656" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A0E1A"/>
+      <stop offset="0.52" stop-color="#121B33"/>
+      <stop offset="1" stop-color="#070B14"/>
+    </linearGradient>
+    <linearGradient id="titleStroke" x1="368" y1="282" x2="1232" y2="282" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C084FC"/>
+      <stop offset="0.5" stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#67E8F9"/>
+    </linearGradient>
+    <linearGradient id="subtitle" x1="544" y1="390" x2="1056" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E9D5FF"/>
+      <stop offset="1" stop-color="#A5F3FC"/>
+    </linearGradient>
+    <filter id="glowPurple" x="235" y="151" width="1130" height="247" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="22" result="effect1_foregroundBlur"/>
+    </filter>
+    <filter id="glowCyan" x="471" y="323" width="658" height="110" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="10" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="720" fill="url(#bg)"/>
+
+  <circle cx="312" cy="186" r="230" fill="#8B5CF6" fill-opacity="0.12"/>
+  <circle cx="1286" cy="552" r="250" fill="#06B6D4" fill-opacity="0.1"/>
+  <circle cx="816" cy="132" r="124" fill="#7C3AED" fill-opacity="0.08"/>
+
+  <g stroke="#6B7280" stroke-opacity="0.14">
+    <path d="M0 110H1600"/>
+    <path d="M0 220H1600"/>
+    <path d="M0 330H1600"/>
+    <path d="M0 440H1600"/>
+    <path d="M0 550H1600"/>
+    <path d="M200 0V720"/>
+    <path d="M440 0V720"/>
+    <path d="M680 0V720"/>
+    <path d="M920 0V720"/>
+    <path d="M1160 0V720"/>
+    <path d="M1400 0V720"/>
+  </g>
+
+  <g fill="#111827" fill-opacity="0.55" stroke="#A855F7" stroke-opacity="0.35">
+    <rect x="180" y="112" width="220" height="120" rx="20"/>
+    <rect x="1220" y="126" width="190" height="112" rx="20"/>
+    <rect x="124" y="470" width="250" height="126" rx="20"/>
+    <rect x="1218" y="454" width="252" height="132" rx="20"/>
+    <rect x="1124" y="284" width="250" height="118" rx="20"/>
+  </g>
+
+  <g stroke="#8B5CF6" stroke-opacity="0.65" stroke-width="3">
+    <path d="M364 202H278V146"/>
+    <path d="M1272 454V402H1192"/>
+    <path d="M990 360H1124"/>
+    <path d="M1218 520H1124V572"/>
+    <path d="M400 530H514"/>
+  </g>
+
+  <g fill="#F5F3FF" fill-opacity="0.85" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" letter-spacing="2">
+    <text x="214" y="154">LIVE METRICS</text>
+    <text x="1248" y="162">AUDIT EVIDENCE</text>
+    <text x="150" y="512">LAB VM ORCHESTRATION</text>
+    <text x="1248" y="496">RELEASE CONTROL</text>
+    <text x="1160" y="318">CIS OPS</text>
+  </g>
+
+  <g fill="#8B5CF6" fill-opacity="0.9">
+    <circle cx="278" cy="146" r="7"/>
+    <circle cx="514" cy="530" r="7"/>
+    <circle cx="1124" cy="360" r="7"/>
+    <circle cx="1192" cy="402" r="7"/>
+    <circle cx="1124" cy="572" r="7"/>
+  </g>
+
+  <g fill="#67E8F9" fill-opacity="0.92">
+    <circle cx="364" cy="202" r="7"/>
+    <circle cx="1272" cy="454" r="7"/>
+    <circle cx="990" cy="360" r="7"/>
+    <circle cx="1218" cy="520" r="7"/>
+    <circle cx="400" cy="530" r="7"/>
+  </g>
+
+  <g opacity="0.92">
+    <rect x="214" y="166" width="146" height="10" rx="5" fill="#A78BFA" fill-opacity="0.65"/>
+    <rect x="214" y="186" width="112" height="10" rx="5" fill="#67E8F9" fill-opacity="0.58"/>
+    <rect x="1248" y="176" width="132" height="10" rx="5" fill="#A78BFA" fill-opacity="0.65"/>
+    <rect x="1248" y="198" width="94" height="10" rx="5" fill="#67E8F9" fill-opacity="0.58"/>
+    <rect x="150" y="540" width="188" height="10" rx="5" fill="#A78BFA" fill-opacity="0.65"/>
+    <rect x="150" y="560" width="140" height="10" rx="5" fill="#67E8F9" fill-opacity="0.58"/>
+    <rect x="1248" y="520" width="154" height="10" rx="5" fill="#A78BFA" fill-opacity="0.65"/>
+    <rect x="1248" y="540" width="108" height="10" rx="5" fill="#67E8F9" fill-opacity="0.58"/>
+    <rect x="1160" y="340" width="180" height="10" rx="5" fill="#A78BFA" fill-opacity="0.62"/>
+    <rect x="1160" y="360" width="112" height="10" rx="5" fill="#67E8F9" fill-opacity="0.56"/>
+  </g>
+
+  <g filter="url(#glowPurple)">
+    <text x="332" y="332" fill="none" stroke="url(#titleStroke)" stroke-width="12" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="156" font-weight="800" letter-spacing="10">
+      REPORTOPS
+    </text>
+  </g>
+  <text x="332" y="332" fill="none" stroke="url(#titleStroke)" stroke-width="6" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="156" font-weight="800" letter-spacing="10">
+    REPORTOPS
+  </text>
+
+  <g filter="url(#glowCyan)">
+    <text x="507" y="398" fill="url(#subtitle)" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="48" font-weight="600" letter-spacing="8">
+      OPERATIONAL INTELLIGENCE PLATFORM
+    </text>
+  </g>
+  <text x="507" y="398" fill="url(#subtitle)" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="48" font-weight="600" letter-spacing="8">
+    OPERATIONAL INTELLIGENCE PLATFORM
+  </text>
+</svg>

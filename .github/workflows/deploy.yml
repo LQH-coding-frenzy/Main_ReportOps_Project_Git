@@ -1,4 +1,4 @@
-name: Deploy Backend to GCP VM
+name: Deploy Backend and ONLYOFFICE
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'infra/**'
+      - 'project.answers.yaml'
       - '.github/workflows/deploy.yml'
   workflow_dispatch: # Allow manual trigger
 
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy to GCP VM
+    name: Deploy API and Docs Stack
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -110,10 +111,10 @@ jobs:
           sleep 10
           
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "$BACKEND_PUBLIC_URL/api/auth/me" \
+            "$BACKEND_PUBLIC_URL/api/health" \
             --max-time 10 || echo "000")
           
-          if [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ]; then
+          if [ "$STATUS" = "200" ]; then
             echo "✅ API is responding (HTTP $STATUS)"
           else
             echo "⚠️ API returned HTTP $STATUS — may need manual check"
