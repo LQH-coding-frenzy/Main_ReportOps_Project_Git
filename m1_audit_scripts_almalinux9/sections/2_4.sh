@@ -58,6 +58,7 @@ section_summary() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+should_run_control() { [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]; }
 
 
 echo "## M1 §2.4 Job Schedulers Audit"
@@ -85,18 +86,13 @@ check_file_perm() {
   fi
 }
 
-if systemctl is-enabled crond >/dev/null 2>&1 && systemctl is-active crond >/dev/null 2>&1; then
-  print_pass "2.4.1.1" "Ensure cron daemon is enabled and active" " - crond is enabled and active"
-else
-  print_fail "2.4.1.1" "Ensure cron daemon is enabled and active" " - crond is not both enabled and active"
+if should_run_control "2.4.1.1"; then
+  if systemctl is-enabled crond >/dev/null 2>&1 && systemctl is-active crond >/dev/null 2>&1; then
+    print_pass "2.4.1.1" "Ensure cron daemon is enabled and active" " - crond is enabled and active"
+  else
+    print_fail "2.4.1.1" "Ensure cron daemon is enabled and active" " - crond is not both enabled and active"
+  fi
 fi
-
-check_file_perm "2.4.1.2" "Ensure permissions on /etc/crontab are configured" "/etc/crontab" "600" "file"
-check_file_perm "2.4.1.3" "Ensure permissions on /etc/cron.hourly are configured" "/etc/cron.hourly" "700" "dir"
-check_file_perm "2.4.1.4" "Ensure permissions on /etc/cron.daily are configured" "/etc/cron.daily" "700" "dir"
-check_file_perm "2.4.1.5" "Ensure permissions on /etc/cron.weekly are configured" "/etc/cron.weekly" "700" "dir"
-check_file_perm "2.4.1.6" "Ensure permissions on /etc/cron.monthly are configured" "/etc/cron.monthly" "700" "dir"
-check_file_perm "2.4.1.7" "Ensure permissions on /etc/cron.d are configured" "/etc/cron.d" "700" "dir"
 
 check_allow_file() {
   local control_id="$1"; local title="$2"; local allow="$3"; local deny="$4"
@@ -118,7 +114,13 @@ check_allow_file() {
   fi
 }
 
-check_allow_file "2.4.1.8" "Ensure crontab is restricted to authorized users" "/etc/cron.allow" "/etc/cron.deny"
-check_allow_file "2.4.2.1" "Ensure at is restricted to authorized users" "/etc/at.allow" "/etc/at.deny"
+should_run_control "2.4.1.2" && check_file_perm "2.4.1.2" "Ensure permissions on /etc/crontab are configured" "/etc/crontab" "600" "file"
+should_run_control "2.4.1.3" && check_file_perm "2.4.1.3" "Ensure permissions on /etc/cron.hourly are configured" "/etc/cron.hourly" "700" "dir"
+should_run_control "2.4.1.4" && check_file_perm "2.4.1.4" "Ensure permissions on /etc/cron.daily are configured" "/etc/cron.daily" "700" "dir"
+should_run_control "2.4.1.5" && check_file_perm "2.4.1.5" "Ensure permissions on /etc/cron.weekly are configured" "/etc/cron.weekly" "700" "dir"
+should_run_control "2.4.1.6" && check_file_perm "2.4.1.6" "Ensure permissions on /etc/cron.monthly are configured" "/etc/cron.monthly" "700" "dir"
+should_run_control "2.4.1.7" && check_file_perm "2.4.1.7" "Ensure permissions on /etc/cron.d are configured" "/etc/cron.d" "700" "dir"
+should_run_control "2.4.1.8" && check_allow_file "2.4.1.8" "Ensure crontab is restricted to authorized users" "/etc/cron.allow" "/etc/cron.deny"
+should_run_control "2.4.2.1" && check_allow_file "2.4.2.1" "Ensure at is restricted to authorized users" "/etc/at.allow" "/etc/at.deny"
 
 section_summary

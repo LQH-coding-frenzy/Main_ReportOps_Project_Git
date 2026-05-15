@@ -58,6 +58,7 @@ section_summary() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+should_run_control() { [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]; }
 
 
 echo "## M1 §1.5 Process Hardening Audit"
@@ -88,9 +89,9 @@ check_systemd_coredump_value() {
   fi
 }
 
-check_sysctl_value "1.5.1" "Ensure address space layout randomization is enabled" "kernel.randomize_va_space" "2"
-check_sysctl_value "1.5.2" "Ensure ptrace_scope is restricted" "kernel.yama.ptrace_scope" "1"
-check_systemd_coredump_value "1.5.3" "Ensure core dump backtraces are disabled" "ProcessSizeMax" "0"
-check_systemd_coredump_value "1.5.4" "Ensure core dump storage is disabled" "Storage" "none"
+should_run_control "1.5.1" && check_sysctl_value "1.5.1" "Ensure address space layout randomization is enabled" "kernel.randomize_va_space" "2"
+should_run_control "1.5.2" && check_sysctl_value "1.5.2" "Ensure ptrace_scope is restricted" "kernel.yama.ptrace_scope" "1"
+should_run_control "1.5.3" && check_systemd_coredump_value "1.5.3" "Ensure core dump backtraces are disabled" "ProcessSizeMax" "0"
+should_run_control "1.5.4" && check_systemd_coredump_value "1.5.4" "Ensure core dump storage is disabled" "Storage" "none"
 
 section_summary

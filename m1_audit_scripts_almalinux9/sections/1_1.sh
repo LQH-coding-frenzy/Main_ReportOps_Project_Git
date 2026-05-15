@@ -58,6 +58,7 @@ section_summary() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+should_run_control() { [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]; }
 
 
 echo "## M1 §1.1 Filesystem Audit"
@@ -152,35 +153,35 @@ check_mount_option_if_mounted() {
   fi
 }
 
-check_kernel_module_unavailable "1.1.1.1" "Ensure cramfs kernel module is not available" "cramfs" "fs"
-check_kernel_module_unavailable "1.1.1.2" "Ensure freevxfs kernel module is not available" "freevxfs" "fs"
-check_kernel_module_unavailable "1.1.1.3" "Ensure hfs kernel module is not available" "hfs" "fs"
-check_kernel_module_unavailable "1.1.1.4" "Ensure hfsplus kernel module is not available" "hfsplus" "fs"
-check_kernel_module_unavailable "1.1.1.5" "Ensure jffs2 kernel module is not available" "jffs2" "fs"
-check_kernel_module_unavailable "1.1.1.8" "Ensure usb-storage kernel module is not available" "usb-storage" "drivers"
+should_run_control "1.1.1.1" && check_kernel_module_unavailable "1.1.1.1" "Ensure cramfs kernel module is not available" "cramfs" "fs"
+should_run_control "1.1.1.2" && check_kernel_module_unavailable "1.1.1.2" "Ensure freevxfs kernel module is not available" "freevxfs" "fs"
+should_run_control "1.1.1.3" && check_kernel_module_unavailable "1.1.1.3" "Ensure hfs kernel module is not available" "hfs" "fs"
+should_run_control "1.1.1.4" && check_kernel_module_unavailable "1.1.1.4" "Ensure hfsplus kernel module is not available" "hfsplus" "fs"
+should_run_control "1.1.1.5" && check_kernel_module_unavailable "1.1.1.5" "Ensure jffs2 kernel module is not available" "jffs2" "fs"
+should_run_control "1.1.1.8" && check_kernel_module_unavailable "1.1.1.8" "Ensure usb-storage kernel module is not available" "usb-storage" "drivers"
 
-check_mount_exists "1.1.2.1.1" "Ensure /tmp is a separate partition" "/tmp"
-check_mount_option_if_mounted "1.1.2.1.2" "Ensure nodev option set on /tmp partition" "/tmp" "nodev"
-check_mount_option_if_mounted "1.1.2.1.3" "Ensure nosuid option set on /tmp partition" "/tmp" "nosuid"
-check_mount_option_if_mounted "1.1.2.1.4" "Ensure noexec option set on /tmp partition" "/tmp" "noexec"
+should_run_control "1.1.2.1.1" && check_mount_exists "1.1.2.1.1" "Ensure /tmp is a separate partition" "/tmp"
+should_run_control "1.1.2.1.2" && check_mount_option_if_mounted "1.1.2.1.2" "Ensure nodev option set on /tmp partition" "/tmp" "nodev"
+should_run_control "1.1.2.1.3" && check_mount_option_if_mounted "1.1.2.1.3" "Ensure nosuid option set on /tmp partition" "/tmp" "nosuid"
+should_run_control "1.1.2.1.4" && check_mount_option_if_mounted "1.1.2.1.4" "Ensure noexec option set on /tmp partition" "/tmp" "noexec"
 
-check_mount_exists "1.1.2.2.1" "Ensure /dev/shm is a separate partition" "/dev/shm"
-check_mount_option_if_mounted "1.1.2.2.2" "Ensure nodev option set on /dev/shm partition" "/dev/shm" "nodev"
-check_mount_option_if_mounted "1.1.2.2.3" "Ensure nosuid option set on /dev/shm partition" "/dev/shm" "nosuid"
-check_mount_option_if_mounted "1.1.2.2.4" "Ensure noexec option set on /dev/shm partition" "/dev/shm" "noexec"
+should_run_control "1.1.2.2.1" && check_mount_exists "1.1.2.2.1" "Ensure /dev/shm is a separate partition" "/dev/shm"
+should_run_control "1.1.2.2.2" && check_mount_option_if_mounted "1.1.2.2.2" "Ensure nodev option set on /dev/shm partition" "/dev/shm" "nodev"
+should_run_control "1.1.2.2.3" && check_mount_option_if_mounted "1.1.2.2.3" "Ensure nosuid option set on /dev/shm partition" "/dev/shm" "nosuid"
+should_run_control "1.1.2.2.4" && check_mount_option_if_mounted "1.1.2.2.4" "Ensure noexec option set on /dev/shm partition" "/dev/shm" "noexec"
 
-check_mount_option_if_mounted "1.1.2.3.2" "Ensure nodev option set on /home partition" "/home" "nodev"
-check_mount_option_if_mounted "1.1.2.3.3" "Ensure nosuid option set on /home partition" "/home" "nosuid"
-check_mount_option_if_mounted "1.1.2.4.2" "Ensure nodev option set on /var partition" "/var" "nodev"
-check_mount_option_if_mounted "1.1.2.4.3" "Ensure nosuid option set on /var partition" "/var" "nosuid"
-check_mount_option_if_mounted "1.1.2.5.2" "Ensure nodev option set on /var/tmp partition" "/var/tmp" "nodev"
-check_mount_option_if_mounted "1.1.2.5.3" "Ensure nosuid option set on /var/tmp partition" "/var/tmp" "nosuid"
-check_mount_option_if_mounted "1.1.2.5.4" "Ensure noexec option set on /var/tmp partition" "/var/tmp" "noexec"
-check_mount_option_if_mounted "1.1.2.6.2" "Ensure nodev option set on /var/log partition" "/var/log" "nodev"
-check_mount_option_if_mounted "1.1.2.6.3" "Ensure nosuid option set on /var/log partition" "/var/log" "nosuid"
-check_mount_option_if_mounted "1.1.2.6.4" "Ensure noexec option set on /var/log partition" "/var/log" "noexec"
-check_mount_option_if_mounted "1.1.2.7.2" "Ensure nodev option set on /var/log/audit partition" "/var/log/audit" "nodev"
-check_mount_option_if_mounted "1.1.2.7.3" "Ensure nosuid option set on /var/log/audit partition" "/var/log/audit" "nosuid"
-check_mount_option_if_mounted "1.1.2.7.4" "Ensure noexec option set on /var/log/audit partition" "/var/log/audit" "noexec"
+should_run_control "1.1.2.3.2" && check_mount_option_if_mounted "1.1.2.3.2" "Ensure nodev option set on /home partition" "/home" "nodev"
+should_run_control "1.1.2.3.3" && check_mount_option_if_mounted "1.1.2.3.3" "Ensure nosuid option set on /home partition" "/home" "nosuid"
+should_run_control "1.1.2.4.2" && check_mount_option_if_mounted "1.1.2.4.2" "Ensure nodev option set on /var partition" "/var" "nodev"
+should_run_control "1.1.2.4.3" && check_mount_option_if_mounted "1.1.2.4.3" "Ensure nosuid option set on /var partition" "/var" "nosuid"
+should_run_control "1.1.2.5.2" && check_mount_option_if_mounted "1.1.2.5.2" "Ensure nodev option set on /var/tmp partition" "/var/tmp" "nodev"
+should_run_control "1.1.2.5.3" && check_mount_option_if_mounted "1.1.2.5.3" "Ensure nosuid option set on /var/tmp partition" "/var/tmp" "nosuid"
+should_run_control "1.1.2.5.4" && check_mount_option_if_mounted "1.1.2.5.4" "Ensure noexec option set on /var/tmp partition" "/var/tmp" "noexec"
+should_run_control "1.1.2.6.2" && check_mount_option_if_mounted "1.1.2.6.2" "Ensure nodev option set on /var/log partition" "/var/log" "nodev"
+should_run_control "1.1.2.6.3" && check_mount_option_if_mounted "1.1.2.6.3" "Ensure nosuid option set on /var/log partition" "/var/log" "nosuid"
+should_run_control "1.1.2.6.4" && check_mount_option_if_mounted "1.1.2.6.4" "Ensure noexec option set on /var/log partition" "/var/log" "noexec"
+should_run_control "1.1.2.7.2" && check_mount_option_if_mounted "1.1.2.7.2" "Ensure nodev option set on /var/log/audit partition" "/var/log/audit" "nodev"
+should_run_control "1.1.2.7.3" && check_mount_option_if_mounted "1.1.2.7.3" "Ensure nosuid option set on /var/log/audit partition" "/var/log/audit" "nosuid"
+should_run_control "1.1.2.7.4" && check_mount_option_if_mounted "1.1.2.7.4" "Ensure noexec option set on /var/log/audit partition" "/var/log/audit" "noexec"
 
 section_summary

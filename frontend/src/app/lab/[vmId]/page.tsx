@@ -269,60 +269,62 @@ export default function LabVmDetailPage() {
             )}
           </div>
 
-          <div className="card">
-            <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-4)' }}>📈 Live Observability</h3>
-            {observability ? (
-              <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Model</div>
-                    <div style={{ fontWeight: 700 }}>{observability.cpuModel || '—'}</div>
+          {vm.status !== 'DESTROYED' && (
+            <div className="card">
+              <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-4)' }}>📈 Live Observability</h3>
+              {observability ? (
+                <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Model</div>
+                      <div style={{ fontWeight: 700 }}>{observability.cpuModel || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Threads</div>
+                      <div style={{ fontWeight: 700 }}>{observability.cpuCount}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Pressure</div>
+                      <div style={{ fontWeight: 700 }}>{observability.cpuPressurePercent}%</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Uptime</div>
+                      <div style={{ fontWeight: 700 }}>{observability.uptimeHuman || '—'}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Threads</div>
-                    <div style={{ fontWeight: 700 }}>{observability.cpuCount}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Load Avg</div>
+                      <div style={{ fontWeight: 700 }}>{observability.load1.toFixed(2)} / {observability.load5.toFixed(2)} / {observability.load15.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>RAM Used</div>
+                      <div style={{ fontWeight: 700 }}>{observability.memoryUsedMb} MB / {observability.memoryTotalMb} MB</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>RAM Usage</div>
+                      <div style={{ fontWeight: 700 }}>{observability.memoryUsagePercent}%</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Root Disk</div>
+                      <div style={{ fontWeight: 700 }}>{observability.rootDiskUsedMb} MB / {observability.rootDiskTotalMb} MB ({observability.rootDiskUsagePercent}%)</div>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>CPU Pressure</div>
-                    <div style={{ fontWeight: 700 }}>{observability.cpuPressurePercent}%</div>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                    <span className={`badge ${observability.nginxStatus === 'active' ? 'badge-success' : 'badge-danger'}`}>nginx: {observability.nginxStatus}</span>
+                    <span className={`badge ${observability.sshdStatus === 'active' ? 'badge-success' : 'badge-danger'}`}>sshd: {observability.sshdStatus}</span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Uptime</div>
-                    <div style={{ fontWeight: 700 }}>{observability.uptimeHuman || '—'}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                    Updated: {new Date(observability.collectedAt).toLocaleString('vi-VN')}
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Load Avg</div>
-                    <div style={{ fontWeight: 700 }}>{observability.load1.toFixed(2)} / {observability.load5.toFixed(2)} / {observability.load15.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>RAM Used</div>
-                    <div style={{ fontWeight: 700 }}>{observability.memoryUsedMb} MB / {observability.memoryTotalMb} MB</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>RAM Usage</div>
-                    <div style={{ fontWeight: 700 }}>{observability.memoryUsagePercent}%</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Root Disk</div>
-                    <div style={{ fontWeight: 700 }}>{observability.rootDiskUsedMb} MB / {observability.rootDiskTotalMb} MB ({observability.rootDiskUsagePercent}%)</div>
-                  </div>
+              ) : (
+                <div style={{ fontSize: 'var(--text-sm)', color: observabilityError ? '#f87171' : 'var(--color-text-muted)' }}>
+                  {observabilityError || 'Đang tải observability...'}
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                  <span className={`badge ${observability.nginxStatus === 'active' ? 'badge-success' : 'badge-danger'}`}>nginx: {observability.nginxStatus}</span>
-                  <span className={`badge ${observability.sshdStatus === 'active' ? 'badge-success' : 'badge-danger'}`}>sshd: {observability.sshdStatus}</span>
-                </div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                  Updated: {new Date(observability.collectedAt).toLocaleString('vi-VN')}
-                </div>
-              </div>
-            ) : (
-              <div style={{ fontSize: 'var(--text-sm)', color: observabilityError ? '#f87171' : 'var(--color-text-muted)' }}>
-                {observabilityError || 'Đang tải observability...'}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Recent Audit Jobs */}

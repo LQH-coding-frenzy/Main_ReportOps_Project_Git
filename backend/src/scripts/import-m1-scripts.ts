@@ -26,48 +26,9 @@ const supabase = createClient(
 const BUCKET = env.SUPABASE_STORAGE_BUCKET;
 const SCRIPTS_DIR = path.join(__dirname, '../../../m1_audit_scripts_almalinux9/sections');
 
-function findFirstControlInvocationIndex(lines: string[]): number {
-  return lines.findIndex((line) => /["'][0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*["']/.test(line));
-}
-
-function extractControlInvocation(lines: string[], controlId: string): string[] {
-  const matcher = new RegExp(`["']${controlId.replace(/\./g, '\\.')}["']`);
-  const startIndex = lines.findIndex((line) => matcher.test(line));
-
-  if (startIndex === -1) {
-    return [];
-  }
-
-  const invocation: string[] = [];
-  let index = startIndex;
-
-  while (index < lines.length) {
-    const line = lines[index];
-    invocation.push(line);
-    if (!line.trim().endsWith('\\')) {
-      break;
-    }
-    index += 1;
-  }
-
-  return invocation;
-}
-
-function buildIsolatedControlScript(content: string, controlId: string): string | null {
-  const lines = content.split('\n');
-  const firstControlIndex = findFirstControlInvocationIndex(lines);
-  if (firstControlIndex === -1) {
-    return null;
-  }
-
-  const header = lines.slice(0, firstControlIndex);
-  const invocation = extractControlInvocation(lines, controlId);
-
-  if (invocation.length === 0) {
-    return null;
-  }
-
-  return [...header, ...invocation, '', 'section_summary', ''].join('\n');
+function buildTargetedControlScript(content: string, controlId: string): string {
+  const scriptBody = content.replace(/^#!\/usr\/bin\/env bash\s*/, '');
+  return ['#!/usr/bin/env bash', `export TARGET_CONTROL_ID="${controlId}"`, '', scriptBody].join('\n');
 }
 
 async function importScripts() {
@@ -130,11 +91,7 @@ async function importScripts() {
       
       console.log(`    - Registering ${controlId}: ${title}`);
 
-      const isolatedScript = buildIsolatedControlScript(content, controlId);
-      if (!isolatedScript) {
-        console.warn(`      ⚠️ Could not isolate control ${controlId} from ${file}`);
-        continue;
-      }
+      const isolatedScript = buildTargetedControlScript(content, controlId);
 
       const storagePath = `audit-scripts/m1/${controlId}.sh`;
 

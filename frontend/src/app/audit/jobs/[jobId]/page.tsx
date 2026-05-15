@@ -15,6 +15,21 @@ const RESULT_STYLE: Record<AuditResultStatus, { bg: string; color: string; icon:
   UNKNOWN: { bg: 'rgba(100,116,139,0.1)', color: '#64748b', icon: '❓' },
 };
 
+function resolveDurationMs(startedAt: string | null, finishedAt: string | null, durationMs: number | null): number | null {
+  if (durationMs != null && durationMs > 0) {
+    return durationMs;
+  }
+
+  if (!startedAt || !finishedAt) {
+    return null;
+  }
+
+  const started = new Date(startedAt).getTime();
+  const finished = new Date(finishedAt).getTime();
+  const diff = finished - started;
+  return diff > 0 ? diff : null;
+}
+
 export default function AuditJobDetailPage() {
   const params = useParams();
   const jobId = parseInt(params.jobId as string, 10);
@@ -155,6 +170,7 @@ export default function AuditJobDetailPage() {
   }
 
   const scoreColor = job.score != null ? (job.score >= 80 ? '#4ade80' : job.score >= 60 ? '#fbbf24' : '#f87171') : '#64748b';
+  const totalDurationMs = resolveDurationMs(job.startedAt, job.finishedAt, job.durationMs);
 
   return (
     <main className="main-content">
@@ -354,7 +370,7 @@ export default function AuditJobDetailPage() {
             <span style={{ color: 'var(--color-text-muted)' }}>Finished:</span>
             <span>{job.finishedAt ? new Date(job.finishedAt).toLocaleString('vi-VN') : '—'}</span>
             <span style={{ color: 'var(--color-text-muted)' }}>Duration:</span>
-            <span>{job.durationMs ? `${(job.durationMs / 1000).toFixed(1)}s` : '—'}</span>
+            <span>{totalDurationMs ? `${(totalDurationMs / 1000).toFixed(1)}s` : '—'}</span>
           </div>
         </div>
       </div>

@@ -58,26 +58,29 @@ section_summary() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+should_run_control() { [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]; }
 
 
 echo "## M1 §1.2 Package Management Audit"
 
-fail=(); ok=()
-if grep -Piq '^\s*gpgcheck\s*=\s*(1|true|yes)\b' /etc/dnf/dnf.conf 2>/dev/null; then
-  ok+=(" - global gpgcheck is enabled in /etc/dnf/dnf.conf")
-else
-  fail+=(" - global gpgcheck is not enabled in /etc/dnf/dnf.conf")
-fi
-if grep -Prisq '^\s*gpgcheck\s*=\s*(0|[2-9]|[1-9][0-9]+|false|no)\b' /etc/yum.repos.d/ 2>/dev/null; then
-  fail+=(" - at least one repository file disables gpgcheck")
-else
-  ok+=(" - no repository file disables gpgcheck")
-fi
-if [ "${#fail[@]}" -eq 0 ]; then
-  print_pass "1.2.1.2" "Ensure gpgcheck is globally activated" "${ok[@]}"
-else
-  print_fail "1.2.1.2" "Ensure gpgcheck is globally activated" "${fail[@]}"
-  [ "${#ok[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${ok[@]}"
+if should_run_control "1.2.1.2"; then
+  fail=(); ok=()
+  if grep -Piq '^\s*gpgcheck\s*=\s*(1|true|yes)\b' /etc/dnf/dnf.conf 2>/dev/null; then
+    ok+=(" - global gpgcheck is enabled in /etc/dnf/dnf.conf")
+  else
+    fail+=(" - global gpgcheck is not enabled in /etc/dnf/dnf.conf")
+  fi
+  if grep -Prisq '^\s*gpgcheck\s*=\s*(0|[2-9]|[1-9][0-9]+|false|no)\b' /etc/yum.repos.d/ 2>/dev/null; then
+    fail+=(" - at least one repository file disables gpgcheck")
+  else
+    ok+=(" - no repository file disables gpgcheck")
+  fi
+  if [ "${#fail[@]}" -eq 0 ]; then
+    print_pass "1.2.1.2" "Ensure gpgcheck is globally activated" "${ok[@]}"
+  else
+    print_fail "1.2.1.2" "Ensure gpgcheck is globally activated" "${fail[@]}"
+    [ "${#ok[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${ok[@]}"
+  fi
 fi
 
 section_summary

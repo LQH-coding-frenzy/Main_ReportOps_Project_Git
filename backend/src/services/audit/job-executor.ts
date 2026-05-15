@@ -145,9 +145,10 @@ export class AuditJobExecutor {
       if (!job.vm.publicIp) throw new Error('VM does not have a public IP address');
 
       // Update status to RUNNING
+      const startedAt = new Date();
       await prisma.auditJob.update({
         where: { id: this.jobId },
-        data: { status: 'RUNNING', startedAt: new Date() }
+        data: { status: 'RUNNING', startedAt }
       });
 
       await this.ensureNotCancelled();
@@ -602,7 +603,7 @@ export class AuditJobExecutor {
 
       // 7. Complete Job
       const finishedAt = new Date();
-      const jobStartedAt = job.startedAt || new Date(); // Fallback
+      const jobStartedAt = startedAt;
       const durationMs = finishedAt.getTime() - jobStartedAt.getTime();
 
       await prisma.auditJob.update({

@@ -58,28 +58,35 @@ section_summary() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+should_run_control() { [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]; }
 
 
 echo "## M1 §2.3 Time Synchronization Audit"
 
-if systemctl is-enabled chronyd >/dev/null 2>&1 && systemctl is-active chronyd >/dev/null 2>&1; then
-  print_pass "2.3.1" "Ensure time synchronization is in use" " - chronyd is enabled and active"
-else
-  print_fail "2.3.1" "Ensure time synchronization is in use" " - chronyd is not both enabled and active"
+if should_run_control "2.3.1"; then
+  if systemctl is-enabled chronyd >/dev/null 2>&1 && systemctl is-active chronyd >/dev/null 2>&1; then
+    print_pass "2.3.1" "Ensure time synchronization is in use" " - chronyd is enabled and active"
+  else
+    print_fail "2.3.1" "Ensure time synchronization is in use" " - chronyd is not both enabled and active"
+  fi
 fi
 
-chrony_sources="$(grep -RhsP '^\s*(server|pool)\s+\S+' /etc/chrony.conf /etc/chrony.d/*.conf 2>/dev/null || true)"
-if [ -n "$chrony_sources" ]; then
-  print_pass "2.3.2" "Ensure chrony is configured" " - chrony server/pool entries found:" "$chrony_sources"
-else
-  print_fail "2.3.2" "Ensure chrony is configured" " - no chrony server/pool entries found in /etc/chrony.conf or /etc/chrony.d/*.conf"
+if should_run_control "2.3.2"; then
+  chrony_sources="$(grep -RhsP '^\s*(server|pool)\s+\S+' /etc/chrony.conf /etc/chrony.d/*.conf 2>/dev/null || true)"
+  if [ -n "$chrony_sources" ]; then
+    print_pass "2.3.2" "Ensure chrony is configured" " - chrony server/pool entries found:" "$chrony_sources"
+  else
+    print_fail "2.3.2" "Ensure chrony is configured" " - no chrony server/pool entries found in /etc/chrony.conf or /etc/chrony.d/*.conf"
+  fi
 fi
 
-chrony_user="$(ps -C chronyd -o user= 2>/dev/null | awk 'NR==1{print $1}' || true)"
-if [ -n "$chrony_user" ] && [ "$chrony_user" != "root" ]; then
-  print_pass "2.3.3" "Ensure chrony is not run as the root user" " - chronyd is running as user: $chrony_user"
-else
-  print_fail "2.3.3" "Ensure chrony is not run as the root user" " - chronyd user is '${chrony_user:-not running/unknown}', expected non-root"
+if should_run_control "2.3.3"; then
+  chrony_user="$(ps -C chronyd -o user= 2>/dev/null | awk 'NR==1{print $1}' || true)"
+  if [ -n "$chrony_user" ] && [ "$chrony_user" != "root" ]; then
+    print_pass "2.3.3" "Ensure chrony is not run as the root user" " - chronyd is running as user: $chrony_user"
+  else
+    print_fail "2.3.3" "Ensure chrony is not run as the root user" " - chronyd user is '${chrony_user:-not running/unknown}', expected non-root"
+  fi
 fi
 
 section_summary

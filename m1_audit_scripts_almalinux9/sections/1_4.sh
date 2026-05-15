@@ -58,38 +58,45 @@ section_summary() {
 }
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
+should_run_control() { [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]; }
 
 
 echo "## M1 §1.4 Bootloader Audit"
 
-user_cfg="$(find /boot -type f -name 'user.cfg' ! -empty 2>/dev/null | head -n 1 || true)"
-if [ -n "$user_cfg" ] && grep -Pq '^\s*GRUB2_PASSWORD=grub\.pbkdf2\.sha512' "$user_cfg" 2>/dev/null; then
-  print_pass "1.4.1" "Ensure bootloader password is set" " - bootloader password hash found in $user_cfg"
-else
-  print_fail "1.4.1" "Ensure bootloader password is set" " - GRUB2_PASSWORD hash was not found in /boot user.cfg files"
-fi
-
-fail=(); ok=()
-while IFS= read -r -d '' f; do
-  read -r file mode user group < <(stat -Lc '%n %a %U %G' "$f" 2>/dev/null || echo "$f 999 unknown unknown")
-  max=600
-  if [[ "$(dirname "$f")" =~ ^/boot/efi/EFI ]]; then max=700; fi
-  # Compare octal permissions by checking any disallowed bits.
-  if [ "$max" = "700" ]; then mask=077; else mask=177; fi
-  if [ $((8#$mode & 8#$mask)) -eq 0 ]; then
-    ok+=(" - $file mode $mode is $max or more restrictive")
+audit_1_4_1() {
+  user_cfg="$(find /boot -type f -name 'user.cfg' ! -empty 2>/dev/null | head -n 1 || true)"
+  if [ -n "$user_cfg" ] && grep -Pq '^\s*GRUB2_PASSWORD=grub\.pbkdf2\.sha512' "$user_cfg" 2>/dev/null; then
+    print_pass "1.4.1" "Ensure bootloader password is set" " - bootloader password hash found in $user_cfg"
   else
-    fail+=(" - $file mode $mode should be $max or more restrictive")
+    print_fail "1.4.1" "Ensure bootloader password is set" " - GRUB2_PASSWORD hash was not found in /boot user.cfg files"
   fi
-  [ "$user" = "root" ] && ok+=(" - $file owner is root") || fail+=(" - $file owner is $user, should be root")
-  [ "$group" = "root" ] && ok+=(" - $file group is root") || fail+=(" - $file group is $group, should be root")
-done < <(find /boot -type f \( -name 'grub*' -o -name 'user.cfg' \) -print0 2>/dev/null)
+}
 
-if [ "${#fail[@]}" -eq 0 ]; then
-  print_pass "1.4.2" "Ensure access to bootloader config is configured" "${ok[@]:- - no grub/user.cfg files found for evaluation}"
-else
-  print_fail "1.4.2" "Ensure access to bootloader config is configured" "${fail[@]}"
-  [ "${#ok[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${ok[@]}"
-fi
+audit_1_4_2() {
+  fail=(); ok=()
+  while IFS= read -r -d '' f; do
+    read -r file mode user group < <(stat -Lc '%n %a %U %G' "$f" 2>/dev/null || echo "$f 999 unknown unknown")
+    max=600
+    if [[ "$(dirname "$f")" =~ ^/boot/efi/EFI ]]; then max=700; fi
+    if [ "$max" = "700" ]; then mask=077; else mask=177; fi
+    if [ $((8#$mode & 8#$mask)) -eq 0 ]; then
+      ok+=(" - $file mode $mode is $max or more restrictive")
+    else
+      fail+=(" - $file mode $mode should be $max or more restrictive")
+    fi
+    [ "$user" = "root" ] && ok+=(" - $file owner is root") || fail+=(" - $file owner is $user, should be root")
+    [ "$group" = "root" ] && ok+=(" - $file group is root") || fail+=(" - $file group is $group, should be root")
+  done < <(find /boot -type f \( -name 'grub*' -o -name 'user.cfg' \) -print0 2>/dev/null)
+
+  if [ "${#fail[@]}" -eq 0 ]; then
+    print_pass "1.4.2" "Ensure access to bootloader config is configured" "${ok[@]:- - no grub/user.cfg files found for evaluation}"
+  else
+    print_fail "1.4.2" "Ensure access to bootloader config is configured" "${fail[@]}"
+    [ "${#ok[@]}" -gt 0 ] && printf '%s\n' "- Correctly set:" "${ok[@]}"
+  fi
+}
+
+should_run_control "1.4.1" && audit_1_4_1
+should_run_control "1.4.2" && audit_1_4_2
 
 section_summary
