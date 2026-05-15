@@ -7,6 +7,9 @@ import { usePolling } from '../../../hooks/usePolling';
 import { getLabVm, getLabVmObservability, deleteLabVm, purgeLabVmIndex } from '../../../lib/api';
 import { getLabVmHardwareProfile } from '../../../lib/lab-vm-hardware';
 import type { LabVm, AuditJob, LabVmObservability } from '../../../lib/types';
+import { ConfirmModal } from '../../../components/ui/ConfirmModal';
+import { SshTerminalModal } from '../../../components/ui/SshTerminalModal';
+import { useToast } from '../../../components/ui/Toast';
 
 function withGoogleAccountChooser(targetUrl: string): string {
   return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(targetUrl)}`;
@@ -19,8 +22,18 @@ export default function LabVmDetailPage() {
   const [observability, setObservability] = useState<LabVmObservability | null>(null);
   const [observabilityError, setObservabilityError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSshOpen, setIsSshOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    confirmLoadingText: string;
+    type: 'danger' | 'primary';
+    onConfirm: () => Promise<void>;
+  } | null>(null);
   const observableVmId = vm?.id ?? null;
   const isObservabilityEnabled = !!vm && vm.status === 'RUNNING' && !!vm.publicIp;
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!vmId) return;
@@ -79,28 +92,47 @@ export default function LabVmDetailPage() {
     }
   }, 10000, isObservabilityEnabled);
 
-  async function handleDestroy() {
+  function handleDestroy() {
     if (!vm) return;
-    if (!confirm(`Bạn có chắc muốn hủy VM "${vm.name}"?`)) return;
-    try {
-      await deleteLabVm(vm.id);
-      setVm({ ...vm, status: 'DESTROYING' });
-    } catch (err) {
-      console.error(err);
-      alert('Không thể hủy VM');
-    }
+
+    setConfirmState({
+      title: `Destroy VM "${vm.name}"`,
+      message: 'VM sẽ chuyển sang trạng thái DESTROYING và bị hủy bởi Terraform runner.',
+      confirmText: 'Destroy VM',
+      confirmLoadingText: 'Đang gửi lệnh destroy...',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteLabVm(vm.id);
+          setVm({ ...vm, status: 'DESTROYING' });
+          showToast(`Đã gửi lệnh destroy cho VM "${vm.name}"`, 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Không thể hủy VM', 'error');
+        }
+      },
+    });
   }
 
-  async function handlePurge() {
+  function handlePurge() {
     if (!vm) return;
-    if (!confirm(`Xóa index cũ của VM "${vm.name}"?`)) return;
-    try {
-      await purgeLabVmIndex(vm.id);
-      window.location.href = '/lab';
-    } catch (err) {
-      console.error(err);
-      alert('Không thể xóa index VM cũ');
-    }
+
+    setConfirmState({
+      title: `Xóa index VM "${vm.name}"`,
+      message: 'Thao tác này sẽ xóa index VM cũ và toàn bộ lịch sử audit gắn với VM này.',
+      confirmText: 'Xóa index',
+      confirmLoadingText: 'Đang xóa...',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await purgeLabVmIndex(vm.id);
+          window.location.href = '/lab';
+        } catch (err) {
+          console.error(err);
+          showToast('Không thể xóa index VM cũ', 'error');
+        }
+      },
+    });
   }
 
   if (loading) {
@@ -177,8 +209,13 @@ export default function LabVmDetailPage() {
                   rel="noopener noreferrer"
                   className="btn btn-secondary btn-sm"
                 >
-                  📟 SSH
+                  📟 GCP SSH
                 </a>
+                )}
+                {vm.status === 'RUNNING' && (
+                <button className="btn btn-primary btn-sm" onClick={() => setIsSshOpen(true)}>
+                  &gt;_ Web SSH
+                </button>
                 )}
                 {vm.status === 'RUNNING' && (
                 <Link href={`/audit/new`} className="btn btn-primary btn-sm">
@@ -361,6 +398,26 @@ export default function LabVmDetailPage() {
             </table>
           </div>
         )}
+
+        {isSshOpen ? (
+          <SshTerminalModal
+            isOpen={isSshOpen}
+            onClose={() => setIsSshOpen(false)}
+            vmId={vm.status === 'RUNNING' ? vm.id : null}
+            vmName={vm.name}
+          />
+        ) : null}
+
+        <ConfirmModal
+          isOpen={!!confirmState}
+          onClose={() => setConfirmState(null)}
+          onConfirm={confirmState?.onConfirm || (async () => {})}
+          title={confirmState?.title || ''}
+          message={confirmState?.message || ''}
+          confirmText={confirmState?.confirmText || 'Xác nhận'}
+          confirmLoadingText={confirmState?.confirmLoadingText || 'Đang xử lý...'}
+          type={confirmState?.type || 'primary'}
+        />
       </div>
     </main>
   );

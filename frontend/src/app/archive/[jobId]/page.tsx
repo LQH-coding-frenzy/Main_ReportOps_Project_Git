@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getAuditJob, getAuditJobEvidence, getAuditJobEvidenceFile } from '../../../lib/api';
+import { getAuditJob, getAuditJobEvidence } from '../../../lib/api';
 import type { AuditEvidence, AuditJob } from '../../../lib/types';
+import { ArtifactPreviewModal } from '../../../components/ui/ArtifactPreviewModal';
 
 function formatSize(sizeBytes: number | null): string {
   if (!sizeBytes) return '—';
@@ -17,8 +18,7 @@ export default function ArchiveJobPage() {
   const [job, setJob] = useState<AuditJob | null>(null);
   const [evidence, setEvidence] = useState<AuditEvidence[]>([]);
   const [loading, setLoading] = useState(true);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewName, setPreviewName] = useState<string>('');
+  const [selectedEvidence, setSelectedEvidence] = useState<AuditEvidence | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,19 +50,6 @@ export default function ArchiveJobPage() {
       return acc;
     }, {});
   }, [evidence]);
-
-  async function handlePreview(ev: AuditEvidence) {
-    const blob = await getAuditJobEvidenceFile(jobId, ev.id);
-    const url = URL.createObjectURL(blob);
-    setPreviewName(ev.artifactName);
-    setPreviewUrl(url);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
 
   if (loading) {
     return <main className="main-content"><div className="admin-loading"><div className="spinner" /><span>Đang tải archive job...</span></div></main>;
@@ -103,8 +90,8 @@ export default function ArchiveJobPage() {
                   type="button"
                   className="card"
                   style={{ textAlign: 'left', padding: 12, cursor: 'pointer' }}
-                  onClick={() => handlePreview(ev)}
-                >
+                   onClick={() => setSelectedEvidence(ev)}
+                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div>
                       <div style={{ fontWeight: 600 }}>{ev.artifactName}</div>
@@ -118,17 +105,12 @@ export default function ArchiveJobPage() {
           </div>
         ))}
 
-        {previewUrl && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setPreviewUrl(null)}>
-            <div className="card" style={{ width: 'min(1200px, 100%)', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                <strong>{previewName}</strong>
-                <button className="btn btn-secondary btn-sm" onClick={() => setPreviewUrl(null)}>Đóng</button>
-              </div>
-              <iframe src={previewUrl} title={previewName} style={{ width: '100%', height: '80vh', border: 'none' }} />
-            </div>
-          </div>
-        )}
+        <ArtifactPreviewModal
+          isOpen={!!selectedEvidence}
+          onClose={() => setSelectedEvidence(null)}
+          jobId={jobId}
+          evidence={selectedEvidence}
+        />
       </div>
     </main>
   );

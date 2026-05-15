@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { CSSProperties, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ModalProps {
@@ -8,9 +8,26 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  description?: React.ReactNode;
+  size?: 'md' | 'lg' | 'xl' | 'fullscreen';
+  titleActions?: React.ReactNode;
+  dialogStyle?: CSSProperties;
+  contentStyle?: CSSProperties;
+  closeOnOverlayClick?: boolean;
 }
 
-export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  description,
+  size = 'md',
+  titleActions,
+  dialogStyle,
+  contentStyle,
+  closeOnOverlayClick = true,
+}: ModalProps) {
   useEffect(() => {
     if (!isOpen) return;
 
@@ -34,10 +51,21 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen || typeof window === 'undefined') return null;
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-title font-bold">{title}</h2>
-        <div className="modal-content mt-4">
+    <div className="modal-overlay" onClick={closeOnOverlayClick ? onClose : undefined}>
+      <div className={`modal modal-${size}`} style={dialogStyle} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2 className="modal-title font-bold">{title}</h2>
+            {description ? <div className="modal-description">{description}</div> : null}
+          </div>
+          <div className="modal-header-actions">
+            {titleActions}
+            <button type="button" className="modal-close" onClick={onClose} aria-label="Đóng popup">
+              ✕
+            </button>
+          </div>
+        </div>
+        <div className="modal-content" style={contentStyle}>
           {children}
         </div>
       </div>

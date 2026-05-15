@@ -1,5 +1,9 @@
 import { Router, Request, Response } from 'express';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { chromium } from 'playwright';
 import { requireAuth } from '../middleware/auth';
 import { requireLeader } from '../middleware/rbac';
 import { AuditJobExecutor } from '../services/audit/job-executor';
@@ -23,6 +27,78 @@ async function downloadFromAnyBucket(storagePath: string): Promise<Blob | null> 
   }
 
   return null;
+}
+
+async function restoreDashboardArtifactIfMissing(evidence: {
+  id: number;
+  auditJobId: number;
+  artifactType: string;
+  storagePath: string;
+  mimeType: string | null;
+}): Promise<boolean> {
+  if (evidence.artifactType !== 'DASHBOARD_PDF' && evidence.artifactType !== 'DASHBOARD_SCREENSHOT') {
+    return false;
+  }
+
+  const htmlEvidence = await prisma.auditEvidence.findFirst({
+    where: {
+      auditJobId: evidence.auditJobId,
+      artifactType: 'DASHBOARD_HTML',
+    },
+  });
+
+  if (!htmlEvidence) {
+    return false;
+  }
+
+  const htmlBlob = await downloadFromAnyBucket(htmlEvidence.storagePath);
+  if (!htmlBlob) {
+    return false;
+  }
+
+  const tempHtmlPath = path.join(os.tmpdir(), `dashboard-restore-${evidence.auditJobId}-${Date.now()}.html`);
+  fs.writeFileSync(tempHtmlPath, await htmlBlob.text(), 'utf-8');
+
+  const browser = await chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage();
+    await page.goto(`file://${tempHtmlPath}`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
+
+    const buffer = evidence.artifactType === 'DASHBOARD_PDF'
+      ? await page.pdf({ format: 'A4', printBackground: true })
+      : await page.screenshot({ fullPage: true });
+
+    const contentType = evidence.artifactType === 'DASHBOARD_PDF' ? 'application/pdf' : 'image/png';
+    const { error } = await supabase.storage.from(env.SUPABASE_ARCHIVE_BUCKET).upload(evidence.storagePath, buffer, {
+      contentType,
+      upsert: true,
+    });
+
+    if (error) {
+      console.error('Restore dashboard artifact upload error:', error);
+      return false;
+    }
+
+    await prisma.auditEvidence.update({
+      where: { id: evidence.id },
+      data: {
+        mimeType: evidence.mimeType || contentType,
+        sizeBytes: buffer.length,
+      },
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Restore dashboard artifact render error:', error);
+    return false;
+  } finally {
+    await browser.close();
+    if (fs.existsSync(tempHtmlPath)) {
+      fs.unlinkSync(tempHtmlPath);
+    }
+  }
 }
 
 function automatedScriptFilter(ownerSection: string) {
@@ -320,7 +396,14 @@ router.get('/:id/evidence/:evidenceId', requireAuth, async (req: Request, res: R
       return res.status(404).json({ error: 'Evidence not found', status: 404 });
     }
 
-    const data = await downloadFromAnyBucket(evidence.storagePath);
+    let data = await downloadFromAnyBucket(evidence.storagePath);
+
+    if (!data) {
+      const restored = await restoreDashboardArtifactIfMissing(evidence);
+      if (restored) {
+        data = await downloadFromAnyBucket(evidence.storagePath);
+      }
+    }
 
     if (!data) {
       return res.status(404).json({ error: 'Evidence file not found in storage', status: 404 });

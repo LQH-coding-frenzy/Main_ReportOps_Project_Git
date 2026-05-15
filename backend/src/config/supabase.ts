@@ -21,12 +21,18 @@ export async function initStorage(): Promise<void> {
   const { data: buckets } = await supabase.storage.listBuckets();
   const bucketNames = new Set((buckets || []).map((bucket) => bucket.name));
 
-  const ensureBucket = async (
+  const syncBucket = async (
     name: string,
     options: { public: boolean; fileSizeLimit: number; allowedMimeTypes: string[] }
   ): Promise<void> => {
     if (bucketNames.has(name)) {
-      console.log(`✅ Storage bucket "${name}" exists`);
+      const { error } = await supabase.storage.updateBucket(name, options);
+      if (error) {
+        console.error(`❌ Failed to update storage bucket "${name}":`, error.message);
+        return;
+      }
+
+      console.log(`✅ Storage bucket "${name}" exists and is synced`);
       return;
     }
 
@@ -40,7 +46,7 @@ export async function initStorage(): Promise<void> {
     console.log(`✅ Storage bucket "${name}" created`);
   };
 
-  await ensureBucket(env.SUPABASE_STORAGE_BUCKET, {
+  await syncBucket(env.SUPABASE_STORAGE_BUCKET, {
     public: false,
     fileSizeLimit: 52428800, // 50MB
     allowedMimeTypes: [
@@ -50,7 +56,7 @@ export async function initStorage(): Promise<void> {
     ],
   });
 
-  await ensureBucket(env.SUPABASE_ARCHIVE_BUCKET, {
+  await syncBucket(env.SUPABASE_ARCHIVE_BUCKET, {
     public: false,
     fileSizeLimit: 52428800, // 50MB
     allowedMimeTypes: [
@@ -60,6 +66,7 @@ export async function initStorage(): Promise<void> {
       'application/xml',
       'text/xml',
       'image/png',
+      'application/pdf',
       'application/octet-stream',
     ],
   });

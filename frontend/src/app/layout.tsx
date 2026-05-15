@@ -1,5 +1,6 @@
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import 'xterm/css/xterm.css';
 import { Metadata } from 'next';
 
 const inter = Inter({

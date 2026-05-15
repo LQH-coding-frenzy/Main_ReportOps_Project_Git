@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePolling } from '../../hooks/usePolling';
 import { getLabVms, purgeLabVmIndex } from '../../lib/api';
 import type { LabVm } from '../../lib/types';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { useToast } from '../../components/ui/Toast';
 
 const VM_STATUS_STYLE: Record<string, { cls: string; icon: string }> = {
   PROVISIONING: { cls: 'badge-warning', icon: '🔄' },
@@ -18,6 +20,13 @@ const VM_STATUS_STYLE: Record<string, { cls: string; icon: string }> = {
 export default function LabPage() {
   const [vms, setVms] = useState<LabVm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     getLabVms()
@@ -37,18 +46,22 @@ export default function LabPage() {
 
   const runningVms = vms.filter((v) => v.status === 'RUNNING');
 
-  async function handlePurge(vm: LabVm) {
-    if (!confirm(`Xóa index cũ của VM "${vm.name}"? Thao tác này sẽ xóa luôn lịch sử audit gắn với VM này.`)) {
-      return;
-    }
-
-    try {
-      await purgeLabVmIndex(vm.id);
-      setVms((current) => current.filter((item) => item.id !== vm.id));
-    } catch (error) {
-      console.error(error);
-      alert('Không thể xóa index VM cũ');
-    }
+  function handlePurge(vm: LabVm) {
+    setConfirmState({
+      title: 'Xóa index VM',
+      message: `Xóa index cũ của VM "${vm.name}"? Thao tác này sẽ xóa luôn lịch sử audit gắn với VM này.`,
+      confirmText: 'Xóa index',
+      onConfirm: async () => {
+        try {
+          await purgeLabVmIndex(vm.id);
+          setVms((current) => current.filter((item) => item.id !== vm.id));
+          showToast(`Đã xóa index VM "${vm.name}"`, 'success');
+        } catch (error) {
+          console.error(error);
+          showToast('Không thể xóa index VM cũ', 'error');
+        }
+      },
+    });
   }
 
   return (
@@ -150,6 +163,17 @@ export default function LabPage() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={confirmState?.onConfirm || (async () => {})}
+        title={confirmState?.title || ''}
+        message={confirmState?.message || ''}
+        confirmText={confirmState?.confirmText || 'Xác nhận'}
+        confirmLoadingText="Đang xóa..."
+        type="danger"
+      />
     </main>
   );
 }

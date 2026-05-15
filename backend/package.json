@@ -24,6 +24,8 @@
   "dependencies": {
     "@prisma/client": "^5.0.0",
     "@supabase/supabase-js": "^2.39.0",
+    "@types/ssh2": "^1.15.5",
+    "@types/ws": "^8.18.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "docx-merger": "^1.2.2",
@@ -33,7 +35,9 @@
     "multer": "^2.1.1",
     "node-ssh": "^13.2.1",
     "playwright": "^1.59.1",
+    "ssh2": "^1.17.0",
     "uuid": "^9.0.0",
+    "ws": "^8.20.1",
     "yaml": "^2.9.0"
   },
   "overrides": {

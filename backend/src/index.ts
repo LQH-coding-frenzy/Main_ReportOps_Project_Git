@@ -1,9 +1,11 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env, validateEnv } from './config/env';
 import { initStorage } from './config/supabase';
 import { resumeInFlightPreviewBuilds } from './services/report-generator';
+import { registerLabSshWebSocket } from './services/lab-ssh-websocket';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -21,6 +23,7 @@ import labRoutes from './routes/lab';
 validateEnv();
 
 const app = express();
+const server = http.createServer(app);
 
 // ── Middleware ──
 app.use(
@@ -92,7 +95,9 @@ async function start() {
     }
   }
 
-  app.listen(env.PORT, () => {
+  registerLabSshWebSocket(server);
+
+  server.listen(env.PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════╗
 ║       ReportOps Backend API                  ║

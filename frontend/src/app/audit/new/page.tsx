@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getLabVms, createAuditJob } from '../../../lib/api';
 import type { LabVm } from '../../../lib/types';
 import { benchmarkLabel, projectConfig } from '../../../lib/project-config';
+import { useToast } from '../../../components/ui/Toast';
 
 const MODES = [
   { value: 'OPENSCAP_ONLY', label: 'OpenSCAP Only', icon: '🛡️', desc: 'Chạy OpenSCAP baseline CIS Level 1 Server' },
@@ -20,6 +21,7 @@ export default function NewAuditPage() {
   const [selectedMode, setSelectedMode] = useState('SCRIPTS_ONLY');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     getLabVms()
@@ -38,7 +40,7 @@ export default function NewAuditPage() {
       router.push(`/audit/jobs/${job.id}`);
     } catch (err) {
       console.error(err);
-      alert('Không thể tạo audit job. Vui lòng thử lại.');
+      showToast('Không thể tạo audit job. Vui lòng thử lại.', 'error');
       setCreating(false);
     }
   }

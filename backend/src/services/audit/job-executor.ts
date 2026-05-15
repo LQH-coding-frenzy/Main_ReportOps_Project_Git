@@ -65,6 +65,17 @@ function buildOpenScapFilteredJson(input: {
   );
 }
 
+async function uploadToBucketOrThrow(bucket: string, storagePath: string, body: string | Buffer, contentType: string): Promise<void> {
+  const { error } = await supabase.storage.from(bucket).upload(storagePath, body, {
+    contentType,
+    upsert: true,
+  });
+
+  if (error) {
+    throw new Error(`Failed to upload ${storagePath}: ${error.message}`);
+  }
+}
+
 class AuditJobCancelledError extends Error {}
 
 export class AuditJobExecutor {
@@ -397,7 +408,7 @@ export class AuditJobExecutor {
         const oscapArfPath = `${openScapPrefix}/results-arf.xml`;
 
         if (oscapHtml.stdout) {
-          await supabase.storage.from(bucket).upload(oscapReportPath, Buffer.from(oscapHtml.stdout, 'utf-8'), { contentType: 'text/html', upsert: true });
+          await uploadToBucketOrThrow(bucket, oscapReportPath, Buffer.from(oscapHtml.stdout, 'utf-8'), 'text/html');
           await prisma.auditEvidence.create({
             data: {
               auditJobId: this.jobId,
@@ -411,7 +422,7 @@ export class AuditJobExecutor {
         }
 
         if (oscapXml.stdout) {
-          await supabase.storage.from(bucket).upload(oscapXmlPath, Buffer.from(oscapXml.stdout, 'utf-8'), { contentType: 'application/xml', upsert: true });
+          await uploadToBucketOrThrow(bucket, oscapXmlPath, Buffer.from(oscapXml.stdout, 'utf-8'), 'application/xml');
           await prisma.auditEvidence.create({
             data: {
               auditJobId: this.jobId,
@@ -425,7 +436,7 @@ export class AuditJobExecutor {
         }
 
         if (oscapArf.stdout) {
-          await supabase.storage.from(bucket).upload(oscapArfPath, Buffer.from(oscapArf.stdout, 'utf-8'), { contentType: 'application/xml', upsert: true });
+          await uploadToBucketOrThrow(bucket, oscapArfPath, Buffer.from(oscapArf.stdout, 'utf-8'), 'application/xml');
           await prisma.auditEvidence.create({
             data: {
               auditJobId: this.jobId,
@@ -447,7 +458,7 @@ export class AuditJobExecutor {
           counts: { pass: oPass, fail: oFail, error: oError },
           rows: parseOpenScapResultRows(oscapXml.stdout),
         });
-        await supabase.storage.from(bucket).upload(oscapSummaryPath, Buffer.from(oscapSummaryJson, 'utf-8'), { contentType: 'application/json', upsert: true });
+        await uploadToBucketOrThrow(bucket, oscapSummaryPath, Buffer.from(oscapSummaryJson, 'utf-8'), 'application/json');
         await prisma.auditEvidence.create({
           data: {
             auditJobId: this.jobId,
@@ -503,11 +514,11 @@ export class AuditJobExecutor {
 
       // Upload Terminal HTML
       const terminalPath = `${evidencePathPrefix}/terminal-evidence.html`;
-      await supabase.storage.from(bucket).upload(terminalPath, terminalHtml, { contentType: 'text/html', upsert: true });
+      await uploadToBucketOrThrow(bucket, terminalPath, terminalHtml, 'text/html');
 
       // Upload Dashboard HTML
       const dashboardPath = `${evidencePathPrefix}/dashboard-evidence.html`;
-      await supabase.storage.from(bucket).upload(dashboardPath, dashboardHtml, { contentType: 'text/html', upsert: true });
+      await uploadToBucketOrThrow(bucket, dashboardPath, dashboardHtml, 'text/html');
 
       // Create Evidence DB records
       await prisma.auditEvidence.createMany({
@@ -550,7 +561,7 @@ export class AuditJobExecutor {
         fs.unlinkSync(tempHtmlPath);
 
         const screenshotPath = `${evidencePathPrefix}/dashboard-screenshot.png`;
-        await supabase.storage.from(bucket).upload(screenshotPath, screenshotBuffer, { contentType: 'image/png', upsert: true });
+        await uploadToBucketOrThrow(bucket, screenshotPath, screenshotBuffer, 'image/png');
 
         await prisma.auditEvidence.create({
           data: {
@@ -564,7 +575,7 @@ export class AuditJobExecutor {
         });
 
         const pdfPath = `${evidencePathPrefix}/dashboard-evidence.pdf`;
-        await supabase.storage.from(bucket).upload(pdfPath, pdfBuffer, { contentType: 'application/pdf', upsert: true });
+        await uploadToBucketOrThrow(bucket, pdfPath, pdfBuffer, 'application/pdf');
 
         await prisma.auditEvidence.create({
           data: {
@@ -585,7 +596,7 @@ export class AuditJobExecutor {
       try {
         const logContent = this.logs.join('\n');
         const logPath = `archives/audits/${this.jobId}/audit-log.txt`;
-        await supabase.storage.from(bucket).upload(logPath, logContent, { contentType: 'text/plain', upsert: true });
+        await uploadToBucketOrThrow(bucket, logPath, logContent, 'text/plain');
         
         await prisma.auditEvidence.create({
           data: {
@@ -650,11 +661,7 @@ export class AuditJobExecutor {
           const bucket = archiveBucket;
           const logContent = this.logs.join('\n');
           const logPath = `archives/audits/${this.jobId}/audit-log.txt`;
-          
-          await supabase.storage.from(bucket).upload(logPath, logContent, { 
-            contentType: 'text/plain', 
-            upsert: true 
-          });
+          await uploadToBucketOrThrow(bucket, logPath, logContent, 'text/plain');
           
           // Check if evidence already exists to avoid duplication
           const existing = await prisma.auditEvidence.findFirst({

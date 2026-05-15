@@ -3,9 +3,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import { cancelAuditJob, deleteAuditJob, getAuditJob } from '../../../../lib/api';
-import type { AuditJob, AuditResultStatus } from '../../../../lib/types';
+import { cancelAuditJob, deleteAuditJob, getAuditJob, getAuditJobLogs } from '../../../../lib/api';
+import type { AuditEvidence, AuditJob, AuditResultStatus } from '../../../../lib/types';
+import { ArtifactPreviewModal } from '../../../../components/ui/ArtifactPreviewModal';
+import { ConfirmModal } from '../../../../components/ui/ConfirmModal';
+import { Modal } from '../../../../components/ui/Modal';
+import { useToast } from '../../../../components/ui/Toast';
 
 const RESULT_STYLE: Record<AuditResultStatus, { bg: string; color: string; icon: string }> = {
   PASS: { bg: 'rgba(34,197,94,0.12)', color: '#4ade80', icon: '✅' },
@@ -39,7 +42,17 @@ export default function AuditJobDetailPage() {
   const [logs, setLogs] = useState<string | null>(null);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const logContainerRef = useRef<HTMLPreElement>(null);
+  const [selectedEvidence, setSelectedEvidence] = useState<AuditEvidence | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    confirmLoadingText: string;
+    type: 'danger' | 'primary';
+    onConfirm: () => Promise<void>;
+  } | null>(null);
   const jobStatus = job?.status;
+  const { showToast } = useToast();
 
   // Auto-scroll logs to bottom
   useEffect(() => {
@@ -62,7 +75,6 @@ export default function AuditJobDetailPage() {
         if (data.status === 'RUNNING') {
           // Use executionLog from the job record itself for realtime
           setLogs(data.executionLog || 'Đang chuẩn bị log...');
-          setShowLogs(true);
         }
       } catch (err) {
         console.error(err);
@@ -86,8 +98,6 @@ export default function AuditJobDetailPage() {
     return () => clearInterval(interval);
   }, [jobId, jobStatus]);
 
-  const [selectedImage, setSelectedImage] = useState<{ url: string; name: string } | null>(null);
-
   async function handleViewLogs() {
     if (!job) return;
     
@@ -105,45 +115,61 @@ export default function AuditJobDetailPage() {
 
     setLoadingLogs(true);
     try {
-      const content = await import('../../../../lib/api').then(api => api.getAuditJobLogs(jobId));
+      const content = await getAuditJobLogs(jobId);
       setLogs(content);
       setShowLogs(true);
     } catch (err) {
-      alert('Không tìm thấy log file hoặc job chưa có log.');
+      showToast('Không tìm thấy log file hoặc job chưa có log.', 'error');
     } finally {
       setLoadingLogs(false);
     }
   }
 
-  async function handleCancelJob() {
-    if (!job || !confirm(`Hủy audit job #${job.id}?`)) return;
-    try {
-      const updated = await cancelAuditJob(job.id);
-      setJob(updated);
-    } catch (err) {
-      console.error(err);
-      alert('Không thể hủy audit job');
-    }
+  function handleCancelJob() {
+    if (!job) return;
+
+    setConfirmState({
+      title: `Hủy audit job #${job.id}`,
+      message: 'Job sẽ dừng ngay khi backend xử lý xong yêu cầu hủy.',
+      confirmText: 'Hủy job',
+      confirmLoadingText: 'Đang hủy...',
+      type: 'primary',
+      onConfirm: async () => {
+        try {
+          const updated = await cancelAuditJob(job.id);
+          setJob(updated);
+          showToast(`Đã gửi yêu cầu hủy audit job #${job.id}`, 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Không thể hủy audit job', 'error');
+        }
+      },
+    });
   }
 
-  async function handleDeleteJob() {
-    if (!job || !confirm(`Xóa index cũ của audit job #${job.id}?`)) return;
-    try {
-      await deleteAuditJob(job.id);
-      window.location.href = '/audit';
-    } catch (err) {
-      console.error(err);
-      alert('Không thể xóa audit job');
-    }
+  function handleDeleteJob() {
+    if (!job) return;
+
+    setConfirmState({
+      title: `Xóa audit job #${job.id}`,
+      message: 'Thao tác này sẽ xóa index audit job và toàn bộ evidence/artifact đi kèm.',
+      confirmText: 'Xóa audit job',
+      confirmLoadingText: 'Đang xóa...',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteAuditJob(job.id);
+          window.location.href = '/audit';
+        } catch (err) {
+          console.error(err);
+          showToast('Không thể xóa audit job', 'error');
+        }
+      },
+    });
   }
 
-  const handleEvidenceClick = (ev: any) => {
-    const url = `/api/audit-jobs/${jobId}/evidence/${ev.id}`;
-    if (ev.mimeType?.startsWith('image/')) {
-      setSelectedImage({ url, name: ev.artifactName });
-    } else {
-      window.open(url, '_blank');
-    }
+  const handleEvidenceClick = (ev: AuditEvidence) => {
+    setSelectedEvidence(ev);
   };
 
   if (loading) {
@@ -211,21 +237,6 @@ export default function AuditJobDetailPage() {
           <div className="alert alert-danger" style={{ marginBottom: 'var(--space-6)', borderRadius: 'var(--radius-lg)' }}>
             <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ Audit Job Failed</div>
             <div style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)' }}>{job.errorMessage || 'No error message provided.'}</div>
-          </div>
-        )}
-
-        {showLogs && logs && (
-          <div className="card" style={{ marginBottom: 'var(--space-6)', background: '#000', border: '1px solid #333' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ color: '#888', fontSize: 12, fontWeight: 700 }}>SYSTEM EXECUTION LOG</span>
-              <button onClick={() => setShowLogs(false)} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer' }}>✕</button>
-            </div>
-            <pre 
-              ref={logContainerRef}
-              style={{ margin: 0, padding: 0, color: '#0f0', fontSize: 12, overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto' }}
-            >
-              {logs}
-            </pre>
           </div>
         )}
 
@@ -375,42 +386,53 @@ export default function AuditJobDetailPage() {
         </div>
       </div>
 
-      {/* Image Modal */}
-      {selectedImage && (
-        <div 
+      <Modal
+        isOpen={showLogs}
+        onClose={() => setShowLogs(false)}
+        title="Audit Execution Log"
+        description={job ? `Job #${job.id} • ${job.vm.name}` : undefined}
+        size="fullscreen"
+        contentStyle={{ display: 'flex', flexDirection: 'column', minHeight: '62vh' }}
+      >
+        <pre
+          ref={logContainerRef}
           style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.9)',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 'var(--space-10)',
+            margin: 0,
+            minHeight: '62vh',
+            maxHeight: '72vh',
+            padding: 'var(--space-5)',
+            overflow: 'auto',
+            background: '#020617',
+            border: '1px solid rgba(15, 23, 42, 0.8)',
+            borderRadius: 'var(--radius-xl)',
+            color: '#22c55e',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'var(--text-xs)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
           }}
-          onClick={() => setSelectedImage(null)}
         >
-          <div style={{ position: 'absolute', top: 20, right: 20, color: '#fff', fontSize: 32, cursor: 'pointer', fontWeight: 300 }}>✕</div>
-          <div style={{ color: '#fff', marginBottom: 20, fontSize: 'var(--text-lg)', fontWeight: 600 }}>{selectedImage.name}</div>
-          <div style={{ position: 'relative', width: 'min(100%, 1200px)', height: 'calc(100vh - 150px)' }} onClick={(e) => e.stopPropagation()}>
-            <Image
-              src={selectedImage.url}
-              alt={selectedImage.name}
-              fill
-              unoptimized
-              sizes="100vw"
-              style={{ objectFit: 'contain', borderRadius: 'var(--radius-lg)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}
-            />
-          </div>
-          <div style={{ marginTop: 20 }}>
-            <a href={selectedImage.url} download className="btn btn-primary">Download Image</a>
-          </div>
-        </div>
-      )}
+          {logs || 'Chưa có log để hiển thị.'}
+        </pre>
+      </Modal>
+
+      <ArtifactPreviewModal
+        isOpen={!!selectedEvidence}
+        onClose={() => setSelectedEvidence(null)}
+        jobId={jobId}
+        evidence={selectedEvidence}
+      />
+
+      <ConfirmModal
+        isOpen={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={confirmState?.onConfirm || (async () => {})}
+        title={confirmState?.title || ''}
+        message={confirmState?.message || ''}
+        confirmText={confirmState?.confirmText || 'Xác nhận'}
+        confirmLoadingText={confirmState?.confirmLoadingText || 'Đang xử lý...'}
+        type={confirmState?.type || 'primary'}
+      />
 
       <style jsx>{`
         .evidence-item:hover {

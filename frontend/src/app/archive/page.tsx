@@ -3,13 +3,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getAuditJobs, getAuditJobEvidence } from '../../lib/api';
-import type { AuditJob } from '../../lib/types';
+import type { AuditEvidence, AuditJob } from '../../lib/types';
+import { ArtifactPreviewModal } from '../../components/ui/ArtifactPreviewModal';
+import { useToast } from '../../components/ui/Toast';
 
 export default function ArchivePage() {
   const [jobs, setJobs] = useState<AuditJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
   const [evidenceMap, setEvidenceMap] = useState<Record<number, Awaited<ReturnType<typeof getAuditJobEvidence>>>>({});
+  const [selectedPreview, setSelectedPreview] = useState<{ jobId: number; evidence: AuditEvidence } | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     getAuditJobs()
@@ -26,8 +30,13 @@ export default function ArchivePage() {
 
     setExpandedJobId(jobId);
     if (!evidenceMap[jobId]) {
-      const evidence = await getAuditJobEvidence(jobId);
-      setEvidenceMap((prev) => ({ ...prev, [jobId]: evidence }));
+      try {
+        const evidence = await getAuditJobEvidence(jobId);
+        setEvidenceMap((prev) => ({ ...prev, [jobId]: evidence }));
+      } catch (error) {
+        console.error(error);
+        showToast('Không thể tải danh sách artifact', 'error');
+      }
     }
   }
 
@@ -97,13 +106,12 @@ export default function ArchivePage() {
                     <div style={{ fontWeight: 700, marginBottom: 8 }}>Artifacts</div>
                     <div style={{ display: 'grid', gap: 8 }}>
                       {evidenceMap[job.id].map((ev) => (
-                        <a
+                        <button
+                          type="button"
                           key={ev.id}
-                          href={`/api/audit-jobs/${job.id}/evidence/${ev.id}`}
-                          target="_blank"
-                          rel="noreferrer"
+                          onClick={() => setSelectedPreview({ jobId: job.id, evidence: ev })}
                           className="card"
-                          style={{ padding: 12, textDecoration: 'none' }}
+                          style={{ padding: 12, textDecoration: 'none', textAlign: 'left', cursor: 'pointer', width: '100%' }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                             <div>
@@ -116,7 +124,7 @@ export default function ArchivePage() {
                               {ev.sizeBytes ? `${(ev.sizeBytes / 1024).toFixed(1)} KB` : ''}
                             </div>
                           </div>
-                        </a>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -125,6 +133,13 @@ export default function ArchivePage() {
             ))}
           </div>
         )}
+
+        <ArtifactPreviewModal
+          isOpen={!!selectedPreview}
+          onClose={() => setSelectedPreview(null)}
+          jobId={selectedPreview?.jobId || 0}
+          evidence={selectedPreview?.evidence || null}
+        />
       </div>
     </main>
   );

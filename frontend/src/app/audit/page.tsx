@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { cancelAuditJob, deleteAuditJob, getAuditJobs } from '../../lib/api';
 import type { AuditJob } from '../../lib/types';
 import { benchmarkLabel, projectConfig } from '../../lib/project-config';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { useToast } from '../../components/ui/Toast';
 
 const STATUS_BADGES: Record<string, { cls: string; icon: string }> = {
   PENDING: { cls: 'badge-warning', icon: '⏳' },
@@ -17,6 +19,15 @@ const STATUS_BADGES: Record<string, { cls: string; icon: string }> = {
 export default function AuditPage() {
   const [jobs, setJobs] = useState<AuditJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    confirmLoadingText: string;
+    type: 'danger' | 'primary';
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     getAuditJobs()
@@ -33,26 +44,44 @@ export default function AuditPage() {
     setJobs(data.jobs);
   }
 
-  async function handleCancel(job: AuditJob) {
-    if (!confirm(`Hủy audit job #${job.id}?`)) return;
-    try {
-      const updated = await cancelAuditJob(job.id);
-      setJobs((current) => current.map((item) => item.id === updated.id ? updated : item));
-    } catch (error) {
-      console.error(error);
-      alert('Không thể hủy audit job');
-    }
+  function handleCancel(job: AuditJob) {
+    setConfirmState({
+      title: `Hủy audit job #${job.id}`,
+      message: 'Job sẽ dừng ngay khi backend xử lý xong yêu cầu hủy.',
+      confirmText: 'Hủy job',
+      confirmLoadingText: 'Đang hủy...',
+      type: 'primary',
+      onConfirm: async () => {
+        try {
+          const updated = await cancelAuditJob(job.id);
+          setJobs((current) => current.map((item) => item.id === updated.id ? updated : item));
+          showToast(`Đã gửi yêu cầu hủy audit job #${job.id}`, 'success');
+        } catch (error) {
+          console.error(error);
+          showToast('Không thể hủy audit job', 'error');
+        }
+      },
+    });
   }
 
-  async function handleDelete(job: AuditJob) {
-    if (!confirm(`Xóa index cũ của audit job #${job.id}?`)) return;
-    try {
-      await deleteAuditJob(job.id);
-      await reloadJobs();
-    } catch (error) {
-      console.error(error);
-      alert('Không thể xóa audit job');
-    }
+  function handleDelete(job: AuditJob) {
+    setConfirmState({
+      title: `Xóa audit job #${job.id}`,
+      message: 'Thao tác này sẽ xóa index audit job và toàn bộ evidence/artifact đi kèm.',
+      confirmText: 'Xóa audit job',
+      confirmLoadingText: 'Đang xóa...',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteAuditJob(job.id);
+          await reloadJobs();
+          showToast(`Đã xóa audit job #${job.id}`, 'success');
+        } catch (error) {
+          console.error(error);
+          showToast('Không thể xóa audit job', 'error');
+        }
+      },
+    });
   }
 
   return (
@@ -205,6 +234,17 @@ export default function AuditPage() {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        onConfirm={confirmState?.onConfirm || (async () => {})}
+        title={confirmState?.title || ''}
+        message={confirmState?.message || ''}
+        confirmText={confirmState?.confirmText || 'Xác nhận'}
+        confirmLoadingText={confirmState?.confirmLoadingText || 'Đang xử lý...'}
+        type={confirmState?.type || 'primary'}
+      />
     </main>
   );
 }
