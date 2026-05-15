@@ -150,7 +150,6 @@ enum AuditJobStatus {
 enum AuditResultStatus {
   PASS
   FAIL
-  MANUAL
   NOT_APPLICABLE
   ERROR
   UNKNOWN
@@ -210,7 +209,7 @@ model AuditScript {
   controlId       String   // "1.2.1.2"
   title           String   // "Ensure gpgcheck is globally activated"
   section         String   // "1.2"
-  assessmentType  String   // "Automated" | "Manual"
+  assessmentType  String   // "Automated"
   parserMode      String   @default("cis_stdout")
   scriptStoragePath String // Supabase storage path
   scriptSha256    String?
@@ -248,7 +247,6 @@ model AuditJob {
   totalControls  Int            @default(0)
   passCount      Int            @default(0)
   failCount      Int            @default(0)
-  manualCount    Int            @default(0)
   errorCount     Int            @default(0)
   unknownCount   Int            @default(0)
   score          Float?         // PASS / (PASS + FAIL + ERROR) * 100

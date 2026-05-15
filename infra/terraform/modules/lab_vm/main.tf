@@ -89,12 +89,16 @@ resource "google_compute_instance" "lab_vm" {
     systemctl enable sshd
     systemctl restart sshd
 
-    # 5. Install minimum packages for the welcome page first
+    # 5. Disable guest firewall early so public HTTP works as soon as nginx is ready.
+    systemctl stop firewalld || true
+    systemctl disable firewalld || true
+
+    # 6. Install only the minimum packages needed for the welcome page first.
+    # Avoid slow third-party repos during first boot.
     echo "Installing minimum packages for welcome page..."
-    dnf install -y epel-release || true
-    dnf install -y nginx curl jq policycoreutils-python-utils
+    dnf --disablerepo='google-cloud*' install -y nginx curl || true
     
-    # 6. Configure Welcome Page early so HTTP is available even if later packages fail
+    # 7. Configure Welcome Page early so HTTP is available even if later packages fail
     echo "Configuring Nginx..."
     mkdir -p /usr/share/nginx/html
     cat > /usr/share/nginx/html/index.html <<HTML
@@ -150,22 +154,18 @@ HTML
     setsebool -P httpd_can_network_connect 1 || true
     systemctl enable --now nginx || true
 
-    for attempt in $(seq 1 12); do
+    for attempt in $(seq 1 24); do
       if curl -fsS http://127.0.0.1 >/dev/null 2>&1; then
         echo "Welcome page is reachable on localhost."
         break
       fi
-      echo "Waiting for nginx welcome page... attempt $attempt/12"
+      echo "Waiting for nginx welcome page... attempt $attempt/24"
       sleep 5
     done
 
-    # 7. Install audit packages best-effort after HTTP is already available
-    echo "Installing OpenSCAP packages..."
-    dnf install -y openscap-scanner scap-security-guide || true
-
-    # Disable firewalld inside VM to prevent conflicts
-    systemctl stop firewalld || true
-    systemctl disable firewalld || true
+    # 8. Install audit packages best-effort after HTTP is already available.
+    echo "Installing audit packages..."
+    dnf --disablerepo='google-cloud*' install -y jq policycoreutils-python-utils openscap-scanner scap-security-guide || true
 
     echo "Initialization complete!"
   EOF

@@ -30,7 +30,13 @@ async function cleanupManualAudits() {
     : [];
 
   const manualJobs = await prisma.auditJob.findMany({
-    where: { manualCount: { gt: 0 } },
+    where: {
+      scriptRuns: {
+        some: {
+          controlId: { in: [...MANUAL_M1_CONTROL_IDS] },
+        },
+      },
+    },
     select: { id: true },
   });
 

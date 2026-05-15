@@ -252,7 +252,6 @@ export class AuditJobExecutor {
       const results: NormalizedAuditResult[] = [];
       let passCount = 0;
       let failCount = 0;
-      const manualCount = 0;
       let errorCount = 0;
       let unknownCount = 0;
 
@@ -612,7 +611,7 @@ export class AuditJobExecutor {
           status: 'COMPLETED',
           score,
           riskLevel,
-          passCount, failCount, manualCount, errorCount, unknownCount,
+          passCount, failCount, errorCount, unknownCount,
           finishedAt,
           durationMs,
         }
