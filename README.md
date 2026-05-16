@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./.github/reportops-banner.svg" alt="ReportOps banner" width="100%" />
+  <img src="./.github/reportops-main-banner.jpg" alt="ReportOps banner" width="100%" />
 </p>
 
 <h1 align="center">ReportOps</h1>
