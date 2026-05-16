@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import { Client, type ClientChannel } from 'ssh2';
 import { WebSocketServer, WebSocket } from 'ws';
 import { env } from '../config/env';
+import { verifyLabSshSessionToken } from './lab-ssh-session';
 
 const prisma = new PrismaClient();
 
@@ -41,7 +42,26 @@ function extractCookie(cookieHeader: string | undefined, name: string): string |
   return null;
 }
 
-async function authenticateUpgradeRequest(req: IncomingMessage) {
+async function authenticateUpgradeRequest(req: IncomingMessage, vmId: number) {
+  const requestUrl = new URL(req.url || '/', 'http://localhost');
+  const sessionToken = requestUrl.searchParams.get('token');
+
+  if (sessionToken) {
+    const decoded = verifyLabSshSessionToken(sessionToken);
+
+    if (!decoded || decoded.vmId !== vmId) {
+      return null;
+    }
+
+    return prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+  }
+
   const token = extractCookie(req.headers.cookie, 'reportops_token');
   if (!token) return null;
 
@@ -80,8 +100,10 @@ export function registerLabSshWebSocket(server: import('http').Server): void {
       return;
     }
 
+    const vmId = parseInt(match[1], 10);
+
     try {
-      const user = await authenticateUpgradeRequest(req);
+      const user = await authenticateUpgradeRequest(req, vmId);
       if (!user) {
         rejectUpgrade(socket, 401, 'Unauthorized');
         return;
@@ -92,7 +114,6 @@ export function registerLabSshWebSocket(server: import('http').Server): void {
         return;
       }
 
-      const vmId = parseInt(match[1], 10);
       const vm = await prisma.labVm.findUnique({ where: { id: vmId } });
 
       if (!vm) {

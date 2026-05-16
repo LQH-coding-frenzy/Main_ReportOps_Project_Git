@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from 'xterm';
-import { getLabVmSshWebSocketUrl } from '../../lib/api';
+import { createLabVmSshSession } from '../../lib/api';
 import { Modal } from './Modal';
 
 type TerminalStatus = 'connecting' | 'ready' | 'error' | 'closed';
@@ -35,6 +35,9 @@ export function SshTerminalModal({ isOpen, onClose, vmId, vmName }: SshTerminalM
     if (!isOpen || !vmId || !containerRef.current) {
       return;
     }
+
+    setStatus('connecting');
+    setErrorMessage(null);
 
     const terminal = new Terminal({
       cursorBlink: true,
@@ -72,15 +75,14 @@ export function SshTerminalModal({ isOpen, onClose, vmId, vmName }: SshTerminalM
 
     terminal.writeln(`Connecting to audituser@${vmName}...`);
     terminal.writeln('');
-
-    const ws = new WebSocket(getLabVmSshWebSocketUrl(vmId));
-    socketRef.current = ws;
     terminalRef.current = terminal;
+    let isDisposed = false;
 
     const sendResize = () => {
-      if (ws.readyState !== WebSocket.OPEN) return;
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
       fitAddon.fit();
-      ws.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+      socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
     };
 
     const resizeObserver = new ResizeObserver(() => {
@@ -89,65 +91,85 @@ export function SshTerminalModal({ isOpen, onClose, vmId, vmName }: SshTerminalM
     resizeObserver.observe(containerRef.current);
 
     const disposeOnData = terminal.onData((data) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify({ type: 'input', data }));
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      socket.send(JSON.stringify({ type: 'input', data }));
     });
 
-    ws.onmessage = (event) => {
+    void (async () => {
       try {
-        const message = JSON.parse(event.data as string) as {
-          type?: string;
-          data?: string;
-          message?: string;
+        const { wsUrl } = await createLabVmSshSession(vmId);
+
+        if (isDisposed) {
+          return;
+        }
+
+        const ws = new WebSocket(wsUrl);
+        socketRef.current = ws;
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data as string) as {
+              type?: string;
+              data?: string;
+              message?: string;
+            };
+
+            if (message.type === 'output' && typeof message.data === 'string') {
+              terminal.write(message.data);
+              return;
+            }
+
+            if (message.type === 'ready') {
+              setStatus('ready');
+              setErrorMessage(null);
+              window.requestAnimationFrame(sendResize);
+              return;
+            }
+
+            if (message.type === 'status' && message.message) {
+              terminal.writeln(message.message);
+              return;
+            }
+
+            if (message.type === 'error') {
+              const nextError = message.message || 'Không thể mở phiên SSH.';
+              setStatus('error');
+              setErrorMessage(nextError);
+              terminal.writeln(`\r\n[${nextError}]`);
+              return;
+            }
+
+            if (message.type === 'closed') {
+              setStatus((current) => (current === 'error' ? current : 'closed'));
+              terminal.writeln('\r\n[SSH session closed]');
+            }
+          } catch {
+            terminal.writeln('\r\n[Received malformed SSH message]');
+          }
         };
 
-        if (message.type === 'output' && typeof message.data === 'string') {
-          terminal.write(message.data);
-          return;
-        }
-
-        if (message.type === 'ready') {
-          setStatus('ready');
-          setErrorMessage(null);
-          window.requestAnimationFrame(sendResize);
-          return;
-        }
-
-        if (message.type === 'status' && message.message) {
-          terminal.writeln(message.message);
-          return;
-        }
-
-        if (message.type === 'error') {
-          const nextError = message.message || 'Không thể mở phiên SSH.';
-          setStatus('error');
-          setErrorMessage(nextError);
-          terminal.writeln(`\r\n[${nextError}]`);
-          return;
-        }
-
-        if (message.type === 'closed') {
+        ws.onclose = () => {
           setStatus((current) => (current === 'error' ? current : 'closed'));
-          terminal.writeln('\r\n[SSH session closed]');
-        }
-      } catch {
-        terminal.writeln('\r\n[Received malformed SSH message]');
+        };
+
+        ws.onerror = () => {
+          setStatus('error');
+          setErrorMessage('Không thể kết nối Web SSH sau khi đã tạo session. Kiểm tra proxy backend hoặc Nginx upgrade headers.');
+        };
+      } catch (error) {
+        const nextError = error instanceof Error ? error.message : 'Không thể chuẩn bị Web SSH session.';
+        setStatus('error');
+        setErrorMessage(nextError);
+        terminal.writeln(`\r\n[${nextError}]`);
       }
-    };
-
-    ws.onclose = () => {
-      setStatus((current) => (current === 'error' ? current : 'closed'));
-    };
-
-    ws.onerror = () => {
-      setStatus('error');
-      setErrorMessage('Không thể kết nối Web SSH. Kiểm tra API proxy hoặc trạng thái VM.');
-    };
+    })();
 
     return () => {
+      isDisposed = true;
       resizeObserver.disconnect();
       disposeOnData.dispose();
-      ws.close();
+      socketRef.current?.close();
       terminal.dispose();
       socketRef.current = null;
       terminalRef.current = null;

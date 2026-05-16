@@ -306,10 +306,9 @@ export async function purgeLabVmIndex(id: number): Promise<void> {
   await apiFetch(`/api/lab/vms/${id}/index`, { method: 'DELETE' });
 }
 
-export function getLabVmSshWebSocketUrl(id: number): string {
-  const baseUrl = new URL(API_BASE);
-  const protocol = baseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${baseUrl.host}/api/lab/vms/${id}/ssh`;
+export async function createLabVmSshSession(id: number): Promise<{ wsUrl: string }> {
+  const res = await apiFetch<ApiResponse<{ wsUrl: string }>>(`/api/lab/vms/${id}/ssh/session`);
+  return res.data;
 }
 
 // ═══════════════════════════════════════════════════

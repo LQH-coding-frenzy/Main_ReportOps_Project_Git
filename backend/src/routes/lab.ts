@@ -5,6 +5,7 @@ import { requireLeader } from '../middleware/rbac';
 import { purgeAuditJobArtifacts } from '../services/audit/archive-cleanup';
 import { SSHRunner } from '../services/audit/ssh-runner';
 import { env } from '../config/env';
+import { buildLabSshWebSocketUrl, createLabSshSessionToken } from '../services/lab-ssh-session';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -294,6 +295,52 @@ router.get('/vms/:id/observability', requireAuth, async (req: Request, res: Resp
   } catch (error) {
     console.error('Get VM observability error:', error);
     res.status(500).json({ error: 'Failed to collect VM observability', status: 500 });
+  }
+});
+
+/**
+ * GET /api/lab/vms/:id/ssh/session
+ * Prepare a signed Web SSH URL for the browser.
+ */
+router.get('/vms/:id/ssh/session', requireAuth, requireLeader, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(id)) {
+      res.status(400).json({ error: 'Invalid VM id', status: 400 });
+      return;
+    }
+
+    const vm = await prisma.labVm.findUnique({
+      where: { id },
+      select: { id: true, status: true, publicIp: true },
+    });
+
+    if (!vm) {
+      res.status(404).json({ error: 'VM not found', status: 404 });
+      return;
+    }
+
+    if (vm.status !== 'RUNNING' || !vm.publicIp) {
+      res.status(409).json({ error: 'VM is not ready for Web SSH', status: 409 });
+      return;
+    }
+
+    if (!env.AUDIT_RUNNER_SSH_KEY) {
+      res.status(503).json({ error: 'Web SSH is not configured on the backend', status: 503 });
+      return;
+    }
+
+    const sessionToken = createLabSshSessionToken(req.user!.id, vm.id);
+    const wsUrl = buildLabSshWebSocketUrl(req, vm.id, sessionToken);
+
+    res.json({
+      data: { wsUrl },
+      status: 200,
+    });
+  } catch (error) {
+    console.error('Create Web SSH session error:', error);
+    res.status(500).json({ error: 'Failed to prepare Web SSH session', status: 500 });
   }
 });
 
