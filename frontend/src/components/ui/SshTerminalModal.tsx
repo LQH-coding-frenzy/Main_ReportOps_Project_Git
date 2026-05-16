@@ -36,9 +36,6 @@ export function SshTerminalModal({ isOpen, onClose, vmId, vmName }: SshTerminalM
       return;
     }
 
-    setStatus('connecting');
-    setErrorMessage(null);
-
     const terminal = new Terminal({
       cursorBlink: true,
       convertEol: true,
