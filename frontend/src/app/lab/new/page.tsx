@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createLabVm } from '../../../lib/api';
+import { createLabVm, getCurrentUser } from '../../../lib/api';
 import { benchmarkLabel } from '../../../lib/project-config';
 import { LAB_VM_MACHINE_TYPES } from '../../../lib/lab-vm-hardware';
+import { hasCapability } from '../../../lib/system-roles';
 
 export default function NewLabVmPage() {
   const router = useRouter();
@@ -13,6 +14,17 @@ export default function NewLabVmPage() {
   const [machineType, setMachineType] = useState('e2-medium');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function guard() {
+      const currentUser = await getCurrentUser();
+      if (!currentUser || !hasCapability(currentUser, 'manage_lab')) {
+        window.location.href = '/dashboard';
+      }
+    }
+
+    guard().catch(console.error);
+  }, []);
 
   async function handleCreate() {
     if (!name.trim()) {

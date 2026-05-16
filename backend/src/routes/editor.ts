@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireSectionAccess, requireLeader } from '../middleware/rbac';
+import { requireSectionAccess, requireCapabilityAccess } from '../middleware/rbac';
 import { generateEditorConfig, CallbackStatus, verifyCallbackToken } from '../services/onlyoffice';
 import { getSignedUrl, downloadFromUrl, uploadFile, fileExists, createEmptyDocx } from '../services/storage';
 import { env } from '../config/env';
+import { hasAnyRole } from '../lib/system-roles';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -33,7 +34,7 @@ function extractCallbackToken(req: Request): string | null {
 router.get(
   '/config/report/:buildId',
   requireAuth,
-  requireLeader,
+  requireCapabilityAccess('view_reports'),
   async (req: Request, res: Response) => {
     try {
       const buildId = parseInt(req.params.buildId, 10);
@@ -117,7 +118,7 @@ router.get(
 
       // Determine edit permission
       const isAssigned = section.assignments.some((a) => a.userId === user.id);
-      const canEdit = user.role === 'LEADER' || isAssigned;
+      const canEdit = hasAnyRole(user, [Role.LEADER, Role.ADMIN]) || isAssigned;
 
       const config = generateEditorConfig({
         fileUrl,
@@ -215,7 +216,7 @@ router.post('/callback', async (req: Request, res: Response) => {
         });
 
         const hasSectionAccess =
-          !!editorUser && (editorUser.role === 'LEADER' || editorUser.assignments.length > 0);
+          !!editorUser && (hasAnyRole(editorUser, [Role.LEADER, Role.ADMIN]) || editorUser.assignments.length > 0);
 
         if (!hasSectionAccess) {
           console.warn(

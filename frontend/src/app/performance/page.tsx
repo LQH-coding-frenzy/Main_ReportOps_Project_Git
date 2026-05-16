@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { getCurrentUser, getPerformance } from '../../lib/api';
 import type { User, PerformanceData } from '../../lib/types';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { hasCapability } from '../../lib/system-roles';
 
 export default function PerformancePage() {
   const [, setUser] = useState<User | null>(null);
@@ -27,7 +28,7 @@ export default function PerformancePage() {
     async function init() {
       try {
         const u = await getCurrentUser();
-        if (!u || u.role !== 'LEADER') {
+        if (!u || !hasCapability(u, 'view_performance')) {
           window.location.href = '/dashboard';
           return;
         }
@@ -90,7 +91,7 @@ export default function PerformancePage() {
                 )}
                 <div>
                   <div className="font-bold text-lg">{member.displayName || member.githubUsername}</div>
-                  <div className="text-xs text-tertiary-text uppercase tracking-wider">{member.role}</div>
+                    <div className="text-xs text-tertiary-text uppercase tracking-wider">{member.roles?.join(' + ') || member.role}</div>
                 </div>
               </div>
             </div>

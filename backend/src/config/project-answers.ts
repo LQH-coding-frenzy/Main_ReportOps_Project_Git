@@ -59,3 +59,13 @@ export function loadProjectAnswers(customPath?: string): ProjectAnswers {
 export function getProjectAnswers(): ProjectAnswers {
   return loadProjectAnswers(process.env.PROJECT_ANSWERS_PATH);
 }
+
+export function resolveProjectRoot(customPath?: string): string {
+  const filePath = customPath || process.env.PROJECT_ANSWERS_PATH || DEFAULT_PATHS.find((p) => fs.existsSync(p));
+
+  if (!filePath) {
+    return path.resolve(process.cwd(), '..');
+  }
+
+  return path.dirname(path.resolve(filePath));
+}

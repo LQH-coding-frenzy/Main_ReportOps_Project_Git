@@ -16,7 +16,13 @@ const ACTION_ICONS: Record<string, string> = {
   assign_section: '📌',
   unassign_section: '📌',
   change_user_role: '🛡️',
+  set_user_roles: '🛡️',
   freeze_release: '❄️',
+  upload_audit_script: '📜',
+  create_audit_job: '🚀',
+  create_remediation_job: '🛠️',
+  cancel_audit_job: '⏹️',
+  delete_audit_job: '🗑️',
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -29,7 +35,13 @@ const ACTION_COLORS: Record<string, string> = {
   assign_section: 'badge-info',
   unassign_section: 'badge-info',
   change_user_role: 'badge-danger',
+  set_user_roles: 'badge-danger',
   freeze_release: 'badge-success',
+  upload_audit_script: 'badge-info',
+  create_audit_job: 'badge-primary',
+  create_remediation_job: 'badge-warning',
+  cancel_audit_job: 'badge-secondary',
+  delete_audit_job: 'badge-danger',
 };
 
 export default function AdminAuditLogsPage() {

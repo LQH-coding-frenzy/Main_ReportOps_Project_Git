@@ -136,6 +136,11 @@ The repository now covers two closely related tracks:
 │   └── setup-vm.sh              # VM bootstrap helper
 ├── .github/workflows/           # CI, security, deploy, source releases, lab VM automation
 ├── database/                    # Database notes and supporting docs
+├── scripts/                     # Team submission audit scripts (M1 real, M2-M4 placeholder)
+├── manifests/                   # YAML manifests matching the M1-M4 packs
+├── remediation/                 # Remediation scripts kept separate from audit-only entrypoints
+├── logs/                        # before/after command output captured for report evidence
+├── screenshots/                 # M1-M4 screenshot buckets for final report assembly
 ├── m1_audit_scripts_almalinux9/ # M1 shell script reference set
 ├── project.answers.yaml         # Shared project metadata and defaults
 ├── WRITING_GUIDE.md             # Mandatory formatting guide for report authors
@@ -259,10 +264,10 @@ This enables the embedded editor flow used by `/editor/[sectionId]` and `/editor
 
 | Member | Role | GitHub | Scope |
 | --- | --- | --- | --- |
-| Lại Quang Huy | Leader | `LQH-coding-frenzy` | M1: 1.1, 1.2, 1.4, 1.5, 1.6, 2.3, 2.4 |
-| Bao Nguyên | Member | `baongdqu` | M2: 1.3, 2.1, 2.2, 3, 4 |
-| Trương Duy | Member | `truongdaoanhduy` | M3: 5.1, 5.2, 5.3, 5.4 |
-| Lâm Hoàng Phước | Member | `hpuoc` | M4: 1.7, 1.8, 6, 7 |
+| Lại Quang Huy | Leader | `LQH-coding-frenzy` | M1: `1.2.1.2`, `1.1.2.1.2`, `1.1.2.1.3`, `1.1.2.1.4`, `1.5.1`, `1.5.2`, `2.3.1` |
+| Bao Nguyên | Member | `baongdqu` | M2: `1.3.1.1`, `1.3.1.4`, `1.3.1.7`, `1.3.1.8`, `3.3.1`, `3.3.7`, `4.1.1` |
+| Trương Duy | Member | `truongdaoanhduy` | M3: `5.1.1`, `5.1.15`, `5.1.19`, `5.1.20`, `5.1.22`, `5.2.2`, `5.2.6` |
+| Lâm Hoàng Phước | Member | `hpuoc` | M4: `5.3.2.2`, `5.3.2.3`, `5.3.2.4`, `5.4.1.1`, `5.4.2.1`, `6.2.1.1`, `6.2.3.2` |
 
 ## Repository Status
 

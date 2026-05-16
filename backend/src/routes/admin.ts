@@ -1,17 +1,18 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
+import { getEffectiveRoles, normalizeAssignableRoles } from '../lib/system-roles';
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// All admin routes require auth + leader role
-router.use(requireAuth, requireLeader);
+// All admin routes require auth + admin panel capability
+router.use(requireAuth, requireCapabilityAccess('admin_panel'));
 
 /**
  * GET /api/admin/users
- * List all users with stats (Leader only).
+ * List all users with stats (Admin capable users only).
  */
 router.get('/users', async (req: Request, res: Response) => {
   try {
@@ -42,6 +43,7 @@ router.get('/users', async (req: Request, res: Response) => {
         email: u.email,
         avatarUrl: u.avatarUrl,
         role: u.role,
+        roles: getEffectiveRoles(u),
         createdAt: u.createdAt,
         sections: u.assignments.map((a) => a.section),
         lastActive: u.auditLogs[0]?.createdAt ?? null,
@@ -56,44 +58,73 @@ router.get('/users', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/admin/users/:id/role
- * Change a user's role (Leader only).
+ * Change a user's roles.
  */
 router.patch('/users/:id/role', async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.id, 10);
-    const { role } = req.body;
+    const rawRoles = Array.isArray(req.body?.roles)
+      ? req.body.roles
+      : typeof req.body?.role === 'string'
+        ? [req.body.role]
+        : [];
 
-    if (isNaN(userId) || !role) {
-      res.status(400).json({ error: 'Invalid user ID or role', status: 400 });
+    if (isNaN(userId) || rawRoles.length === 0) {
+      res.status(400).json({ error: 'Invalid user ID or roles', status: 400 });
       return;
     }
 
-    if (!['LEADER', 'MEMBER'].includes(role)) {
-      res.status(400).json({ error: 'Invalid role. Must be LEADER or MEMBER', status: 400 });
+    const invalidRoles = rawRoles.filter((role: string) => !Object.values(Role).includes(role as Role));
+    if (invalidRoles.length > 0) {
+      res.status(400).json({ error: `Invalid roles: ${invalidRoles.join(', ')}`, status: 400 });
       return;
     }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, githubUsername: true },
+    });
+
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found', status: 404 });
+      return;
+    }
+
+    const normalizedRoles = normalizeAssignableRoles(
+      targetUser.githubUsername,
+      rawRoles.map((role: string) => role as Role)
+    );
 
     // Prevent self-demotion
     if (userId === req.user!.id) {
-      res.status(400).json({ error: 'Cannot change your own role', status: 400 });
+      res.status(400).json({ error: 'Cannot change your own roles', status: 400 });
       return;
     }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { role },
-      select: { id: true, githubUsername: true, displayName: true, role: true },
+      data: {
+        role: normalizedRoles[0],
+        roles: normalizedRoles,
+      },
+      select: { id: true, githubUsername: true, displayName: true, role: true, roles: true },
     });
 
     await prisma.auditLog.create({
       data: {
         userId: req.user!.id,
-        action: 'change_user_role',
-        details: { targetUserId: userId, newRole: role },
+        action: 'set_user_roles',
+        details: { targetUserId: userId, newRoles: normalizedRoles },
       },
     });
 
-    res.json({ data: updatedUser, status: 200 });
+    res.json({
+      data: {
+        ...updatedUser,
+        roles: getEffectiveRoles(updatedUser),
+      },
+      status: 200,
+    });
   } catch (error) {
     console.error('Admin change role error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });
@@ -139,16 +170,45 @@ router.delete('/sections/:sectionId/assign/:userId', async (req: Request, res: R
  */
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
-    const [totalUsers, totalSections, totalBuilds, totalReleases, totalLogs] = await Promise.all([
-      prisma.user.count(),
-      prisma.section.count(),
+    const [users, sections, totalBuilds, totalReleases, totalLogs] = await Promise.all([
+      prisma.user.findMany({ select: { id: true, githubUsername: true, role: true, roles: true } }),
+      prisma.section.findMany({
+        select: {
+          code: true,
+          _count: { select: { assignments: true } },
+        },
+      }),
       prisma.reportBuild.count({ where: { status: 'completed' } }),
       prisma.release.count(),
       prisma.auditLog.count(),
     ]);
 
+    const roleBreakdown = Object.values(Role).reduce<Record<string, number>>((acc, role) => {
+      acc[role] = 0;
+      return acc;
+    }, {});
+
+    for (const user of users) {
+      for (const role of getEffectiveRoles(user)) {
+        roleBreakdown[role] = (roleBreakdown[role] || 0) + 1;
+      }
+    }
+
+    const sectionBreakdown = sections.map((section) => ({
+      code: section.code,
+      assigneeCount: section._count.assignments,
+    }));
+
     res.json({
-      data: { totalUsers, totalSections, totalBuilds, totalReleases, totalLogs },
+      data: {
+        totalUsers: users.length,
+        totalSections: sections.length,
+        totalBuilds,
+        totalReleases,
+        totalLogs,
+        roleBreakdown,
+        sectionBreakdown,
+      },
       status: 200,
     });
   } catch (error) {

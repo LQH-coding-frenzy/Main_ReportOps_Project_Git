@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getAuthorizationUrl,
@@ -9,6 +9,7 @@ import {
 } from '../services/github-oauth';
 import { generateToken, setAuthCookie, clearAuthCookie, requireAuth } from '../middleware/auth';
 import { env } from '../config/env';
+import { getEffectiveRoles, normalizeAssignableRoles, PRIMARY_LEADER_GITHUB_USERNAME } from '../lib/system-roles';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -78,6 +79,11 @@ router.get('/github/callback', async (req: Request, res: Response) => {
     });
 
     if (user) {
+      const normalizedRoles = normalizeAssignableRoles(
+        githubUser.login,
+        githubUser.login === PRIMARY_LEADER_GITHUB_USERNAME ? [Role.LEADER] : getEffectiveRoles(user)
+      );
+
       // Update existing user with latest GitHub info
       user = await prisma.user.update({
         where: { id: user.id },
@@ -87,9 +93,16 @@ router.get('/github/callback', async (req: Request, res: Response) => {
           displayName: githubUser.name || user.displayName,
           email: email || user.email,
           avatarUrl: githubUser.avatar_url,
+          role: normalizedRoles[0],
+          roles: normalizedRoles,
         },
       });
     } else {
+      const normalizedRoles = normalizeAssignableRoles(
+        githubUser.login,
+        githubUser.login === PRIMARY_LEADER_GITHUB_USERNAME ? [Role.LEADER] : [Role.MEMBER]
+      );
+
       // New user — create with MEMBER role (leader can promote later)
       user = await prisma.user.create({
         data: {
@@ -98,7 +111,8 @@ router.get('/github/callback', async (req: Request, res: Response) => {
           displayName: githubUser.name,
           email,
           avatarUrl: githubUser.avatar_url,
-          role: 'MEMBER',
+          role: normalizedRoles[0],
+          roles: normalizedRoles,
         },
       });
     }
@@ -168,11 +182,13 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
         email: user.email,
         avatarUrl: user.avatarUrl,
         role: user.role,
+        roles: getEffectiveRoles(user),
         sections: user.assignments.map((a) => ({
           id: a.section.id,
           code: a.section.code,
           title: a.section.title,
           cisChapters: a.section.cisChapters,
+          controlIds: a.section.controlIds,
         })),
       },
       status: 200,

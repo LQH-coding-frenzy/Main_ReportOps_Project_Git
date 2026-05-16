@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
 import { buildPreviewReport, deleteReportBuild } from '../services/report-generator';
 import { getSignedUrl } from '../services/storage';
+import { getEffectiveRoles } from '../lib/system-roles';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -12,7 +13,7 @@ const prisma = new PrismaClient();
  * POST /api/reports/preview
  * Trigger a preview report build (leader only).
  */
-router.post('/preview', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/preview', requireAuth, requireCapabilityAccess('manage_reports'), async (req: Request, res: Response) => {
   try {
     const result = await buildPreviewReport(req.user!.id);
 
@@ -44,7 +45,7 @@ router.post('/preview', requireAuth, requireLeader, async (req: Request, res: Re
  * GET /api/reports
  * List all report builds (leader only).
  */
-router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.get('/', requireAuth, requireCapabilityAccess('view_reports'), async (req: Request, res: Response) => {
   try {
     const builds = await prisma.reportBuild.findMany({
       orderBy: { createdAt: 'desc' },
@@ -82,7 +83,7 @@ router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) 
  * GET /api/reports/performance
  * Get performance metrics for leaders.
  */
-router.get('/performance', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.get('/performance', requireAuth, requireCapabilityAccess('view_performance'), async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
       include: {
@@ -100,15 +101,16 @@ router.get('/performance', requireAuth, requireLeader, async (req: Request, res:
       const editLogs = u.auditLogs.filter((l) => l.action === 'save_document' || l.action === 'edit_section');
       const lastActive = u.auditLogs[0]?.createdAt || null;
 
-      return {
-        id: u.id,
-        displayName: u.displayName,
-        githubUsername: u.githubUsername,
-        avatarUrl: u.avatarUrl,
-        role: u.role,
-        stats: {
-          assignedSections: u.assignments.length,
-          totalEdits: editLogs.length,
+        return {
+          id: u.id,
+          displayName: u.displayName,
+          githubUsername: u.githubUsername,
+          avatarUrl: u.avatarUrl,
+          role: u.role,
+          roles: getEffectiveRoles(u),
+          stats: {
+            assignedSections: u.assignments.length,
+            totalEdits: editLogs.length,
           lastActive,
         },
       };
@@ -131,7 +133,7 @@ router.get('/performance', requireAuth, requireLeader, async (req: Request, res:
  * GET /api/reports/:id
  * Get a report build detail with download link.
  */
-router.get('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, requireCapabilityAccess('view_reports'), async (req: Request, res: Response) => {
   try {
     const buildId = parseInt(req.params.id, 10);
     if (Number.isNaN(buildId)) {
@@ -183,7 +185,7 @@ router.get('/:id', requireAuth, requireLeader, async (req: Request, res: Respons
  * POST /api/reports/:id/consume-preview
  * Mark a completed preview as consumed: delete artifact(s) and remove build record.
  */
-router.post('/:id/consume-preview', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/:id/consume-preview', requireAuth, requireCapabilityAccess('manage_reports'), async (req: Request, res: Response) => {
   try {
     const buildId = parseInt(req.params.id, 10);
     if (Number.isNaN(buildId)) {
@@ -249,7 +251,7 @@ router.post('/:id/consume-preview', requireAuth, requireLeader, async (req: Requ
  * DELETE /api/reports/:id
  * Delete a report build (leader only).
  */
-router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requireCapabilityAccess('manage_reports'), async (req: Request, res: Response) => {
   try {
     const buildId = parseInt(req.params.id, 10);
     await deleteReportBuild(buildId);

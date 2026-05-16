@@ -5,16 +5,17 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getCurrentUser } from '../../lib/api';
 import type { User } from '../../lib/types';
+import { hasCapability, type AppCapability } from '../../lib/system-roles';
 
 const sidebarItems = [
-  { label: 'Tổng quan', href: '/admin', icon: '📊', exact: true },
-  { label: 'Người dùng', href: '/admin/users', icon: '👥' },
-  { label: 'Vai trò', href: '/admin/roles', icon: '🛡️' },
-  { label: 'Sections', href: '/admin/sections', icon: '📑' },
-  { label: 'Audit Packs', href: '/admin/audit-packs', icon: '📦' },
-  { label: 'Release Settings', href: '/admin/release-settings', icon: '🚀' },
-  { label: 'Audit Logs', href: '/admin/audit-logs', icon: '📜' },
-  { label: 'Cài đặt', href: '/admin/settings', icon: '⚡' },
+  { label: 'Tổng quan', href: '/admin', icon: '📊', exact: true, capability: 'admin_panel' as AppCapability },
+  { label: 'Người dùng', href: '/admin/users', icon: '👥', capability: 'manage_users' as AppCapability },
+  { label: 'Vai trò', href: '/admin/roles', icon: '🛡️', capability: 'manage_roles' as AppCapability },
+  { label: 'Sections', href: '/admin/sections', icon: '📑', capability: 'manage_sections' as AppCapability },
+  { label: 'Audit Packs', href: '/admin/audit-packs', icon: '📦', capability: 'manage_audit_packs' as AppCapability },
+  { label: 'Release Settings', href: '/admin/release-settings', icon: '🚀', capability: 'manage_releases' as AppCapability },
+  { label: 'Audit Logs', href: '/admin/audit-logs', icon: '📜', capability: 'view_audit_logs' as AppCapability },
+  { label: 'Cài đặt', href: '/admin/settings', icon: '⚡', capability: 'manage_settings' as AppCapability },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -27,10 +28,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     async function checkAccess() {
       try {
         const u = await getCurrentUser();
-        if (!u || u.role !== 'LEADER') {
+        if (!u) {
           window.location.href = '/dashboard';
           return;
         }
+
+        const accessibleItems = sidebarItems.filter((item) => hasCapability(u, item.capability));
+        if (accessibleItems.length === 0) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        if (!hasCapability(u, 'admin_panel') && pathname === '/admin') {
+          window.location.href = accessibleItems[0].href;
+          return;
+        }
+
         setUser(u);
       } catch {
         window.location.href = '/';
@@ -39,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
     }
     checkAccess();
-  }, []);
+  }, [pathname]);
 
   if (loading) {
     return (
@@ -51,6 +64,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   if (!user) return null;
+
+  const visibleItems = sidebarItems.filter((item) => hasCapability(user, item.capability));
 
   return (
     <div className="admin-layout">
@@ -71,7 +86,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="admin-sidebar-nav">
-          {sidebarItems.map((item) => {
+          {visibleItems.map((item) => {
             const isActive = item.exact
               ? pathname === item.href
               : pathname.startsWith(item.href);

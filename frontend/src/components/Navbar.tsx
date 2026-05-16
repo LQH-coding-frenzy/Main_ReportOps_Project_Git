@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import type { User } from '../lib/types';
 
 import { logout as apiLogout } from '../lib/api';
+import { getEffectiveRoles, hasCapability } from '../lib/system-roles';
 
 interface NavbarProps {
   user: User | null;
@@ -25,7 +26,8 @@ export function Navbar({ user }: NavbarProps) {
   // Don't show on editor (it has its own custom compact header)
   if (pathname.startsWith('/editor')) return null;
 
-  const isLeader = user?.role === 'LEADER';
+  const roles = getEffectiveRoles(user);
+  const roleLabel = roles.includes('LEADER') ? 'Leader' : roles.join(' + ');
 
   return (
     <nav className="navbar">
@@ -44,57 +46,65 @@ export function Navbar({ user }: NavbarProps) {
               Dashboard
             </Link>
           </li>
-          {isLeader && (
-            <>
-              <li>
-                <Link 
-                  href="/reports" 
-                  className={`navbar-link ${pathname === '/reports' ? 'active' : ''}`}
-                >
-                  Reports
-                </Link>
-              </li>
-              <li>
-                <Link 
-                  href="/releases" 
-                  className={`navbar-link ${pathname === '/releases' ? 'active' : ''}`}
-                >
-                  Releases
-                </Link>
-              </li>
-              <li>
-                <Link 
-                  href="/lab" 
-                  className={`navbar-link ${pathname.startsWith('/lab') ? 'active' : ''}`}
-                >
-                  Lab VMs
-                </Link>
-              </li>
-              <li>
-                <Link 
-                  href="/audit" 
-                  className={`navbar-link ${pathname.startsWith('/audit') ? 'active' : ''}`}
-                >
-                  Auto Audit
-                </Link>
-              </li>
-              <li>
-                <Link 
-                  href="/archive" 
-                  className={`navbar-link ${pathname.startsWith('/archive') ? 'active' : ''}`}
-                >
-                  Archives
-                </Link>
-              </li>
-              <li>
-                <Link 
-                  href="/admin" 
-                  className={`navbar-link ${pathname.startsWith('/admin') ? 'active' : ''}`}
-                >
-                  Admin
-                </Link>
-              </li>
-            </>
+          {hasCapability(user, 'view_reports') && (
+            <li>
+              <Link 
+                href="/reports" 
+                className={`navbar-link ${pathname === '/reports' ? 'active' : ''}`}
+              >
+                Reports
+              </Link>
+            </li>
+          )}
+          {hasCapability(user, 'view_releases') && (
+            <li>
+              <Link 
+                href="/releases" 
+                className={`navbar-link ${pathname === '/releases' ? 'active' : ''}`}
+              >
+                Releases
+              </Link>
+            </li>
+          )}
+          {hasCapability(user, 'manage_lab') && (
+            <li>
+              <Link 
+                href="/lab" 
+                className={`navbar-link ${pathname.startsWith('/lab') ? 'active' : ''}`}
+              >
+                Lab VMs
+              </Link>
+            </li>
+          )}
+          {hasCapability(user, 'run_audits') && (
+            <li>
+              <Link 
+                href="/audit" 
+                className={`navbar-link ${pathname.startsWith('/audit') ? 'active' : ''}`}
+              >
+                Auto Audit
+              </Link>
+            </li>
+          )}
+          {hasCapability(user, 'view_archive') && (
+            <li>
+              <Link 
+                href="/archive" 
+                className={`navbar-link ${pathname.startsWith('/archive') ? 'active' : ''}`}
+              >
+                Archives
+              </Link>
+            </li>
+          )}
+          {hasCapability(user, 'admin_panel') && (
+            <li>
+              <Link 
+                href="/admin" 
+                className={`navbar-link ${pathname.startsWith('/admin') ? 'active' : ''}`}
+              >
+                Admin
+              </Link>
+            </li>
           )}
         </ul>
       </div>
@@ -105,8 +115,8 @@ export function Navbar({ user }: NavbarProps) {
             <span className="text-sm text-secondary-text hidden sm:inline">
               {user.displayName || user.githubUsername}
             </span>
-            <span className={`badge ${isLeader ? 'badge-primary' : 'badge-info'}`}>
-              {isLeader ? 'Leader' : 'Member'}
+            <span className={`badge ${roles.includes('LEADER') ? 'badge-primary' : 'badge-info'}`}>
+              {roleLabel}
             </span>
             {user.avatarUrl && (
               <Image 

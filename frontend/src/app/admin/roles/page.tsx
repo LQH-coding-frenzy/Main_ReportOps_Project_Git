@@ -1,43 +1,79 @@
 'use client';
 
-const ROLES = [
-  { name: 'Admin', color: 'badge-danger', permissions: ['Toàn quyền hệ thống', 'Quản lý người dùng', 'Cấu hình hệ thống', 'Xem audit logs'], count: 0 },
-  { name: 'Leader', color: 'badge-primary', permissions: ['Quản lý sections', 'Build/Freeze reports', 'Phân công thành viên', 'Xem tất cả nội dung'], count: 1 },
-  { name: 'Member', color: 'badge-info', permissions: ['Chỉnh sửa section được gán', 'Xem hướng dẫn', 'Upload tài liệu'], count: 3 },
-  { name: 'Auditor', color: 'badge-warning', permissions: ['Tạo audit targets', 'Chạy audit jobs', 'Xem kết quả quét', 'Quản lý credentials'], count: 0 },
-  { name: 'Viewer', color: 'badge-success', permissions: ['Xem báo cáo', 'Xem releases', 'Xem dashboard'], count: 0 },
-];
+import { useEffect, useState } from 'react';
+import { getAdminUsers } from '../../../lib/api';
+import { ROLE_CATALOG } from '../../../lib/role-catalog';
 
 export default function AdminRolesPage() {
+  const [roleCounts, setRoleCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const users = await getAdminUsers();
+        const nextCounts = ROLE_CATALOG.reduce<Record<string, number>>((acc, entry) => {
+          acc[entry.role] = 0;
+          return acc;
+        }, {});
+
+        for (const user of users) {
+          for (const role of user.roles) {
+            nextCounts[role] = (nextCounts[role] || 0) + 1;
+          }
+        }
+
+        setRoleCounts(nextCounts);
+      } catch (error) {
+        console.error('Failed to load role counts:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="admin-content">
+        <div className="admin-loading">
+          <div className="spinner" />
+          <span>Đang tải role matrix...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-content">
       <div className="page-header">
         <h1 className="page-title">Quản Lý Vai Trò</h1>
-        <p className="page-subtitle">Cấu hình quyền hạn cho từng vai trò trong hệ thống</p>
+        <p className="page-subtitle">Ma trận 5 role thật của ReportOps sau bản cập nhật M1-M4</p>
       </div>
 
       <div className="grid grid-2">
-        {ROLES.map(role => (
-          <div key={role.name} className="card">
+        {ROLE_CATALOG.map((role) => (
+          <div key={role.role} className="card">
             <div className="card-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <span className={`badge ${role.color}`} style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) var(--space-4)' }}>
-                  {role.name}
+                <span className={`badge ${role.badgeClass}`} style={{ fontSize: 'var(--text-sm)', padding: 'var(--space-2) var(--space-4)' }}>
+                  {role.label}
                 </span>
                 <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-                  {role.count} người dùng
+                  {roleCounts[role.role] || 0} người dùng
                 </span>
               </div>
             </div>
             <div className="card-body">
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-3)' }}>
-                Quyền hạn:
+                {role.description}
               </p>
               <ul className="admin-permission-list">
-                {role.permissions.map(perm => (
-                  <li key={perm} className="admin-permission-item">
+                {role.permissions.map((permission) => (
+                  <li key={permission} className="admin-permission-item">
                     <span className="admin-permission-check">✓</span>
-                    {perm}
+                    {permission}
                   </li>
                 ))}
               </ul>
@@ -46,9 +82,9 @@ export default function AdminRolesPage() {
         ))}
       </div>
 
-      <div className="card" style={{ marginTop: 'var(--space-6)', borderColor: 'rgba(245, 158, 11, 0.3)', background: 'rgba(245, 158, 11, 0.05)' }}>
-        <p style={{ color: 'var(--color-accent-warning)', fontSize: 'var(--text-sm)', margin: 0 }}>
-          ⚠️ Tính năng tuỳ chỉnh quyền hạn chi tiết sẽ được kích hoạt khi hệ thống Auto-Audit hoàn tất triển khai. Hiện tại, hệ thống sử dụng 2 vai trò chính: <strong>Leader</strong> và <strong>Member</strong>.
+      <div className="card" style={{ marginTop: 'var(--space-6)', borderColor: 'rgba(99, 102, 241, 0.3)', background: 'rgba(99, 102, 241, 0.05)' }}>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', margin: 0 }}>
+          Role hoạt động theo phép hợp. `LEADER` luôn là full access, còn các role khác cộng dồn quyền khi cùng được gán cho một người dùng.
         </p>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { PrismaClient, Role } from '@prisma/client';
+import { SECTION_DEFINITIONS } from '../src/config/section-definitions';
 
 const prisma = new PrismaClient();
 
@@ -13,6 +14,7 @@ async function main() {
       githubUsername: 'LQH-coding-frenzy',
       displayName: 'Lại Quang Huy',
       role: Role.LEADER,
+      roles: [Role.LEADER],
       githubId: 'placeholder-lqh', // TODO: Auto-populated on first login
       email: null,
     },
@@ -20,6 +22,7 @@ async function main() {
       githubUsername: 'baongdqu',
       displayName: 'Bao Nguyên',
       role: Role.MEMBER,
+      roles: [Role.MEMBER],
       githubId: 'placeholder-bao', // TODO: Auto-populated on first login
       email: null,
     },
@@ -27,6 +30,7 @@ async function main() {
       githubUsername: 'truongdaoanhduy',
       displayName: 'Trương Duy',
       role: Role.MEMBER,
+      roles: [Role.MEMBER],
       githubId: 'placeholder-duy', // TODO: Auto-populated on first login
       email: null,
     },
@@ -34,6 +38,7 @@ async function main() {
       githubUsername: 'hpuoc',
       displayName: 'Lâm Hoàng Phước',
       role: Role.MEMBER,
+      roles: [Role.MEMBER],
       githubId: 'placeholder-phuoc', // TODO: Auto-populated on first login
       email: null,
     },
@@ -46,6 +51,7 @@ async function main() {
       update: {
         displayName: userData.displayName,
         role: userData.role,
+        roles: userData.roles,
       },
       create: userData,
     });
@@ -54,44 +60,22 @@ async function main() {
   }
 
   // ── Sections ──
-  const sections = [
-    {
-      code: 'M1',
-      title: 'Filesystem, Package, Boot, Process Hardening, Crypto, Time Sync, Scheduler',
-      description:
-        'CIS sections covering filesystem configuration, package management, bootloader hardening, process hardening, crypto policy, time synchronization, and job schedulers.',
-      cisChapters: ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'],
-      sortOrder: 1,
-      assigneeUsername: 'LQH-coding-frenzy',
-    },
-    {
-      code: 'M2',
-      title: 'SELinux, Services, Network, Firewall',
-      description:
-        'CIS sections covering SELinux configuration, service hardening, network parameters, and host-based firewall rules.',
-      cisChapters: ['1.3', '2.1', '2.2', '3', '4'],
-      sortOrder: 2,
-      assigneeUsername: 'baongdqu',
-    },
-    {
-      code: 'M3',
-      title: 'SSH, Privilege Escalation, PAM, User Accounts',
-      description:
-        'CIS sections covering SSH server configuration, sudo/privilege escalation, pluggable authentication modules, and user account policies.',
-      cisChapters: ['5.1', '5.2', '5.3', '5.4'],
-      sortOrder: 3,
-      assigneeUsername: 'truongdaoanhduy',
-    },
-    {
-      code: 'M4',
-      title: 'Banners, GDM, Logging/Auditing, System Maintenance',
-      description:
-        'CIS sections covering command line warning banners, GNOME Display Manager, system logging/auditing, and file integrity/maintenance.',
-      cisChapters: ['1.7', '1.8', '6', '7'],
-      sortOrder: 4,
-      assigneeUsername: 'hpuoc',
-    },
-  ];
+  const sectionAssignees: Record<string, string> = {
+    M1: 'LQH-coding-frenzy',
+    M2: 'baongdqu',
+    M3: 'truongdaoanhduy',
+    M4: 'hpuoc',
+  };
+
+  const sections = SECTION_DEFINITIONS.map((definition, index) => ({
+    code: definition.code,
+    title: definition.title,
+    description: definition.description,
+    cisChapters: definition.cisChapters,
+    controlIds: definition.controls.map((control) => control.id),
+    sortOrder: index + 1,
+    assigneeUsername: sectionAssignees[definition.code],
+  }));
 
   for (const sectionData of sections) {
     const { assigneeUsername, ...data } = sectionData;
@@ -102,6 +86,7 @@ async function main() {
         title: data.title,
         description: data.description,
         cisChapters: data.cisChapters,
+        controlIds: data.controlIds,
         sortOrder: data.sortOrder,
       },
       create: data,
@@ -128,13 +113,13 @@ async function main() {
     // Create initial empty document record
     await prisma.document.upsert({
       where: { sectionId: section.id },
-      update: {},
-      create: {
-        sectionId: section.id,
-        currentStorageKey: `sections/${section.code}/current.docx`,
-        fileName: `${section.code}-${section.title.split(',')[0].trim()}.docx`,
-      },
-    });
+        update: {},
+        create: {
+          sectionId: section.id,
+          currentStorageKey: `sections/${section.code}/current.docx`,
+          fileName: `${section.code.toLowerCase()}-section.docx`,
+        },
+      });
 
     console.log(`  ✅ Section: ${section.code} → ${assigneeUsername}`);
   }

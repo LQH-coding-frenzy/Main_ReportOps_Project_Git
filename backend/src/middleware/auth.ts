@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { env } from '../config/env';
+import { getEffectiveRoles } from '../lib/system-roles';
 
 const prisma = new PrismaClient();
 
@@ -12,7 +13,8 @@ export interface AuthUser {
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
-  role: 'LEADER' | 'MEMBER';
+  role: Role;
+  roles: Role[];
 }
 
 // Extend Express Request to include user
@@ -50,6 +52,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         email: true,
         avatarUrl: true,
         role: true,
+        roles: true,
       },
     });
 
@@ -58,7 +61,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    req.user = user;
+    req.user = {
+      ...user,
+      roles: getEffectiveRoles(user),
+    };
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
@@ -91,11 +97,15 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
         email: true,
         avatarUrl: true,
         role: true,
+        roles: true,
       },
     });
 
     if (user) {
-      req.user = user;
+      req.user = {
+        ...user,
+        roles: getEffectiveRoles(user),
+      };
     }
     next();
   } catch {

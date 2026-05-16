@@ -6,6 +6,7 @@ import type { Section } from '../../../lib/types';
 import type { AdminUser } from '../../../lib/api';
 import { useToast } from '../../../components/ui/Toast';
 import { Select } from '../../../components/ui/Select';
+import { FRONTEND_SECTION_DEFINITION_MAP } from '../../../lib/section-definitions';
 
 export default function AdminSectionsPage() {
   const [sections, setSections] = useState<Section[]>([]);
@@ -90,15 +91,17 @@ export default function AdminSectionsPage() {
           <div className="admin-assignment-guide-title">📋 Phân công hiện tại theo nhóm</div>
           <div className="admin-assignment-guide-grid">
             {[
-              { key: 'M1', name: 'LQH (Leader)', chapters: '1.1, 1.2, 1.4, 1.5, 1.6, 2.3, 2.4' },
-              { key: 'M2', name: 'Bao Nguyên', chapters: '1.3, 2.1, 2.2, 3, 4' },
-              { key: 'M3', name: 'Trương Duy', chapters: '5.1, 5.2, 5.3, 5.4' },
-              { key: 'M4', name: 'Lâm Hoàng Phước', chapters: '1.7, 1.8, 6, 7' },
+              { key: 'M1', name: 'LQH (Leader)' },
+              { key: 'M2', name: 'Bao Nguyên' },
+              { key: 'M3', name: 'Trương Duy' },
+              { key: 'M4', name: 'Lâm Hoàng Phước' },
             ].map(g => (
               <div key={g.key} className="admin-assignment-guide-item">
                 <span className="admin-chip">{g.key}</span>
                 <span className="admin-assignment-guide-name">{g.name}</span>
-                <span className="admin-assignment-guide-chapters">§{g.chapters}</span>
+                <span className="admin-assignment-guide-chapters">
+                  {FRONTEND_SECTION_DEFINITION_MAP[g.key as keyof typeof FRONTEND_SECTION_DEFINITION_MAP].controls.map((control) => control.id).join(', ')}
+                </span>
               </div>
             ))}
           </div>
@@ -121,6 +124,11 @@ export default function AdminSectionsPage() {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                     {section.cisChapters.map(ch => (
                       <span key={ch} className="admin-chip" style={{ fontSize: '11px' }}>§{ch}</span>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: 8 }}>
+                    {section.controls.map(control => (
+                      <span key={control.id} className="admin-chip" style={{ fontSize: '11px' }}>{control.id}</span>
                     ))}
                   </div>
                 </div>
@@ -175,7 +183,7 @@ export default function AdminSectionsPage() {
                   placeholder="— Chọn thành viên để thêm —"
                   options={users.map(u => ({
                     value: String(u.id),
-                    label: `${u.displayName || u.githubUsername} (${u.role})`
+                    label: `${u.displayName || u.githubUsername} (${u.roles.join(' + ')})`
                   }))}
                 />
               </div>

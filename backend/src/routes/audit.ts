@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
  * GET /api/audit-logs
  * List audit logs (leader only).
  */
-router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.get('/', requireAuth, requireCapabilityAccess('view_audit_logs'), async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string, 10) || 1;
     const limit = parseInt(req.query.limit as string, 10) || 50;

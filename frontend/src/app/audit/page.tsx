@@ -160,6 +160,7 @@ export default function AuditPage() {
                 <tr>
                   <th>ID</th>
                   <th>VM</th>
+                  <th>Type</th>
                   <th>Mode</th>
                   <th>Status</th>
                   <th>Score</th>
@@ -176,6 +177,11 @@ export default function AuditPage() {
                     <tr key={job.id}>
                       <td><code className="admin-code">#{job.id}</code></td>
                       <td>{job.vm.name}</td>
+                      <td>
+                        <span className={`badge ${job.jobType === 'REMEDIATION' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 11 }}>
+                          {job.jobType}
+                        </span>
+                      </td>
                       <td>
                         <span className="badge badge-info" style={{ fontSize: 11 }}>
                           {job.mode.replace(/_/g, ' ')}

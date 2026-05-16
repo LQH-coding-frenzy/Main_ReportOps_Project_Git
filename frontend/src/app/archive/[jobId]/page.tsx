@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { getAuditJob, getAuditJobEvidence } from '../../../lib/api';
+import { getAuditJob, getAuditJobEvidence, getCurrentUser } from '../../../lib/api';
 import type { AuditEvidence, AuditJob } from '../../../lib/types';
 import { ArtifactPreviewModal } from '../../../components/ui/ArtifactPreviewModal';
+import { hasCapability } from '../../../lib/system-roles';
 
 function formatSize(sizeBytes: number | null): string {
   if (!sizeBytes) return '—';
@@ -25,6 +26,12 @@ export default function ArchiveJobPage() {
 
     async function load() {
       try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser || !hasCapability(currentUser, 'view_archive')) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
         const [jobData, evidenceData] = await Promise.all([getAuditJob(jobId), getAuditJobEvidence(jobId)]);
         if (!isMounted) return;
         setJob(jobData);
@@ -68,7 +75,7 @@ export default function ArchiveJobPage() {
 
         <div className="page-header">
           <h1 className="page-title">Archive Job #{job.id}</h1>
-          <p className="page-subtitle">{job.vm.name} • {job.ownerSection} • {job.mode.replace(/_/g, ' ')}</p>
+          <p className="page-subtitle">{job.vm.name} • {job.jobType} • {job.ownerSection} • {job.mode.replace(/_/g, ' ')}</p>
         </div>
 
         <div className="card" style={{ marginBottom: 'var(--space-6)' }}>

@@ -88,15 +88,12 @@ m1_scope:
   sections:
     - "1.1"
     - "1.2"
-    - "1.4"
     - "1.5"
-    - "1.6"
     - "2.3"
-    - "2.4"
 
 audit_pack:
-  pack_id: "m1-standard"
-  title: "M1 Standard Audit Pack"
+  pack_id: "m1-nen-tang-server-an-toan"
+  title: "M1 Nền tảng server an toàn"
   owner_section: "M1"
   benchmark_name: "CIS AlmaLinux OS 9 Benchmark"
   benchmark_version: "2.0.0"
@@ -104,8 +101,5 @@ audit_pack:
   sections:
     - "1.1"
     - "1.2"
-    - "1.4"
     - "1.5"
-    - "1.6"
     - "2.3"
-    - "2.4"

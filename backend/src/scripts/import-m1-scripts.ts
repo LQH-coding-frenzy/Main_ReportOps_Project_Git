@@ -3,28 +3,21 @@ import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getProjectAnswers } from '../config/project-answers';
+import { resolveProjectRoot } from '../config/project-answers';
 import { env } from '../config/env';
-import { isManualM1Control } from '../services/audit/m1-manual-controls';
+import { SECTION_DEFINITION_MAP } from '../config/section-definitions';
+import { buildPackMetadata, syncSectionPacks } from '../services/audit/pack-registry';
 
 dotenv.config();
 
 const prisma = new PrismaClient();
-const answers = getProjectAnswers();
-const packSections = answers.audit_pack?.sections || answers.m1_scope?.sections || ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'];
-const defaultPackId = answers.audit_pack?.pack_id || 'm1-standard';
-const defaultOwnerSection = answers.audit_pack?.owner_section || 'M1';
-const defaultTitle = answers.audit_pack?.title || 'M1 Standard Audit Pack';
-const defaultBenchmarkName = answers.audit_pack?.benchmark_name || answers.benchmark?.name || 'CIS AlmaLinux OS 9 Benchmark';
-const defaultBenchmarkVersion = answers.audit_pack?.benchmark_version || answers.benchmark?.version || '2.0.0';
-const defaultProfile = answers.audit_pack?.profile || answers.benchmark?.profile || 'Level 1 - Server';
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
 const BUCKET = env.SUPABASE_STORAGE_BUCKET;
-const SCRIPTS_DIR = path.join(__dirname, '../../../m1_audit_scripts_almalinux9/sections');
+const M1_SCRIPT_PATH = path.join(resolveProjectRoot(), 'scripts', 'm1_base_server.sh');
 
 function buildTargetedControlScript(content: string, controlId: string): string {
   const scriptBody = content.replace(/^#!\/usr\/bin\/env bash\s*/, '');
@@ -32,111 +25,76 @@ function buildTargetedControlScript(content: string, controlId: string): string 
 }
 
 async function importScripts() {
-  console.log('🚀 Starting M1 Scripts Import (Isolated Control Strategy)...');
+  console.log('Starting M1 script import from scripts/m1_base_server.sh...');
 
   const leader = await prisma.user.findFirst({ where: { role: Role.LEADER } });
   if (!leader) {
-    console.error('❌ No leader found.');
+    console.error('No leader found. Seed users first.');
     return;
   }
 
-  const pack = await prisma.auditPack.upsert({
-    where: { packId: defaultPackId },
-    update: {},
-    create: {
-      packId: defaultPackId,
-      ownerSection: defaultOwnerSection,
-      title: defaultTitle,
-      sections: packSections,
-      benchmarkName: defaultBenchmarkName,
-      benchmarkVersion: defaultBenchmarkVersion,
-      profile: defaultProfile,
-    },
-  });
+  await syncSectionPacks(prisma);
 
-  const files = fs.readdirSync(SCRIPTS_DIR).filter(f => f.endsWith('.sh'));
-
-  for (const file of files) {
-    console.log(`\nProcessing section file ${file}...`);
-    const fullPath = path.join(SCRIPTS_DIR, file);
-    const content = fs.readFileSync(fullPath, 'utf-8');
-    
-    // Find all control IDs in this file using regex
-    const controlMatches = content.matchAll(/["']([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*)["']/g);
-    const controlIds = new Set<string>();
-    
-    for (const match of controlMatches) {
-        controlIds.add(match[1]);
-    }
-
-    if (controlIds.size === 0) {
-        console.warn(`⚠️ No control IDs found in ${file}`);
-        continue;
-    }
-
-    console.log(`  - Found ${controlIds.size} controls in this file.`);
-
-    for (const controlId of controlIds) {
-      if (isManualM1Control(controlId)) {
-        console.log(`    - Skipping manual-only control ${controlId}`);
-        continue;
-      }
-
-      // Find the title for this control (usually on the same line or next line)
-      const titleRegex = new RegExp(`["']${controlId.replace(/\./g, '\\.')}["']\\s*,?\\s*["']([^"']+)["']`);
-      const titleMatch = content.match(titleRegex);
-      const title = titleMatch ? titleMatch[1] : `Audit Control ${controlId}`;
-      
-      const section = controlId.split('.').slice(0, 2).join('.');
-      
-      console.log(`    - Registering ${controlId}: ${title}`);
-
-      const isolatedScript = buildTargetedControlScript(content, controlId);
-
-      const storagePath = `audit-scripts/m1/${controlId}.sh`;
-
-      // Upload only the isolated control wrapper script.
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, Buffer.from(isolatedScript), {
-          contentType: 'text/x-shellscript',
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error(`      ❌ Upload failed for ${controlId}:`, uploadError.message);
-        continue;
-      }
-
-      // Register in DB
-      await prisma.auditScript.upsert({
-        where: {
-          packId_controlId: {
-            packId: pack.id,
-            controlId: controlId,
-          },
-        },
-        update: {
-          title: title,
-          section: section,
-          scriptStoragePath: storagePath,
-        },
-        create: {
-          packId: pack.id,
-          controlId: controlId,
-          title: title,
-          section: section,
-          assessmentType: 'Automated',
-          scriptStoragePath: storagePath,
-          createdById: leader.id,
-        },
-      });
-    }
+  const metadata = buildPackMetadata('M1');
+  if (!metadata) {
+    console.error('M1 pack metadata is missing.');
+    return;
   }
 
-  console.log('\n✨ All M1 scripts imported using Isolated Control Strategy!');
+  const pack = await prisma.auditPack.findUnique({ where: { packId: metadata.packId } });
+  if (!pack) {
+    console.error('M1 audit pack was not created.');
+    return;
+  }
+
+  const definition = SECTION_DEFINITION_MAP.M1;
+  const content = fs.readFileSync(M1_SCRIPT_PATH, 'utf-8');
+
+  for (const control of definition.controls) {
+    console.log(`Registering ${control.id}: ${control.title}`);
+
+    const isolatedScript = buildTargetedControlScript(content, control.id);
+    const storagePath = `audit-scripts/m1/${control.id}.sh`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(storagePath, Buffer.from(isolatedScript), {
+        contentType: 'text/x-shellscript',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error(`Upload failed for ${control.id}: ${uploadError.message}`);
+      continue;
+    }
+
+    await prisma.auditScript.upsert({
+      where: {
+        packId_controlId: {
+          packId: pack.id,
+          controlId: control.id,
+        },
+      },
+      update: {
+        title: control.title,
+        section: control.section,
+        scriptStoragePath: storagePath,
+      },
+      create: {
+        packId: pack.id,
+        controlId: control.id,
+        title: control.title,
+        section: control.section,
+        assessmentType: 'Automated',
+        scriptStoragePath: storagePath,
+        createdById: leader.id,
+      },
+    });
+  }
+
+  console.log('M1 controls imported successfully.');
 }
 
 importScripts()
-  .catch(e => console.error(e))
+  .catch((error) => console.error(error))
   .finally(() => prisma.$disconnect());

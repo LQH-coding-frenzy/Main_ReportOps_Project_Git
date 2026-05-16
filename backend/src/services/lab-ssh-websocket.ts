@@ -6,6 +6,7 @@ import { Client, type ClientChannel } from 'ssh2';
 import { WebSocketServer, WebSocket } from 'ws';
 import { env } from '../config/env';
 import { verifyLabSshSessionToken } from './lab-ssh-session';
+import { hasCapability } from '../lib/system-roles';
 
 const prisma = new PrismaClient();
 
@@ -55,11 +56,13 @@ async function authenticateUpgradeRequest(req: IncomingMessage, vmId: number) {
 
     return prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: {
-        id: true,
-        role: true,
-      },
-    });
+        select: {
+          id: true,
+          githubUsername: true,
+          role: true,
+          roles: true,
+        },
+      });
   }
 
   const token = extractCookie(req.headers.cookie, 'reportops_token');
@@ -71,7 +74,9 @@ async function authenticateUpgradeRequest(req: IncomingMessage, vmId: number) {
       where: { id: decoded.userId },
       select: {
         id: true,
+        githubUsername: true,
         role: true,
+        roles: true,
       },
     });
   } catch {
@@ -109,7 +114,7 @@ export function registerLabSshWebSocket(server: import('http').Server): void {
         return;
       }
 
-      if (user.role !== 'LEADER') {
+      if (!hasCapability(user, 'use_lab_ssh')) {
         rejectUpgrade(socket, 403, 'Forbidden');
         return;
       }

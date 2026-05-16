@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { consumePreviewBuild, getCurrentUser, getReportEditorConfig } from '../../../../lib/api';
 import { useToast } from '../../../../components/ui/Toast';
 import type { User, EditorConfigResponse } from '../../../../lib/types';
+import { hasCapability } from '../../../../lib/system-roles';
 
 interface DownloadAsEvent {
   data?: {
@@ -129,7 +130,7 @@ export default function ReportViewerPage() {
     async function init() {
       try {
         const u = await getCurrentUser();
-        if (!u || u.role !== 'LEADER') {
+        if (!u || !hasCapability(u, 'view_reports')) {
           window.location.href = '/dashboard';
           return;
         }

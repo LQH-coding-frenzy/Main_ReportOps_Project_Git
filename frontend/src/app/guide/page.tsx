@@ -1,127 +1,209 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { getCurrentUser } from '../../lib/api';
+import type { User } from '../../lib/types';
+import { FRONTEND_SECTION_DEFINITIONS, FRONTEND_SECTION_DEFINITION_MAP } from '../../lib/section-definitions';
+import { hasRole } from '../../lib/system-roles';
 
 function GuidePageContent() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<'M1' | 'M2' | 'M3' | 'M4'>('M1');
+
+  useEffect(() => {
+    async function init() {
+      try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) {
+          window.location.href = '/';
+          return;
+        }
+
+        setUser(currentUser);
+
+        if (!hasRole(currentUser, 'LEADER')) {
+          const firstAssignedCode = currentUser.sections?.[0]?.code as 'M1' | 'M2' | 'M3' | 'M4' | undefined;
+          if (firstAssignedCode && FRONTEND_SECTION_DEFINITION_MAP[firstAssignedCode]) {
+            setActiveSection(firstAssignedCode);
+          }
+        }
+      } catch {
+        window.location.href = '/';
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    init();
+  }, []);
+
+  const assignedSectionCodes = useMemo(
+    () => new Set((user?.sections || []).map((section) => section.code)),
+    [user]
+  );
+  const isLeader = hasRole(user, 'LEADER');
+  const activeDefinition = FRONTEND_SECTION_DEFINITION_MAP[activeSection];
+
+  if (loading) {
+    return (
+      <div className="loading-page">
+        <div className="spinner" />
+        <span>Đang tải writing guide...</span>
+      </div>
+    );
+  }
+
   return (
-    <>
-      {/* Main Guide Content */}
-      <div className="page">
-        <div className="container">
-          {/* Header Section */}
-          <div style={{ textAlign: 'center', marginBottom: 'var(--space-12)', animation: 'slide-up-fade 0.8s ease-out' }}>
-            <div style={{
+    <div className="page">
+      <div className="container">
+        <div style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
+          <div
+            style={{
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: '80px',
-              height: '80px',
-              borderRadius: '24px',
+              width: 80,
+              height: 80,
+              borderRadius: 24,
               background: 'var(--gradient-primary)',
               fontSize: '2rem',
               boxShadow: 'var(--shadow-glow)',
-              marginBottom: 'var(--space-6)'
-            }}>
-              ✍️
-            </div>
-            <h1 className="page-title" style={{ fontSize: 'var(--text-5xl)', letterSpacing: '-0.02em', marginBottom: 'var(--space-4)' }}>
-              Standard Writing Guide
-            </h1>
-            <p className="page-subtitle" style={{ maxWidth: '600px', margin: '0 auto', fontSize: 'var(--text-lg)' }}>
-              Quy chuẩn biên soạn Báo cáo Hệ thống & Bảo mật. Thực hiện đúng để đảm bảo công cụ tự động ghép nối (Merge Build) vận hành ổn định.
+              marginBottom: 'var(--space-5)',
+            }}
+          >
+            📘
+          </div>
+          <h1 className="page-title" style={{ fontSize: 'var(--text-5xl)', marginBottom: 'var(--space-3)' }}>
+            ReportOps Writing Guide
+          </h1>
+          <p className="page-subtitle" style={{ maxWidth: 840, margin: '0 auto' }}>
+            Guide này bám theo `plan_complete.md` mới của nhóm: 4 section M1-M4, 28 control automated, audit script tách riêng remediation,
+            và format stdout/manifest để ReportOps parse ổn định.
+          </p>
+        </div>
+
+        <div className="grid grid-2" style={{ gap: 'var(--space-5)', marginBottom: 'var(--space-8)' }}>
+          <div className="card">
+            <h3 className="card-title" style={{ marginBottom: 'var(--space-3)' }}>Flow bài nhóm</h3>
+            <p className="card-body" style={{ margin: 0 }}>
+              Nền tảng server an toàn → Giảm bề mặt tấn công → Bảo vệ truy cập quản trị → Tài khoản, mật khẩu, logging và audit trail
             </p>
           </div>
+          <div className="card">
+            <h3 className="card-title" style={{ marginBottom: 'var(--space-3)' }}>Trạng thái xem guide</h3>
+            <p className="card-body" style={{ margin: 0 }}>
+              {isLeader
+                ? 'Bạn đang xem chế độ leader: thấy toàn bộ guide và có thể chuyển giữa cả 4 section.'
+                : `Bạn đang được focus vào phần ${activeSection}, nhưng vẫn có thể chuyển tab để tham khảo các phần còn lại.`}
+            </p>
+          </div>
+        </div>
 
-          <div className="grid grid-2" style={{ gap: 'var(--space-8)' }}>
-            
-            {/* Cấu trúc Heading */}
-            <div className="card" style={{ gridColumn: '1 / -1' }}>
-              <div className="card-header" style={{ marginBottom: 'var(--space-6)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ fontSize: '2rem', background: 'var(--color-bg-glass)', padding: '0.5rem', borderRadius: 'var(--radius-lg)' }}>📑</div>
-                  <div>
-                    <h2 className="card-title" style={{ fontSize: 'var(--text-2xl)' }}>1. Cấu trúc Tiêu đề (Heading)</h2>
-                    <p style={{ color: 'var(--color-text-tertiary)' }}>Hệ thống dựa vào thẻ Heading để nhận diện mục lục.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-2" style={{ gap: 'var(--space-4)' }}>
-                <div style={{ padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-glass)', border: '1px solid var(--color-accent-success-soft)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                    <span className="badge badge-success">ĐÚNG - DO</span>
-                    <span style={{ fontSize: 'var(--text-2xl)' }}>✅</span>
-                  </div>
-                  <h1 style={{ fontSize: '1.4rem', borderBottom: '2px solid var(--color-border)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Heading 1: Tên Mục (Ví dụ: 1.1.1 Ensure...)</h1>
-                  <h2 style={{ fontSize: '1.1rem', color: 'var(--color-accent-info)', marginBottom: '0.25rem' }}>Heading 2: Profile Applicability:</h2>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem' }}>Nội dung profile...</p>
-                  <h2 style={{ fontSize: '1.1rem', color: 'var(--color-accent-info)', marginBottom: '0.25rem' }}>Heading 2: Description:</h2>
-                  <p style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>Mô tả chi tiết...</p>
-                </div>
+        <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+          <h3 className="card-title" style={{ marginBottom: 'var(--space-4)' }}>Quy định bắt buộc</h3>
+          <div style={{ display: 'grid', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            <div>Script chính là audit-only, không remediation trực tiếp trong file audit.</div>
+            <div>Mỗi control phải có header `### CONTROL_ID - TITLE` và block `- Audit Result:`.</div>
+            <div>Trạng thái hợp lệ: `PASS`, `FAIL`, `ERROR`, `NOT_APPLICABLE`.</div>
+            <div>Nhóm nộp đúng 4 script tên cố định, 4 manifest, before/after logs, screenshots, và remediation scripts tách riêng.</div>
+          </div>
+        </div>
 
-                <div style={{ padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)', background: 'var(--color-bg-glass)', border: '1px solid var(--color-accent-danger-soft)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                    <span className="badge badge-danger">SAI - DON&apos;T</span>
-                    <span style={{ fontSize: 'var(--text-2xl)' }}>❌</span>
-                  </div>
-                  <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: 'gray' }}>Heading 2: Tên Mục (Vô tình làm mờ tên mục)</h2>
-                  <h1 style={{ fontSize: '1.6rem', color: 'var(--color-accent-danger)', borderBottom: '2px dotted red', marginBottom: '1rem' }}>Heading 1: Profile Applicability (Gây hỏng mục lục!)</h1>
-                  <h1 style={{ fontSize: '1.6rem', color: 'var(--color-accent-danger)', borderBottom: '2px dotted red' }}>Heading 1: Description (Lỗi merge)</h1>
-                </div>
+        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-6)' }}>
+          {FRONTEND_SECTION_DEFINITIONS.map((definition) => {
+            const assigned = assignedSectionCodes.has(definition.code);
+            const active = activeSection === definition.code;
+
+            return (
+              <button
+                key={definition.code}
+                className={`btn ${active ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveSection(definition.code)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              >
+                <span>{definition.code}</span>
+                <span>{definition.shortTitle}</span>
+                {(assigned || (isLeader && definition.code === 'M1')) && <span>•</span>}
+                {assigned && <span>Bạn phụ trách</span>}
+                {isLeader && definition.code === 'M1' && <span>Leader</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+          <div className="card-header" style={{ marginBottom: 'var(--space-4)' }}>
+            <div>
+              <h2 className="card-title" style={{ fontSize: 'var(--text-2xl)' }}>
+                {activeDefinition.code} • {activeDefinition.title}
+              </h2>
+              <p style={{ color: 'var(--color-text-tertiary)', marginTop: 6 }}>{activeDefinition.flowRole}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-2" style={{ gap: 'var(--space-5)', marginBottom: 'var(--space-6)' }}>
+            <div>
+              <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>Phạm vi</h3>
+              <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-3)' }}>{activeDefinition.description}</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {activeDefinition.cisChapters.map((chapter) => (
+                  <span key={chapter} className="admin-chip">§{chapter}</span>
+                ))}
               </div>
             </div>
-
-            {/* Định dạng lệnh và code */}
-            <div className="card">
-              <div style={{ fontSize: '2rem', marginBottom: 'var(--space-4)' }}>💻</div>
-              <h3 className="card-title" style={{ fontSize: 'var(--text-xl)', marginBottom: 'var(--space-2)' }}>2. Code & Câu lệnh</h3>
-              <p className="card-body" style={{ marginBottom: 'var(--space-4)' }}>
-                Bất kỳ câu lệnh Bash, PowerShell hoặc Block Cấu hình nào cũng phải được đặt trong khối lệnh hoặc dùng phông chữ dạng <code>Monospace</code>. Tên file/đường dẫn phải được <i>in nghiêng</i>.
-              </p>
-              <div style={{ padding: '1rem', background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#a5b4fc', borderLeft: '4px solid var(--color-accent-primary)' }}>
-                # Mở file /etc/ssh/sshd_config<br/>
-                cat /etc/passwd | grep root
+            <div>
+              <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>File phải nộp</h3>
+              <div style={{ display: 'grid', gap: 6, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                <div><code>{activeDefinition.scriptPath}</code></div>
+                <div><code>{activeDefinition.manifestPath}</code></div>
+                <div><code>{activeDefinition.remediationPath}</code></div>
+                <div><code>{activeDefinition.beforeLogPath}</code></div>
+                <div><code>{activeDefinition.afterLogPath}</code></div>
+                <div><code>{activeDefinition.screenshotDir}</code></div>
               </div>
             </div>
+          </div>
 
-            {/* Định dạng Bảng biểu */}
-            <div className="card">
-              <div style={{ fontSize: '2rem', marginBottom: 'var(--space-4)' }}>📊</div>
-              <h3 className="card-title" style={{ fontSize: 'var(--text-xl)', marginBottom: 'var(--space-2)' }}>3. Bảng biểu (Tables)</h3>
-              <p className="card-body" style={{ marginBottom: 'var(--space-4)' }}>
-                Khi dán thông số, hãy sử dụng công cụ Insert Table trên Editor. Luôn tuỳ chỉnh độ dài bảng là <b>Fit to Window (100%)</b> để bảng không bị tràn ra khỏi trang giấy khi in.
-              </p>
-              <div className="table-container">
-                <table style={{ width: '100%', fontSize: '0.8rem' }}>
-                  <thead>
-                    <tr><th>Parameter</th><th>Value</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td>PermitRootLogin</td><td>no</td></tr>
-                    <tr><td>Port</td><td>22</td></tr>
-                  </tbody>
-                </table>
-              </div>
+          <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>Danh sách 7 control</h3>
+          <div className="table-container" style={{ marginBottom: 'var(--space-6)' }}>
+            <table style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th>Control ID</th>
+                  <th>Tên tiêu chí</th>
+                  <th>Mục đích kiểm tra</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeDefinition.controls.map((control) => (
+                  <tr key={control.id}>
+                    <td><code>{control.id}</code></td>
+                    <td>{control.title}</td>
+                    <td>{control.objective}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-2" style={{ gap: 'var(--space-5)' }}>
+            <div>
+              <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>Nội dung cần viết trong báo cáo</h3>
+              <ul style={{ paddingLeft: '1.25rem', color: 'var(--color-text-secondary)', display: 'grid', gap: 8 }}>
+                {activeDefinition.reportFocus.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
             </div>
-
-            {/* Cảnh báo và Mẹo */}
-            <div className="card" style={{ gridColumn: '1 / -1', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(239, 68, 68, 0.1) 100%)', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem' }}>
-                <div style={{ fontSize: '3rem' }}>⚠️</div>
-                <div>
-                  <h3 className="card-title" style={{ fontSize: 'var(--text-2xl)', color: 'var(--color-accent-warning)', paddingBottom: '0.5rem' }}>Các lỗi gây &quot;chết&quot; Report Build cần tránh</h3>
-                  <ul style={{ paddingLeft: '1.5rem', color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                    <li><b>Copy Paste từ web:</b> Lấy nguyên CSS ẩn hoặc Bảng HTML lồng nhau từ các trang web (ví dụ copy từ PDF/HTML trực tiếp) sẽ làm hỏng file DOCX. Hãy <i>Paste as Plain Text</i> (Ctrl+Shift+V) và dùng công cụ format của editor.</li>
-                    <li><b>Lạm dụng Enter:</b> Không dùng phím Enter &gt; 5 lần liền nhau để sang trang. Hãy dùng tính năng <i>Page Break</i>.</li>
-                    <li><b>Kích thước Ảnh Khổng Lồ:</b> Đừng dán thẳng ảnh nặng 10MB vào doc. Screenshot vừa đủ (tối đa chiều rộng 16cm) để file Build ra nhẹ nhàng.</li>
-                  </ul>
-                </div>
-              </div>
+            <div>
+              <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>Mẫu stdout parser đọc</h3>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{`### 5.1.20 - Ensure sshd PermitRootLogin is disabled\n\n- Audit Result:\n ** PASS **\n\n### 5.1.20 - Ensure sshd PermitRootLogin is disabled\n\n- Audit Result:\n ** FAIL **\n - Reason(s) for audit failure:\n - PermitRootLogin is set to yes`}</pre>
             </div>
-
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

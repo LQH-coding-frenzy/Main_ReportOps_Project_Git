@@ -1,5 +1,6 @@
 import type {
   ApiResponse,
+  Role,
   User,
   Section,
   EditorConfigResponse,
@@ -171,7 +172,8 @@ export interface AdminUser {
   displayName: string | null;
   email: string | null;
   avatarUrl: string | null;
-  role: 'LEADER' | 'MEMBER';
+  role: Role;
+  roles: Role[];
   createdAt: string;
   sections: { id: number; code: string; title: string }[];
   lastActive: string | null;
@@ -183,6 +185,8 @@ export interface AdminStats {
   totalBuilds: number;
   totalReleases: number;
   totalLogs: number;
+  roleBreakdown?: Record<string, number>;
+  sectionBreakdown?: { code: string; assigneeCount: number }[];
 }
 
 export async function getAdminUsers(): Promise<AdminUser[]> {
@@ -190,11 +194,15 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   return res.data;
 }
 
-export async function changeUserRole(userId: number, role: 'LEADER' | 'MEMBER'): Promise<void> {
+export async function setUserRoles(userId: number, roles: Role[]): Promise<void> {
   await apiFetch(`/api/admin/users/${userId}/role`, {
     method: 'PATCH',
-    body: JSON.stringify({ role }),
+    body: JSON.stringify({ roles }),
   });
+}
+
+export async function changeUserRole(userId: number, role: Role): Promise<void> {
+  await setUserRoles(userId, [role]);
 }
 
 export async function adminAssignSection(sectionId: number, userId: number): Promise<void> {
@@ -252,10 +260,17 @@ export async function getAuditJobEvidenceFile(jobId: number, evidenceId: number)
   return res.blob();
 }
 
-export async function createAuditJob(vmId: number, mode: string): Promise<AuditJob> {
+export async function createAuditJob(vmId: number, mode: string, ownerSection: string = 'M1', jobType: string = 'AUDIT'): Promise<AuditJob> {
   const res = await apiFetch<ApiResponse<AuditJob>>('/api/audit-jobs', {
     method: 'POST',
-    body: JSON.stringify({ vmId, mode, ownerSection: 'M1' }),
+    body: JSON.stringify({ vmId, mode, ownerSection, jobType }),
+  });
+  return res.data;
+}
+
+export async function createRemediationJob(sourceAuditJobId: number): Promise<AuditJob> {
+  const res = await apiFetch<ApiResponse<AuditJob>>(`/api/audit-jobs/${sourceAuditJobId}/remediate`, {
+    method: 'POST',
   });
   return res.data;
 }

@@ -8,6 +8,7 @@ import type { User, Release } from '../../lib/types';
 import { useToast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { hasCapability } from '../../lib/system-roles';
 
 function ReleasesContent() {
   const searchParams = useSearchParams();
@@ -37,7 +38,7 @@ function ReleasesContent() {
     async function init() {
       try {
         const u = await getCurrentUser();
-        if (!u || u.role !== 'LEADER') {
+        if (!u || !hasCapability(u, 'view_releases')) {
           window.location.href = '/dashboard';
           return;
         }
@@ -47,7 +48,7 @@ function ReleasesContent() {
         setLoading(false);
 
         const buildId = searchParams.get('buildId');
-        if (buildId) {
+        if (buildId && hasCapability(u, 'manage_releases')) {
           setFormData((prev) => ({ ...prev, buildId }));
           setShowModal(true);
         }
@@ -61,6 +62,7 @@ function ReleasesContent() {
 
   // Global polling for Releases: refresh every 30s
   usePolling(fetchReleases, 30000);
+  const canManageReleases = hasCapability(user, 'manage_releases');
 
   const handleFreeze = useCallback(async () => {
     if (!formData.buildId || !formData.version) {
@@ -108,9 +110,11 @@ function ReleasesContent() {
           <h1 className="page-title">Releases</h1>
           <p className="page-subtitle">Freeze và publish các phiên bản báo cáo chính thức</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary btn-lg">
-          🚀 New Release
-        </button>
+        {canManageReleases && (
+          <button onClick={() => setShowModal(true)} className="btn btn-primary btn-lg">
+            🚀 New Release
+          </button>
+        )}
       </div>
 
       {releases.length > 0 ? (
@@ -136,14 +140,16 @@ function ReleasesContent() {
                   <span className="text-sm text-muted">
                     {new Date(r.createdAt).toLocaleString('vi-VN')}
                   </span>
-                  <button
-                    onClick={() => setDeleteId(r.id)}
-                    className="btn btn-ghost btn-danger btn-sm"
-                    title="Xóa release khỏi hệ thống"
-                    style={{ padding: '4px 8px' }}
-                  >
-                    🗑️
-                  </button>
+                  {canManageReleases && (
+                    <button
+                      onClick={() => setDeleteId(r.id)}
+                      className="btn btn-ghost btn-danger btn-sm"
+                      title="Xóa release khỏi hệ thống"
+                      style={{ padding: '4px 8px' }}
+                    >
+                      🗑️
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="card-body">

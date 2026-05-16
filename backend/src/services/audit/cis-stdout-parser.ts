@@ -18,7 +18,7 @@ export type CisStdoutParserInput = {
   controlId: string;
   title: string;
   section: string;
-  ownerSection: 'M1';
+  ownerSection: string;
   assessmentType: 'Automated';
   stdout: string;
   stderr: string;
@@ -38,7 +38,7 @@ export type NormalizedAuditResult = {
   controlId: string;
   title: string;
   section: string;
-  ownerSection: 'M1';
+  ownerSection: string;
   status: AuditStatus;
   assessmentType: 'Automated';
   info: string[];

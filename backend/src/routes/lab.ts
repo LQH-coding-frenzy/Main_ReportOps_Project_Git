@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient, VmStatus } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
 import { purgeAuditJobArtifacts } from '../services/audit/archive-cleanup';
 import { SSHRunner } from '../services/audit/ssh-runner';
 import { env } from '../config/env';
@@ -92,7 +92,7 @@ async function collectVmObservability(publicIp: string) {
  * GET /api/lab/vms
  * List all lab VMs.
  */
-router.get('/vms', requireAuth, async (_req: Request, res: Response) => {
+router.get('/vms', requireAuth, requireCapabilityAccess('manage_lab'), async (_req: Request, res: Response) => {
   try {
     const vms = await prisma.labVm.findMany({
       orderBy: { createdAt: 'desc' },
@@ -114,7 +114,7 @@ router.get('/vms', requireAuth, async (_req: Request, res: Response) => {
  * GET /api/lab/vms/:id
  * Get VM detail.
  */
-router.get('/vms/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/vms/:id', requireAuth, requireCapabilityAccess('manage_lab'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const vm = await prisma.labVm.findUnique({
@@ -150,7 +150,7 @@ router.get('/vms/:id', requireAuth, async (req: Request, res: Response) => {
  * Create a new lab VM (leader only).
  * NOTE: In MVP, this creates a DB record. Terraform provisioning is triggered separately.
  */
-router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/vms', requireAuth, requireCapabilityAccess('manage_lab'), async (req: Request, res: Response) => {
   try {
     const userId = (req as unknown as { user: { id: number } }).user.id;
     const { name, machineType, diskSizeGb } = req.body;
@@ -250,7 +250,7 @@ router.post('/vms', requireAuth, requireLeader, async (req: Request, res: Respon
  * PATCH /api/lab/vms/:id/status
  * Update VM status (for internal use / runner callbacks).
  */
-router.patch('/vms/:id/status', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.patch('/vms/:id/status', requireAuth, requireCapabilityAccess('manage_lab'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const { status, publicIp, gcpInstanceName, gcpZone, errorMessage } = req.body;
@@ -302,7 +302,7 @@ router.get('/vms/:id/observability', requireAuth, async (req: Request, res: Resp
  * GET /api/lab/vms/:id/ssh/session
  * Prepare a signed Web SSH URL for the browser.
  */
-router.get('/vms/:id/ssh/session', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.get('/vms/:id/ssh/session', requireAuth, requireCapabilityAccess('use_lab_ssh'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
 
@@ -420,7 +420,7 @@ router.post('/vms/:id/callback', async (req: Request, res: Response) => {
  * DELETE /api/lab/vms/:id
  * Delete/destroy a VM (leader only).
  */
-router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.delete('/vms/:id', requireAuth, requireCapabilityAccess('manage_lab'), async (req: Request, res: Response) => {
   try {
     const userId = (req as unknown as { user: { id: number } }).user.id;
     const id = parseInt(req.params.id, 10);
@@ -497,7 +497,7 @@ router.delete('/vms/:id', requireAuth, requireLeader, async (req: Request, res: 
  * DELETE /api/lab/vms/:id/index
  * Permanently remove a destroyed VM record and its historical audit indexes.
  */
-router.delete('/vms/:id/index', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.delete('/vms/:id/index', requireAuth, requireCapabilityAccess('manage_lab'), async (req: Request, res: Response) => {
   try {
     const userId = (req as unknown as { user: { id: number } }).user.id;
     const id = parseInt(req.params.id, 10);

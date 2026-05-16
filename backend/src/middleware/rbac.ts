@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
+import { type AppCapability, hasAnyRole, hasCapability, hasRole } from '../lib/system-roles';
 
 const prisma = new PrismaClient();
 
@@ -13,12 +14,44 @@ export function requireLeader(req: Request, res: Response, next: NextFunction): 
     return;
   }
 
-  if (req.user.role !== 'LEADER') {
+  if (!hasRole(req.user, Role.LEADER)) {
     res.status(403).json({ error: 'Leader access required', status: 403 });
     return;
   }
 
   next();
+}
+
+export function requireAnySystemRole(roles: Role[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required', status: 401 });
+      return;
+    }
+
+    if (!hasAnyRole(req.user, roles)) {
+      res.status(403).json({ error: 'Insufficient role access', status: 403 });
+      return;
+    }
+
+    next();
+  };
+}
+
+export function requireCapabilityAccess(capability: AppCapability) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required', status: 401 });
+      return;
+    }
+
+    if (!hasCapability(req.user, capability)) {
+      res.status(403).json({ error: 'Insufficient capability access', status: 403 });
+      return;
+    }
+
+    next();
+  };
 }
 
 /**
@@ -33,8 +66,8 @@ export function requireSectionAccess(paramName: string = 'sectionId') {
       return;
     }
 
-    // Leaders can access all sections
-    if (req.user.role === 'LEADER') {
+    // Leaders and section managers can access all sections
+    if (hasAnyRole(req.user, [Role.LEADER, Role.ADMIN])) {
       next();
       return;
     }

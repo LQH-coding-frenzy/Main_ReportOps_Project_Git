@@ -263,7 +263,7 @@ export function renderDashboardEvidenceHtml(input: DashboardEvidenceInput): stri
 </head>
 <body>
   <div class="header">
-    <h1>📊 M1 Audit Summary</h1>
+    <h1>📊 ${escapeHtml(input.scope)} Summary</h1>
     <div class="meta">
       <span>📋 ${escapeHtml(input.benchmark)}</span>
       <span>📌 ${escapeHtml(input.scope)}</span>

@@ -5,7 +5,7 @@ export default function AdminReleaseSettingsPage() {
     <div className="admin-content">
       <div className="page-header">
         <h1 className="page-title">Release Settings</h1>
-        <p className="page-subtitle">Cấu hình định dạng và nội dung phát hành</p>
+        <p className="page-subtitle">Cấu hình tinh thần phát hành cho report, evidence và artifacts của dự án M1-M4</p>
       </div>
 
       {/* Release Format */}
@@ -19,7 +19,7 @@ export default function AdminReleaseSettingsPage() {
             </code>
           </div>
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 'var(--space-2)' }}>
-            Ví dụ: ReportOps-v1.0.0-2026-05-06
+            Ví dụ: reportops-cis-almalinux9-v1.0.0-2026-05-06
           </p>
         </div>
       </div>
@@ -31,8 +31,9 @@ export default function AdminReleaseSettingsPage() {
           {[
             { name: 'Final Report PDF', icon: '📄', status: 'active' },
             { name: 'Final Report DOCX', icon: '📝', status: 'active' },
-            { name: 'Audit Summary JSON', icon: '📊', status: 'upcoming' },
-            { name: 'Audit HTML Report', icon: '🌐', status: 'upcoming' },
+            { name: 'Audit Summary HTML', icon: '🌐', status: 'active' },
+            { name: 'Audit Execution Log', icon: '📊', status: 'active' },
+            { name: 'Remediation Evidence', icon: '🛠️', status: 'upcoming' },
           ].map(artifact => (
             <div key={artifact.name} className="admin-artifact-item">
               <span style={{ fontSize: '1.25rem' }}>{artifact.icon}</span>
@@ -56,6 +57,10 @@ export default function AdminReleaseSettingsPage() {
           <div className="admin-target-row">
             <span className="admin-target-label">Auto-publish:</span>
             <span className="badge badge-success">Enabled</span>
+          </div>
+          <div className="admin-target-row">
+            <span className="admin-target-label">Release discipline:</span>
+            <span>Freeze report sau khi section M1-M4 và evidence chính đã sẵn sàng</span>
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">Checksum:</span>

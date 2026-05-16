@@ -5,7 +5,7 @@
  * Ensures scripts meet security requirements for audit-only mode.
  */
 
-import { getProjectAnswers } from '../../config/project-answers';
+import { SECTION_DEFINITIONS } from '../../config/section-definitions';
 import { isManualM1Control } from './m1-manual-controls';
 
 // ── Types ──
@@ -16,9 +16,9 @@ export interface ScriptValidationResult {
   errors: string[];
 }
 
-// ── M1 CIS sections scope ──
-
-const M1_SECTIONS = getProjectAnswers().m1_scope?.sections || ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'];
+const AUTOMATED_SECTIONS = Array.from(
+  new Set(SECTION_DEFINITIONS.flatMap((definition) => definition.cisChapters))
+);
 
 // ── Blocked destructive commands (MVP audit-only mode) ──
 
@@ -57,7 +57,7 @@ export function validateAuditScript(
   filename: string,
   content: string | Buffer,
   controlId: string,
-  options: { maxSize?: number } = {}
+  options: { maxSize?: number; allowedSections?: string[] } = {}
 ): ScriptValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -102,16 +102,18 @@ export function validateAuditScript(
     );
   }
 
-  // 5. Control ID in M1 scope
+  // 5. Control ID must belong to the selected automated scope
   const sectionPrefix = controlId.split('.').slice(0, 2).join('.');
-  // Check if section prefix starts with any M1 section
-  const isInM1Scope = M1_SECTIONS.some(
+  const allowedSections = options.allowedSections && options.allowedSections.length > 0
+    ? options.allowedSections
+    : AUTOMATED_SECTIONS;
+  const isInAllowedScope = allowedSections.some(
     (s) => sectionPrefix === s || sectionPrefix.startsWith(s + '.')
   );
-  if (!isInM1Scope) {
+  if (!isInAllowedScope) {
     errors.push(
-      `Control ${controlId} (section ${sectionPrefix}) is not in M1 scope. ` +
-        `M1 sections: ${M1_SECTIONS.join(', ')}`
+      `Control ${controlId} (section ${sectionPrefix}) is not in the allowed automated scope. ` +
+        `Allowed sections: ${allowedSections.join(', ')}`
     );
   }
 

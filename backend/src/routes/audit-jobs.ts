@@ -5,12 +5,13 @@ import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { chromium } from 'playwright';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
 import { AuditJobExecutor } from '../services/audit/job-executor';
 import { purgeAuditJobArtifacts } from '../services/audit/archive-cleanup';
 import { MANUAL_M1_CONTROL_IDS } from '../services/audit/m1-manual-controls';
 import { env } from '../config/env';
 import { supabase } from '../config/supabase';
+import { buildPackMetadata, syncSectionPacks } from '../services/audit/pack-registry';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -114,7 +115,7 @@ function automatedScriptFilter(ownerSection: string) {
  * GET /api/audit-jobs
  * List audit jobs with pagination.
  */
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', requireAuth, requireCapabilityAccess('view_archive'), async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string, 10) || 1;
     const limit = parseInt(req.query.limit as string, 10) || 20;
@@ -150,7 +151,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
  * GET /api/audit-jobs/stats/summary
  * Get aggregate audit statistics.
  */
-router.get('/stats/summary', requireAuth, async (_req: Request, res: Response) => {
+router.get('/stats/summary', requireAuth, requireCapabilityAccess('view_archive'), async (_req: Request, res: Response) => {
   try {
     const [totalJobs, completedJobs, latestJob] = await Promise.all([
       prisma.auditJob.count(),
@@ -176,7 +177,7 @@ router.get('/stats/summary', requireAuth, async (_req: Request, res: Response) =
  * GET /api/audit-jobs/:id
  * Get single audit job with full results.
  */
-router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, requireCapabilityAccess('view_archive'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const job = await prisma.auditJob.findUnique({
@@ -213,10 +214,25 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * POST /api/audit-jobs
  * Create a new audit job (leader only).
  */
-router.post('/', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/', requireAuth, requireCapabilityAccess('run_audits'), async (req: Request, res: Response) => {
   try {
-    const { vmId, mode, ownerSection } = req.body;
+    const { vmId, mode, ownerSection, jobType } = req.body;
     const userId = (req as unknown as { user: { id: number } }).user.id;
+
+    await syncSectionPacks(prisma);
+
+    const targetPackMetadata = buildPackMetadata(ownerSection || 'M1');
+    if (!targetPackMetadata) {
+      return res.status(400).json({ error: 'Invalid ownerSection', status: 400 });
+    }
+
+    const targetPack = await prisma.auditPack.findFirst({
+      where: { packId: targetPackMetadata.packId },
+    });
+
+    if (!targetPack) {
+      return res.status(404).json({ error: 'Audit pack not found for ownerSection', status: 404 });
+    }
 
     // Validate VM exists and is running
     const vm = await prisma.labVm.findUnique({ where: { id: vmId } });
@@ -234,9 +250,24 @@ router.post('/', requireAuth, requireLeader, async (req: Request, res: Response)
       },
     });
 
+    if ((jobType || 'AUDIT') === 'AUDIT' && targetPack.isPlaceholder) {
+      return res.status(400).json({
+        error: `Audit pack ${ownerSection || 'M1'} hiện mới là placeholder và chưa sẵn sàng để chạy`,
+        status: 400,
+      });
+    }
+
+    if ((jobType || 'AUDIT') === 'AUDIT' && mode !== 'OPENSCAP_ONLY' && scriptCount === 0) {
+      return res.status(400).json({
+        error: `Audit pack ${ownerSection || 'M1'} chưa có script automated sẵn sàng`,
+        status: 400,
+      });
+    }
+
     const job = await prisma.auditJob.create({
       data: {
         vmId,
+        jobType: jobType || 'AUDIT',
         mode: mode || 'SCRIPTS_ONLY',
         ownerSection: ownerSection || 'M1',
         totalControls: scriptCount,
@@ -253,11 +284,11 @@ router.post('/', requireAuth, requireLeader, async (req: Request, res: Response)
     await prisma.auditLog.create({
       data: {
         userId,
-        action: 'create_audit_job',
-        details: { jobId: job.id, vmId, mode: mode || 'SCRIPTS_ONLY' },
-        ipAddress: req.ip,
-      },
-    });
+          action: 'create_audit_job',
+          details: { jobId: job.id, vmId, mode: mode || 'SCRIPTS_ONLY', ownerSection: ownerSection || 'M1', jobType: jobType || 'AUDIT' },
+          ipAddress: req.ip,
+        },
+      });
 
     // Trigger executor asynchronously
     const executor = new AuditJobExecutor(job.id);
@@ -276,7 +307,71 @@ router.post('/', requireAuth, requireLeader, async (req: Request, res: Response)
  * POST /api/audit-jobs/:id/cancel
  * Cancel a pending or running audit job.
  */
-router.post('/:id/cancel', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/:id/remediate', requireAuth, requireCapabilityAccess('run_remediation'), async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const sourceJob = await prisma.auditJob.findUnique({ where: { id } });
+
+    if (!sourceJob) {
+      return res.status(404).json({ error: 'Audit job not found', status: 404 });
+    }
+
+    if (sourceJob.jobType !== 'AUDIT') {
+      return res.status(400).json({ error: 'Only audit jobs can trigger remediation', status: 400 });
+    }
+
+    if (sourceJob.status === 'PENDING' || sourceJob.status === 'RUNNING') {
+      return res.status(400).json({ error: 'Wait for the source audit job to finish before remediation', status: 400 });
+    }
+
+    if (sourceJob.ownerSection !== 'M1') {
+      return res.status(400).json({ error: 'Only M1 remediation is available right now', status: 400 });
+    }
+
+    const vm = await prisma.labVm.findUnique({ where: { id: sourceJob.vmId } });
+    if (!vm || vm.status !== 'RUNNING') {
+      return res.status(400).json({ error: 'Lab VM is not running', status: 400 });
+    }
+
+    const remediationJob = await prisma.auditJob.create({
+      data: {
+        vmId: sourceJob.vmId,
+        jobType: 'REMEDIATION',
+        mode: 'SCRIPTS_ONLY',
+        ownerSection: sourceJob.ownerSection,
+        totalControls: 1,
+        triggeredById: userId,
+        status: 'PENDING',
+      },
+      include: {
+        vm: { select: { id: true, name: true, publicIp: true } },
+        triggeredBy: { select: { id: true, displayName: true, githubUsername: true } },
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'create_remediation_job',
+        details: { sourceJobId: sourceJob.id, remediationJobId: remediationJob.id, ownerSection: sourceJob.ownerSection },
+        ipAddress: req.ip,
+      },
+    });
+
+    const executor = new AuditJobExecutor(remediationJob.id);
+    executor.execute().catch((err) => {
+      console.error(`Background remediation executor failed for Job ${remediationJob.id}:`, err);
+    });
+
+    res.status(201).json({ data: remediationJob, status: 201 });
+  } catch (error) {
+    console.error('Create remediation job error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
+router.post('/:id/cancel', requireAuth, requireCapabilityAccess('run_audits'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const userId = (req as unknown as { user: { id: number } }).user.id;
@@ -325,7 +420,7 @@ router.post('/:id/cancel', requireAuth, requireLeader, async (req: Request, res:
  * DELETE /api/audit-jobs/:id
  * Delete a completed historical audit job and its archive artifacts.
  */
-router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requireCapabilityAccess('run_audits'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const userId = (req as unknown as { user: { id: number } }).user.id;
@@ -361,7 +456,7 @@ router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Resp
  * GET /api/audit-jobs/:id/logs
  * Get the raw execution logs from Supabase.
  */
-router.get('/:id/logs', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/logs', requireAuth, requireCapabilityAccess('view_archive'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const logPath = `archives/audits/${id}/audit-log.txt`;
@@ -383,7 +478,7 @@ router.get('/:id/logs', requireAuth, async (req: Request, res: Response) => {
  * GET /api/audit-jobs/:id/evidence/:evidenceId
  * Get a specific evidence artifact file.
  */
-router.get('/:id/evidence/:evidenceId', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/evidence/:evidenceId', requireAuth, requireCapabilityAccess('view_archive'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const evidenceId = parseInt(req.params.evidenceId, 10);
@@ -423,7 +518,7 @@ router.get('/:id/evidence/:evidenceId', requireAuth, async (req: Request, res: R
  * GET /api/audit-jobs/:id/evidence
  * List evidence artifacts for a job.
  */
-router.get('/:id/evidence', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/evidence', requireAuth, requireCapabilityAccess('view_archive'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const evidences = await prisma.auditEvidence.findMany({

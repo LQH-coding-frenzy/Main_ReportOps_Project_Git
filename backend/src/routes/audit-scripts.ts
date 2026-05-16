@@ -3,23 +3,16 @@ import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
 import { validateAuditScript } from '../services/audit/script-validator';
 import { MANUAL_M1_CONTROL_IDS } from '../services/audit/m1-manual-controls';
 import { env } from '../config/env';
-import { getProjectAnswers } from '../config/project-answers';
 import { supabase } from '../config/supabase';
+import { buildPackMetadata, MANAGED_PACK_IDS, syncSectionPacks } from '../services/audit/pack-registry';
 
 const router = Router();
 const prisma = new PrismaClient();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 } });
-const answers = getProjectAnswers();
-const defaultOwnerSection = answers.audit_pack?.owner_section || 'M1';
-const defaultTitle = answers.audit_pack?.title || 'M1 Standard Audit Pack';
-const defaultSections = answers.audit_pack?.sections || answers.m1_scope?.sections || ['1.1', '1.2', '1.4', '1.5', '1.6', '2.3', '2.4'];
-const defaultBenchmarkName = answers.audit_pack?.benchmark_name || answers.benchmark?.name || 'CIS AlmaLinux OS 9 Benchmark';
-const defaultBenchmarkVersion = answers.audit_pack?.benchmark_version || answers.benchmark?.version || '2.0.0';
-const defaultProfile = answers.audit_pack?.profile || answers.benchmark?.profile || 'Level 1 - Server';
 
 /**
  * GET /api/audit-scripts/packs
@@ -27,7 +20,10 @@ const defaultProfile = answers.audit_pack?.profile || answers.benchmark?.profile
  */
 router.get('/packs', requireAuth, async (_req: Request, res: Response) => {
   try {
+    await syncSectionPacks(prisma);
+
     const packs = await prisma.auditPack.findMany({
+      where: { packId: { in: MANAGED_PACK_IDS } },
       orderBy: { ownerSection: 'asc' },
       include: {
         _count: { select: { scripts: true } },
@@ -71,23 +67,40 @@ router.get('/packs', requireAuth, async (_req: Request, res: Response) => {
  * POST /api/audit-scripts/packs
  * Create or update an audit pack (leader only).
  */
-router.post('/packs', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/packs', requireAuth, requireCapabilityAccess('manage_audit_packs'), async (req: Request, res: Response) => {
   try {
-    const { packId, ownerSection, title, sections, benchmarkName, benchmarkVersion, profile } = req.body;
-    const resolvedPackId = String(packId || answers.audit_pack?.pack_id || 'm1-standard');
+    const { ownerSection, title, sections, benchmarkName, benchmarkVersion, profile, isPlaceholder } = req.body;
+    const metadata = buildPackMetadata(String(ownerSection || 'M1'));
+
+    if (!metadata) {
+      res.status(400).json({ error: 'Invalid ownerSection', status: 400 });
+      return;
+    }
 
     const pack = await prisma.auditPack.upsert({
-      where: { packId: resolvedPackId },
+      where: { packId: metadata.packId },
       create: {
-        packId: resolvedPackId,
-        ownerSection: ownerSection || defaultOwnerSection,
-        title: title || defaultTitle,
-        sections: sections || defaultSections,
-        benchmarkName: benchmarkName || defaultBenchmarkName,
-        benchmarkVersion: benchmarkVersion || defaultBenchmarkVersion,
-        profile: profile || defaultProfile,
+        packId: metadata.packId,
+        ownerSection: metadata.ownerSection,
+        title: title || metadata.title,
+        sections: sections || metadata.sections,
+        benchmarkName: benchmarkName || 'CIS AlmaLinux OS 9 Benchmark',
+        benchmarkVersion: benchmarkVersion || '2.0.0',
+        profile: profile || 'Level 1 - Server',
+        manifestPath: metadata.manifestPath,
+        auditScriptPath: metadata.auditScriptPath,
+        remediationPath: metadata.remediationPath,
+        isPlaceholder: typeof isPlaceholder === 'boolean' ? isPlaceholder : metadata.isPlaceholder,
       },
-      update: { title, sections, enabled: true },
+      update: {
+        title: title || metadata.title,
+        sections: sections || metadata.sections,
+        manifestPath: metadata.manifestPath,
+        auditScriptPath: metadata.auditScriptPath,
+        remediationPath: metadata.remediationPath,
+        isPlaceholder: typeof isPlaceholder === 'boolean' ? isPlaceholder : metadata.isPlaceholder,
+        enabled: true,
+      },
     });
 
     res.status(201).json({ data: pack, status: 201 });
@@ -104,7 +117,7 @@ router.post('/packs', requireAuth, requireLeader, async (req: Request, res: Resp
 router.post(
   '/upload',
   requireAuth,
-  requireLeader,
+  requireCapabilityAccess('manage_audit_packs'),
   upload.single('script'),
   async (req: Request, res: Response) => {
     try {
@@ -119,8 +132,17 @@ router.post(
         return res.status(400).json({ error: 'Missing required fields: packId, controlId, title, section', status: 400 });
       }
 
+      await syncSectionPacks(prisma);
+
+      const pack = await prisma.auditPack.findUnique({ where: { packId: String(packId) } });
+      if (!pack) {
+        return res.status(404).json({ error: 'Audit pack not found', status: 404 });
+      }
+
       // Validate script
-      const validation = validateAuditScript(file.originalname, file.buffer, controlId);
+      const validation = validateAuditScript(file.originalname, file.buffer, controlId, {
+        allowedSections: pack.sections,
+      });
 
       if (!validation.valid) {
         return res.status(400).json({ error: validation.errors.join(' '), status: 400 });
@@ -129,19 +151,9 @@ router.post(
       // Calculate SHA-256
       const sha256 = crypto.createHash('sha256').update(file.buffer).digest('hex');
 
-      const resolvedPackId = String(packId || answers.audit_pack?.pack_id || 'm1-standard');
-      const pack = await prisma.auditPack.upsert({
-        where: { packId: resolvedPackId },
-        create: {
-          packId: resolvedPackId,
-          ownerSection: defaultOwnerSection,
-          title: defaultTitle,
-          sections: defaultSections,
-          benchmarkName: defaultBenchmarkName,
-          benchmarkVersion: defaultBenchmarkVersion,
-          profile: defaultProfile,
-        },
-        update: { enabled: true },
+      await prisma.auditPack.update({
+        where: { id: pack.id },
+        data: { enabled: true, isPlaceholder: false },
       });
 
       // Upload to Supabase storage
@@ -217,7 +229,7 @@ router.post(
  * PATCH /api/audit-scripts/:id/toggle
  * Enable/disable a script.
  */
-router.patch('/:id/toggle', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.patch('/:id/toggle', requireAuth, requireCapabilityAccess('manage_audit_packs'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const script = await prisma.auditScript.findUnique({ where: { id } });

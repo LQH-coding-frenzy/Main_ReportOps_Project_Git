@@ -7,7 +7,7 @@ export default function AdminSettingsPage() {
     <div className="admin-content">
       <div className="page-header">
         <h1 className="page-title">Cài Đặt Hệ Thống</h1>
-        <p className="page-subtitle">Cấu hình tích hợp và thông số vận hành</p>
+        <p className="page-subtitle">Cấu hình tích hợp, role engine và thông số vận hành cho ReportOps M1-M4</p>
       </div>
 
       {/* GitHub OAuth */}
@@ -35,7 +35,7 @@ export default function AdminSettingsPage() {
           </div>
           <div className="admin-target-row">
             <span className="admin-target-label">Allowed org/users:</span>
-            <span>Tất cả (Public)</span>
+            <span>Danh sách người dùng nhóm dự án, leader account được hard-lock riêng</span>
           </div>
         </div>
       </div>
@@ -86,6 +86,10 @@ export default function AdminSettingsPage() {
             <code className="admin-code">reportops-documents</code>
           </div>
           <div className="admin-target-row">
+            <span className="admin-target-label">Project layout:</span>
+            <span>`scripts/`, `manifests/`, `remediation/`, `logs/`, `screenshots/`</span>
+          </div>
+          <div className="admin-target-row">
             <span className="admin-target-label">Retention policy:</span>
             <span>Indefinite</span>
           </div>
@@ -100,7 +104,7 @@ export default function AdminSettingsPage() {
             <h4>Audit Engine</h4>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', margin: 0 }}>Cấu hình quét bảo mật</p>
           </div>
-          <span className="badge badge-warning" style={{ marginLeft: 'auto' }}>Not Configured</span>
+          <span className="badge badge-success" style={{ marginLeft: 'auto' }}>M1 Live, M2-M4 Placeholder</span>
         </div>
         <div className="admin-target-meta" style={{ marginTop: 'var(--space-4)' }}>
           <div className="admin-target-row">
@@ -112,12 +116,16 @@ export default function AdminSettingsPage() {
             <span>{projectConfig.benchmarkProfile}</span>
           </div>
           <div className="admin-target-row">
-            <span className="admin-target-label">Max concurrent jobs:</span>
-            <span>2</span>
+            <span className="admin-target-label">Role model:</span>
+            <span>Leader, Admin, Auditor, Member, Viewer with union permissions</span>
           </div>
           <div className="admin-target-row">
-            <span className="admin-target-label">Credential TTL:</span>
-            <span>24 hours</span>
+            <span className="admin-target-label">Audit runtime:</span>
+            <span>M1 có audit thật; M2-M4 đang là placeholder metadata/runtime</span>
+          </div>
+          <div className="admin-target-row">
+            <span className="admin-target-label">Remediation runtime:</span>
+            <span>M1 remediation script có thể chạy từ web app; các pack còn lại đang chờ nội dung thật</span>
           </div>
         </div>
       </div>

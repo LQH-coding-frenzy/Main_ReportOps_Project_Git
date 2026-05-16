@@ -9,7 +9,10 @@ datasource db {
 
 enum Role {
   LEADER
+  ADMIN
+  AUDITOR
   MEMBER
+  VIEWER
 }
 
 model User {
@@ -20,6 +23,7 @@ model User {
   email         String?
   avatarUrl     String?
   role          Role     @default(MEMBER)
+  roles         Role[]   @default([MEMBER])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -38,6 +42,7 @@ model Section {
   title       String
   description String?
   cisChapters String[] // ["1.1", "1.2", "1.4", ...]
+  controlIds  String[]  @default([]) // ["1.2.1.2", "1.1.2.1.2", ...]
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -196,6 +201,10 @@ model AuditPack {
   sections      String[] // ["1.1", "1.2", "1.4", ...]
   runtimeType   String   @default("shell")
   outputMode    String   @default("cis_stdout")
+  manifestPath  String?
+  auditScriptPath String?
+  remediationPath String?
+  isPlaceholder Boolean  @default(false)
   enabled       Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -241,6 +250,7 @@ model ScriptValidation {
 model AuditJob {
   id             Int            @id @default(autoincrement())
   vmId           Int
+  jobType        String         @default("AUDIT") // "AUDIT" | "REMEDIATION"
   mode           AuditMode      @default(SCRIPTS_ONLY)
   status         AuditJobStatus @default(PENDING)
   ownerSection   String         @default("M1")

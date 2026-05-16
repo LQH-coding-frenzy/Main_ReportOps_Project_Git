@@ -7,6 +7,7 @@ import { usePolling } from '../../hooks/usePolling';
 import { getCurrentUser, getSections } from '../../lib/api';
 import type { User, Section } from '../../lib/types';
 import { benchmarkLabel, projectConfig } from '../../lib/project-config';
+import { hasRole } from '../../lib/system-roles';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -54,7 +55,8 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  const isLeader = user.role === 'LEADER';
+  const isLeader = hasRole(user, 'LEADER');
+  const totalMembers = new Set(sections.flatMap((section) => section.assignees.map((assignee) => assignee.id))).size;
 
   return (
     <div className="container page">
@@ -96,10 +98,10 @@ export default function DashboardPage() {
             </div>
             <div className="card">
               <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>
-                4
+                {totalMembers}
               </div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                Thành viên
+                 Thành viên đang được gán
               </div>
             </div>
           </div>
@@ -133,7 +135,7 @@ export default function DashboardPage() {
               <div>
                 <h3 style={{ fontSize: 'var(--text-xl)', color: 'white', marginBottom: '4px' }}>Hướng dẫn Viết Report Quy chuẩn</h3>
                 <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', margin: 0 }}>
-                  Dành 1 phút đọc guide này để đảm bảo file của bạn khi Leader ấn Build Preview sẽ không bị lỗi cấu trúc nhoe! Mẹo format đúng chuẩn để ăn điểm.
+                  Guide mới đã bám đúng plan M1-M4 và 28 control mới. Mỗi thành viên nên mở đúng phần của mình trước khi viết report hoặc nộp script.
                 </p>
               </div>
               <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
@@ -155,14 +157,26 @@ export default function DashboardPage() {
                 <div className="section-code">{section.code}</div>
                 <div className="section-title">{section.title}</div>
 
-                {/* CIS Chapter Tags */}
-                <div className="section-chapters">
-                  {section.cisChapters.map((ch) => (
-                    <span key={ch} className="chapter-tag">
-                      §{ch}
-                    </span>
-                  ))}
-                </div>
+                 {/* Section Scope Tags */}
+                 <div className="section-chapters">
+                   {section.cisChapters.map((ch) => (
+                     <span key={ch} className="chapter-tag">
+                       §{ch}
+                     </span>
+                   ))}
+                 </div>
+
+                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 'var(--space-3)' }}>
+                   <span className="badge badge-info">{section.controls.length} controls</span>
+                   {section.controls.slice(0, 3).map((control) => (
+                     <span key={control.id} className="admin-chip" style={{ fontSize: '11px' }}>
+                       {control.id}
+                     </span>
+                   ))}
+                   {section.controls.length > 3 && (
+                     <span className="admin-chip" style={{ fontSize: '11px' }}>+{section.controls.length - 3}</span>
+                   )}
+                 </div>
 
                 {/* Status */}
                 {section.document?.lastEditedAt ? (
@@ -177,19 +191,21 @@ export default function DashboardPage() {
 
                 {/* Footer */}
                 <div className="section-meta">
-                  <div className="section-assignee">
-                    {section.assignees[0]?.avatarUrl && (
-                      <Image 
-                        src={section.assignees[0].avatarUrl} 
-                        alt="" 
+                   <div className="section-assignee">
+                     {section.assignees[0]?.avatarUrl && (
+                       <Image 
+                         src={section.assignees[0].avatarUrl} 
+                         alt="" 
                         width={24} 
                         height={24} 
                         className="rounded-full"
                         unoptimized
                       />
                     )}
-                    {section.assignees[0]?.displayName || section.assignees[0]?.githubUsername || 'Chưa gán'}
-                  </div>
+                     {section.assignees.length > 0
+                       ? section.assignees.map((assignee) => assignee.displayName || assignee.githubUsername).join(', ')
+                       : 'Chưa gán'}
+                   </div>
                   {section.document?.fileSize && (
                     <span className="text-xs text-muted">
                       {(section.document.fileSize / 1024).toFixed(1)} KB

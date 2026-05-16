@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { cancelAuditJob, deleteAuditJob, getAuditJob, getAuditJobLogs } from '../../../../lib/api';
+import { cancelAuditJob, createRemediationJob, deleteAuditJob, getAuditJob, getAuditJobLogs } from '../../../../lib/api';
 import type { AuditEvidence, AuditJob, AuditResultStatus } from '../../../../lib/types';
 import { ArtifactPreviewModal } from '../../../../components/ui/ArtifactPreviewModal';
 import { ConfirmModal } from '../../../../components/ui/ConfirmModal';
@@ -168,6 +168,19 @@ export default function AuditJobDetailPage() {
     });
   }
 
+  async function handleRunRemediation() {
+    if (!job) return;
+
+    try {
+      const remediationJob = await createRemediationJob(job.id);
+      showToast(`Đã tạo remediation job #${remediationJob.id}`, 'success');
+      window.location.href = `/audit/jobs/${remediationJob.id}`;
+    } catch (error) {
+      console.error(error);
+      showToast('Không thể tạo remediation job cho audit này', 'error');
+    }
+  }
+
   const handleEvidenceClick = (ev: AuditEvidence) => {
     setSelectedEvidence(ev);
   };
@@ -213,6 +226,11 @@ export default function AuditJobDetailPage() {
             >
               {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
             </button>
+            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && (job.failCount > 0 || job.errorCount > 0) && (
+              <button className="btn btn-primary btn-sm" onClick={handleRunRemediation}>
+                🛠️ Run M1 Remediation
+              </button>
+            )}
             {(job.status === 'PENDING' || job.status === 'RUNNING') && (
               <button className="btn btn-secondary btn-sm" onClick={handleCancelJob}>
                 ⏹ Cancel
@@ -229,7 +247,7 @@ export default function AuditJobDetailPage() {
         <div className="page-header">
           <h1 className="page-title">Audit Job #{job.id}</h1>
           <p className="page-subtitle">
-            VM: {job.vm.name} • Mode: {job.mode.replace(/_/g, ' ')} • {job.ownerSection}
+            VM: {job.vm.name} • Type: {job.jobType} • Mode: {job.mode.replace(/_/g, ' ')} • {job.ownerSection}
           </p>
         </div>
 

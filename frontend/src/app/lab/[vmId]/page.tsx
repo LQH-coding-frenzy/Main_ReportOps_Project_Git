@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { usePolling } from '../../../hooks/usePolling';
-import { getLabVm, getLabVmObservability, deleteLabVm, purgeLabVmIndex } from '../../../lib/api';
+import { getCurrentUser, getLabVm, getLabVmObservability, deleteLabVm, purgeLabVmIndex } from '../../../lib/api';
 import { getLabVmHardwareProfile } from '../../../lib/lab-vm-hardware';
-import type { LabVm, AuditJob, LabVmObservability } from '../../../lib/types';
+import type { LabVm, AuditJob, LabVmObservability, User } from '../../../lib/types';
 import { ConfirmModal } from '../../../components/ui/ConfirmModal';
 import { SshTerminalModal } from '../../../components/ui/SshTerminalModal';
 import { useToast } from '../../../components/ui/Toast';
+import { hasCapability } from '../../../lib/system-roles';
 
 function withGoogleAccountChooser(targetUrl: string): string {
   return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(targetUrl)}`;
@@ -18,6 +19,7 @@ function withGoogleAccountChooser(targetUrl: string): string {
 export default function LabVmDetailPage() {
   const params = useParams();
   const vmId = parseInt(params.vmId as string, 10);
+  const [, setUser] = useState<User | null>(null);
   const [vm, setVm] = useState<(LabVm & { auditJobs?: Pick<AuditJob, 'id' | 'status' | 'score' | 'riskLevel' | 'createdAt' | 'finishedAt' | 'mode'>[] }) | null>(null);
   const [observability, setObservability] = useState<LabVmObservability | null>(null);
   const [observabilityError, setObservabilityError] = useState<string | null>(null);
@@ -37,10 +39,25 @@ export default function LabVmDetailPage() {
 
   useEffect(() => {
     if (!vmId) return;
-    getLabVm(vmId)
-      .then(setVm)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    async function init() {
+      try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser || !hasCapability(currentUser, 'manage_lab')) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        setUser(currentUser);
+        const data = await getLabVm(vmId);
+        setVm(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    init();
   }, [vmId]);
 
   usePolling(async () => {

@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePolling } from '../../hooks/usePolling';
-import { getLabVms, purgeLabVmIndex } from '../../lib/api';
-import type { LabVm } from '../../lib/types';
+import { getCurrentUser, getLabVms, purgeLabVmIndex } from '../../lib/api';
+import type { LabVm, User } from '../../lib/types';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useToast } from '../../components/ui/Toast';
+import { hasCapability } from '../../lib/system-roles';
 
 const VM_STATUS_STYLE: Record<string, { cls: string; icon: string }> = {
   PROVISIONING: { cls: 'badge-warning', icon: '🔄' },
@@ -18,6 +19,7 @@ const VM_STATUS_STYLE: Record<string, { cls: string; icon: string }> = {
 };
 
 export default function LabPage() {
+  const [, setUser] = useState<User | null>(null);
   const [vms, setVms] = useState<LabVm[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmState, setConfirmState] = useState<{
@@ -29,10 +31,25 @@ export default function LabPage() {
   const { showToast } = useToast();
 
   useEffect(() => {
-    getLabVms()
-      .then(setVms)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    async function init() {
+      try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser || !hasCapability(currentUser, 'manage_lab')) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        setUser(currentUser);
+        const data = await getLabVms();
+        setVms(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    init();
   }, []);
 
   usePolling(async () => {

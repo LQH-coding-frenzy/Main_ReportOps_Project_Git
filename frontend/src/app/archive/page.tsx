@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getAuditJobs, getAuditJobEvidence } from '../../lib/api';
+import { getAuditJobs, getAuditJobEvidence, getCurrentUser } from '../../lib/api';
 import type { AuditEvidence, AuditJob } from '../../lib/types';
 import { ArtifactPreviewModal } from '../../components/ui/ArtifactPreviewModal';
 import { useToast } from '../../components/ui/Toast';
+import { hasCapability } from '../../lib/system-roles';
 
 export default function ArchivePage() {
   const [jobs, setJobs] = useState<AuditJob[]>([]);
@@ -16,10 +17,24 @@ export default function ArchivePage() {
   const { showToast } = useToast();
 
   useEffect(() => {
-    getAuditJobs()
-      .then((data) => setJobs(data.jobs.filter((j) => j.status === 'COMPLETED')))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    async function init() {
+      try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser || !hasCapability(currentUser, 'view_archive')) {
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        const data = await getAuditJobs();
+        setJobs(data.jobs.filter((job) => job.status === 'COMPLETED' || job.jobType === 'REMEDIATION'));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    init();
   }, []);
 
   async function handleToggleEvidence(jobId: number) {
@@ -75,7 +90,7 @@ export default function ArchivePage() {
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
                     <span style={{ fontSize: '1.25rem' }}>📊</span>
-                    <span style={{ fontWeight: 700 }}>Audit #{job.id} — {job.vm.name}</span>
+                    <span style={{ fontWeight: 700 }}>{job.jobType} #{job.id} — {job.vm.name}</span>
                   </div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
                     <span>📋 {job.ownerSection}</span>

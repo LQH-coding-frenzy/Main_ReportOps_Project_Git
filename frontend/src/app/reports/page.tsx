@@ -8,6 +8,7 @@ import type { User, ReportBuild } from '../../lib/types';
 import { useToast } from '../../components/ui/Toast';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
+import { hasCapability } from '../../lib/system-roles';
 
 export default function ReportsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -33,7 +34,7 @@ export default function ReportsPage() {
     async function init() {
       try {
         const u = await getCurrentUser();
-        if (!u || u.role !== 'LEADER') {
+        if (!u || !hasCapability(u, 'view_reports')) {
           window.location.href = '/dashboard';
           return;
         }
@@ -54,6 +55,7 @@ export default function ReportsPage() {
   // Use the shared hook for polling when a build is active
   const hasActiveBuild = reports.some(r => r.status === 'building' || r.status === 'pending');
   const buildButtonBusy = building || hasActiveBuild;
+  const canManageReports = hasCapability(user, 'manage_reports');
   usePolling(fetchReports, 3000, hasActiveBuild);
 
   const handleBuildPreview = useCallback(async () => {
@@ -142,19 +144,21 @@ export default function ReportsPage() {
           <h1 className="page-title">Report Builds</h1>
           <p className="page-subtitle">Tạo preview và quản lý các bản build báo cáo</p>
         </div>
-        <button
-          onClick={handleBuildPreview}
-          disabled={buildButtonBusy}
-          className="btn btn-primary btn-lg"
-        >
-          {buildButtonBusy ? (
-            <>
-              <div className="spinner" /> {hasActiveBuild ? 'Build đang chạy...' : 'Đang build...'}
-            </>
-          ) : (
-            '🔨 Build Preview'
-          )}
-        </button>
+        {canManageReports && (
+          <button
+            onClick={handleBuildPreview}
+            disabled={buildButtonBusy}
+            className="btn btn-primary btn-lg"
+          >
+            {buildButtonBusy ? (
+              <>
+                <div className="spinner" /> {hasActiveBuild ? 'Build đang chạy...' : 'Đang build...'}
+              </>
+            ) : (
+              '🔨 Build Preview'
+            )}
+          </button>
+        )}
       </div>
 
       {reports.length > 0 ? (
@@ -239,7 +243,7 @@ export default function ReportsPage() {
                           >
                             <span>⬇️</span> DOCX
                           </button>
-                          {!r.release && r.buildType === 'preview' && (
+                          {!r.release && r.buildType === 'preview' && canManageReports && (
                             <a
                               href={`/releases?buildId=${r.id}`}
                               className="btn btn-secondary btn-sm flex items-center gap-1"
@@ -259,7 +263,7 @@ export default function ReportsPage() {
                         Log
                       </button>
 
-                      {((r.buildType === 'preview' && !r.release && r.status !== 'building' && r.status !== 'pending') ||
+                      {canManageReports && ((r.buildType === 'preview' && !r.release && r.status !== 'building' && r.status !== 'pending') ||
                         r.status === 'failed') && (
                         <button
                           onClick={() => setDeleteId(r.id)}

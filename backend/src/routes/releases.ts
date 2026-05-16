@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
 import { createGitHubRelease, deleteGitHubReleaseByVersion } from '../services/github-release';
 import { deleteFile } from '../services/storage';
 import { env } from '../config/env';
@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
  * POST /api/releases/freeze
  * Freeze a preview build into a final release and create a GitHub Release.
  */
-router.post('/freeze', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/freeze', requireAuth, requireCapabilityAccess('manage_releases'), async (req: Request, res: Response) => {
   try {
     const { reportBuildId, version, notes } = req.body;
 
@@ -73,7 +73,7 @@ router.post('/freeze', requireAuth, requireLeader, async (req: Request, res: Res
  * GET /api/releases
  * List all releases (leader only).
  */
-router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.get('/', requireAuth, requireCapabilityAccess('view_releases'), async (req: Request, res: Response) => {
   try {
     const releases = await prisma.release.findMany({
       orderBy: { createdAt: 'desc' },
@@ -115,7 +115,7 @@ router.get('/', requireAuth, requireLeader, async (req: Request, res: Response) 
  * DELETE /api/releases/:id
  * Delete a release record (leader only).
  */
-router.delete('/:id', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requireCapabilityAccess('manage_releases'), async (req: Request, res: Response) => {
   try {
     const releaseId = parseInt(req.params.id, 10);
     if (Number.isNaN(releaseId)) {

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { getCurrentUser, getEditorConfig } from '../../../lib/api';
 import type { User, EditorConfigResponse } from '../../../lib/types';
+import { getEffectiveRoles, hasAnyRole } from '../../../lib/system-roles';
 
 declare global {
   interface Window {
@@ -95,7 +96,8 @@ export default function EditorPage() {
     );
   }
 
-  const isLeader = user?.role === 'LEADER';
+  const roles = getEffectiveRoles(user);
+  const roleLabel = roles.includes('LEADER') ? 'Leader' : roles.join(' + ');
 
   return (
     <>
@@ -127,8 +129,8 @@ export default function EditorPage() {
         <div className="flex items-center gap-3">
           {user && (
             <>
-              <span className={`badge ${isLeader ? 'badge-primary' : 'badge-info'}`}>
-                {isLeader ? 'Leader' : 'Member'}
+              <span className={`badge ${hasAnyRole(user, ['LEADER', 'ADMIN']) ? 'badge-primary' : 'badge-info'}`}>
+                {roleLabel}
               </span>
               {user.avatarUrl && (
                 <Image 

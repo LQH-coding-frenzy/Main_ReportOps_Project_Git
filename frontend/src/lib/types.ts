@@ -3,7 +3,7 @@
 // Mirror of backend types for frontend consumption
 // ═══════════════════════════════════════════════════
 
-export type Role = 'LEADER' | 'MEMBER';
+export type Role = 'LEADER' | 'ADMIN' | 'AUDITOR' | 'MEMBER' | 'VIEWER';
 
 export interface User {
   id: number;
@@ -13,6 +13,7 @@ export interface User {
   email: string | null;
   avatarUrl: string | null;
   role: Role;
+  roles: Role[];
   sections?: SectionSummary[];
 }
 
@@ -21,6 +22,22 @@ export interface SectionSummary {
   code: string;
   title: string;
   cisChapters: string[];
+  controlIds?: string[];
+}
+
+export interface SectionControl {
+  id: string;
+  title: string;
+  section: string;
+}
+
+export interface SectionDeliverables {
+  scriptPath: string | null;
+  manifestPath: string | null;
+  remediationPath: string | null;
+  beforeLogPath: string | null;
+  afterLogPath: string | null;
+  screenshotDir: string | null;
 }
 
 export interface Section {
@@ -29,6 +46,9 @@ export interface Section {
   title: string;
   description: string | null;
   cisChapters: string[];
+  controlIds: string[];
+  controls: SectionControl[];
+  deliverables: SectionDeliverables;
   sortOrder: number;
   assignees: Assignee[];
   document: DocumentInfo | null;
@@ -142,6 +162,7 @@ export interface PerformanceUser {
   githubUsername: string;
   avatarUrl: string | null;
   role: Role;
+  roles?: Role[];
   stats: {
     assignedSections: number;
     totalEdits: number;
@@ -270,6 +291,10 @@ export interface AuditPack {
   benchmarkVersion: string;
   profile: string;
   sections: string[];
+  manifestPath?: string | null;
+  auditScriptPath?: string | null;
+  remediationPath?: string | null;
+  isPlaceholder?: boolean;
   enabled: boolean;
   _count?: { scripts: number };
   scripts?: AuditScript[];
@@ -299,6 +324,7 @@ export interface ScriptValidationResult {
 export interface AuditJob {
   id: number;
   vmId: number;
+  jobType: string;
   mode: AuditMode;
   status: AuditJobStatus;
   ownerSection: string;

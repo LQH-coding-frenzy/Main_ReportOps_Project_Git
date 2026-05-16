@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import { requireAuth } from '../middleware/auth';
-import { requireLeader } from '../middleware/rbac';
+import { requireCapabilityAccess } from '../middleware/rbac';
+import { SECTION_DEFINITION_MAP } from '../config/section-definitions';
+import { hasAnyRole } from '../lib/system-roles';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -17,7 +19,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
     let sections;
 
-    if (user.role === 'LEADER') {
+    if (hasAnyRole(user, [Role.LEADER, Role.ADMIN])) {
       sections = await prisma.section.findMany({
         orderBy: { sortOrder: 'asc' },
         include: {
@@ -90,6 +92,16 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
         title: s.title,
         description: s.description,
         cisChapters: s.cisChapters,
+        controlIds: s.controlIds,
+        controls: SECTION_DEFINITION_MAP[s.code as keyof typeof SECTION_DEFINITION_MAP]?.controls || [],
+        deliverables: {
+          scriptPath: SECTION_DEFINITION_MAP[s.code as keyof typeof SECTION_DEFINITION_MAP]?.scriptPath || null,
+          manifestPath: SECTION_DEFINITION_MAP[s.code as keyof typeof SECTION_DEFINITION_MAP]?.manifestPath || null,
+          remediationPath: SECTION_DEFINITION_MAP[s.code as keyof typeof SECTION_DEFINITION_MAP]?.remediationPath || null,
+          beforeLogPath: SECTION_DEFINITION_MAP[s.code as keyof typeof SECTION_DEFINITION_MAP]?.beforeLogPath || null,
+          afterLogPath: SECTION_DEFINITION_MAP[s.code as keyof typeof SECTION_DEFINITION_MAP]?.afterLogPath || null,
+          screenshotDir: SECTION_DEFINITION_MAP[s.code as keyof typeof SECTION_DEFINITION_MAP]?.screenshotDir || null,
+        },
         sortOrder: s.sortOrder,
         assignees: s.assignments.map((a) => a.user),
         document: s.documents[0] || null,
@@ -151,7 +163,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     }
 
     // Check access for members
-    if (req.user!.role !== 'LEADER') {
+    if (!hasAnyRole(req.user, [Role.LEADER, Role.ADMIN])) {
       const hasAccess = section.assignments.some((a) => a.user.id === req.user!.id);
       if (!hasAccess) {
         res.status(403).json({ error: 'Access denied', status: 403 });
@@ -166,6 +178,17 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
         title: section.title,
         description: section.description,
         cisChapters: section.cisChapters,
+        sortOrder: section.sortOrder,
+        controlIds: section.controlIds,
+        controls: SECTION_DEFINITION_MAP[section.code as keyof typeof SECTION_DEFINITION_MAP]?.controls || [],
+        deliverables: {
+          scriptPath: SECTION_DEFINITION_MAP[section.code as keyof typeof SECTION_DEFINITION_MAP]?.scriptPath || null,
+          manifestPath: SECTION_DEFINITION_MAP[section.code as keyof typeof SECTION_DEFINITION_MAP]?.manifestPath || null,
+          remediationPath: SECTION_DEFINITION_MAP[section.code as keyof typeof SECTION_DEFINITION_MAP]?.remediationPath || null,
+          beforeLogPath: SECTION_DEFINITION_MAP[section.code as keyof typeof SECTION_DEFINITION_MAP]?.beforeLogPath || null,
+          afterLogPath: SECTION_DEFINITION_MAP[section.code as keyof typeof SECTION_DEFINITION_MAP]?.afterLogPath || null,
+          screenshotDir: SECTION_DEFINITION_MAP[section.code as keyof typeof SECTION_DEFINITION_MAP]?.screenshotDir || null,
+        },
         assignees: section.assignments.map((a) => a.user),
         document: section.documents[0]
           ? {
@@ -186,7 +209,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * POST /api/sections/:id/assign
  * Assign a user to a section (leader only).
  */
-router.post('/:id/assign', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.post('/:id/assign', requireAuth, requireCapabilityAccess('manage_sections'), async (req: Request, res: Response) => {
   try {
     const sectionId = parseInt(req.params.id, 10);
     const { userId } = req.body;
@@ -223,7 +246,7 @@ router.post('/:id/assign', requireAuth, requireLeader, async (req: Request, res:
  * DELETE /api/sections/:id/assign/:userId
  * Remove a user from a section assignment (leader only).
  */
-router.delete('/:id/assign/:userId', requireAuth, requireLeader, async (req: Request, res: Response) => {
+router.delete('/:id/assign/:userId', requireAuth, requireCapabilityAccess('manage_sections'), async (req: Request, res: Response) => {
   try {
     const sectionId = parseInt(req.params.id, 10);
     const userId = parseInt(req.params.userId, 10);

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getAdminStats, getSections } from '../../lib/api';
 import type { AdminStats } from '../../lib/api';
 import type { Section } from '../../lib/types';
+import { ROLE_CATALOG } from '../../lib/role-catalog';
 
 export default function AdminOverviewPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -87,6 +88,45 @@ export default function AdminOverviewPage() {
             <span className="admin-quick-desc">{link.desc}</span>
             <span className="admin-quick-arrow">→</span>
           </Link>
+        ))}
+      </div>
+
+      {stats?.roleBreakdown && (
+        <>
+          <h3 className="admin-section-title" style={{ marginTop: 'var(--space-8)' }}>Role Breakdown</h3>
+          <div className="grid grid-3">
+            {ROLE_CATALOG.map((entry) => (
+              <div key={entry.role} className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className={`badge ${entry.badgeClass}`}>{entry.label}</span>
+                  <strong style={{ fontSize: 'var(--text-xl)' }}>{stats.roleBreakdown?.[entry.role] || 0}</strong>
+                </div>
+                <p style={{ marginTop: 'var(--space-3)', marginBottom: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
+                  {entry.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <h3 className="admin-section-title" style={{ marginTop: 'var(--space-8)' }}>M1-M4 Workload</h3>
+      <div className="grid grid-2">
+        {sections.map((section) => (
+          <div key={section.id} className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>{section.code}</div>
+                <div style={{ color: 'var(--color-text-secondary)' }}>{section.title}</div>
+              </div>
+              <span className="badge badge-info">{section.controls.length} controls</span>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {section.controls.map((control) => (
+                <span key={control.id} className="admin-chip">{control.id}</span>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </div>
