@@ -1,6 +1,6 @@
 # ReportOps — Project Overview
 
-Collaborative CIS Benchmark report editing platform. Members edit their assigned sections via ONLYOFFICE embedded editor. Leader generates merged reports and publishes releases.
+Collaborative CIS Benchmark report editing platform. Members edit their assigned sections via ONLYOFFICE embedded editor. Role-based governance controls report generation, audit packs, remediation runtime, and release operations.
 
 ## Architecture
 
@@ -41,11 +41,13 @@ npm run lint                     # ESLint
 cd backend && npm run dev        # Start API (http://localhost:4000)
 npm run build                    # TypeScript compile
 npm run lint                     # ESLint
-npm run db:migrate               # Prisma migrate
+npx prisma migrate deploy         # Apply tracked Prisma migrations
 npm run db:generate              # Generate Prisma client
 npm run db:seed                  # Seed users + sections
 npm run db:studio                # Open Prisma Studio GUI
 npm run db:push                  # Push schema to DB (dev)
+npm run audit:bootstrap          # Register canonical M1-M4 audit packs
+npm run audit:import-m1          # Upload the 7 live M1 control scripts
 
 # ONLYOFFICE (GCP VM)
 cd infra/onlyoffice && docker compose up -d    # Start Document Server
@@ -77,7 +79,7 @@ docker compose logs -f onlyoffice              # View logs
 
 | Member | Role | GitHub | Sections |
 |--------|------|--------|----------|
-| Lại Quang Huy | Leader | LQH-coding-frenzy | M1: 1.1, 1.2, 1.4, 1.5, 1.6, 2.3, 2.4 |
-| Bao Nguyên | Member | baongdqu | M2: 1.3, 2.1, 2.2, 3, 4 |
-| Trương Duy | Member | truongdaoanhduy | M3: 5.1, 5.2, 5.3, 5.4 |
-| Lâm Hoàng Phước | Member | hpuoc | M4: 1.7, 1.8, 6, 7 |
+| Lại Quang Huy | Leader | LQH-coding-frenzy | M1: 1.2.1.2, 1.1.2.1.2, 1.1.2.1.3, 1.1.2.1.4, 1.5.1, 1.5.2, 2.3.1 |
+| Bao Nguyên | Member | baongdqu | M2: 1.3.1.1, 1.3.1.4, 1.3.1.7, 1.3.1.8, 3.3.1, 3.3.7, 4.1.1 |
+| Trương Duy | Member | truongdaoanhduy | M3: 5.1.1, 5.1.15, 5.1.19, 5.1.20, 5.1.22, 5.2.2, 5.2.6 |
+| Lâm Hoàng Phước | Member | hpuoc | M4: 5.3.2.2, 5.3.2.3, 5.3.2.4, 5.4.1.1, 5.4.2.1, 6.2.1.1, 6.2.3.2 |

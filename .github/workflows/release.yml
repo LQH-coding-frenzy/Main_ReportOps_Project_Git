@@ -58,7 +58,7 @@ jobs:
       - name: Package infrastructure and metadata
         run: |
           tar -czf release-artifacts/infra-${{ github.ref_name }}.tar.gz \
-            infra/ .github/workflows/ project.answers.yaml README.md WRITING_GUIDE.md AGENTS.md
+            infra/ .github/workflows/ project.answers.yaml README.md WRITING_GUIDE.md AGENTS.md plan_complete.md database/ scripts/ manifests/ remediation/ logs/ screenshots/
 
       # ── Create GitHub Release ──
       - name: Create GitHub Release
@@ -75,7 +75,7 @@ jobs:
             ### 📦 Artifacts
             - `backend-${{ github.ref_name }}.tar.gz` — Compiled backend bundle (`dist` + Prisma assets)
             - `frontend-${{ github.ref_name }}.tar.gz` — Frontend source bundle for Vercel-hosted UI
-            - `infra-${{ github.ref_name }}.tar.gz` — Infrastructure, workflow, and metadata bundle
+            - `infra-${{ github.ref_name }}.tar.gz` — Infrastructure, workflow, metadata, reference materials, scripts, manifests, remediation, and evidence-layout bundle
 
             ### Scope
             This workflow archives repository deployment assets for a tagged source release.

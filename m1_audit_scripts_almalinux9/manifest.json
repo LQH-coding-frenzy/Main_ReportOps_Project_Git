@@ -1,7 +1,7 @@
 {
   "pack_id": "m1-almalinux9-cis-l1-server-audit-scripts",
   "source_document": "CIS_AlmaLinux_OS_9_Benchmark_v2.0.0.pdf",
-  "scope": "M1",
+  "scope": "Legacy M1 Reference",
   "benchmark": {
     "name": "CIS AlmaLinux OS 9 Benchmark",
     "version": "2.0.0",
@@ -46,5 +46,5 @@
       "topic": "Job Schedulers"
     }
   ],
-  "note": "These are original audit-only shell scripts derived from the M1 control scope. They are not verbatim CIS benchmark text."
+  "note": "These are original audit-only shell scripts derived from the older section-based M1 reference scope. The current canonical runtime now uses scripts/m1_base_server.sh, manifests/manifest-m1.yaml, and remediation/m1_remediate.sh."
 }

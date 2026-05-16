@@ -1,6 +1,6 @@
 # M1 AlmaLinux 9 CIS Level 1 Server Audit Scripts
 
-This archive contains audit-only shell scripts for the M1 scope:
+This archive contains the older section-based audit-only shell scripts for the original M1 reference scope:
 
 - `1_1.sh` — Filesystem
 - `1_2.sh` — Package Management
@@ -11,6 +11,15 @@ This archive contains audit-only shell scripts for the M1 scope:
 - `2_4.sh` — Job Schedulers
 
 ## Important
+
+This directory is now **archival reference material**.
+The current canonical ReportOps runtime uses:
+
+- `scripts/m1_base_server.sh`
+- `manifests/manifest-m1.yaml`
+- `remediation/m1_remediate.sh`
+
+Those files reflect the current narrowed 7-control M1 scope used by the web app and the live audit pack registry.
 
 These scripts are **audit-only**. They do not intentionally remediate or change system configuration.
 They output CIS-like stdout patterns such as:

@@ -44,12 +44,12 @@
 
 ## About the Project
 
-ReportOps is a private collaborative platform built for CIS Benchmark delivery workflows. It combines structured `.docx` authoring, leader-controlled report generation, GitHub-backed release publishing, and a newer automated audit pipeline that provisions lab VMs, runs security checks, archives evidence, and tracks operational results inside the same application.
+ReportOps is a private collaborative platform built for CIS Benchmark delivery workflows. It combines structured `.docx` authoring, role-governed report generation, GitHub-backed release publishing, and a newer automated audit pipeline that provisions lab VMs, runs security checks, archives evidence, and tracks operational results inside the same application.
 
 The repository now covers two closely related tracks:
 
 - Collaborative report editing with section-based ownership, ONLYOFFICE integration, preview builds, and final release freeze.
-- Operational audit workflows with Lab VM provisioning, OpenSCAP plus shell-script execution, evidence archiving, audit-pack management, and leader-facing observability dashboards.
+- Operational audit workflows with Lab VM provisioning, OpenSCAP plus shell-script execution, evidence archiving, audit-pack management, remediation runtime, and admin/auditor observability dashboards.
 
 `project.answers.yaml` is the current source of truth for shared project metadata such as public URLs, benchmark labels, and infrastructure defaults.
 
@@ -60,7 +60,7 @@ The repository now covers two closely related tracks:
 - 🧩 Writing-guide aware report workflow to keep merged `.docx` output stable.
 - 🚀 Preview builds and final report freeze flow with GitHub Releases integration.
 - 🖥️ Lab VM lifecycle management driven by GitHub Actions and Terraform.
-- 🛡️ Automated audits with OpenSCAP, uploaded shell scripts, and per-job evidence tracking.
+- 🛡️ Automated audits with OpenSCAP, uploaded shell scripts, remediation runtime, and per-job evidence tracking.
 - 🗃️ Archive views for artifacts, screenshots, raw logs, and execution evidence.
 - 📊 Admin dashboards for audit packs, release settings, platform stats, and performance analytics.
 - 🔍 Security automation with dependency audit, secret scanning, and CodeQL.
@@ -69,8 +69,8 @@ The repository now covers two closely related tracks:
 
 | Layer | Runtime / Service | Endpoint / Scope | Responsibility |
 | --- | --- | --- | --- |
-| Frontend | Next.js 16 App Router on Vercel | `https://automatedprogram.app` | UI, session-aware routing, API proxy, leader dashboards |
-| Backend API | Express + Prisma on GCP VM | `https://api.automatedprogram.app/api` | Auth, report workflow, lab orchestration, audit/job APIs |
+| Frontend | Next.js 16 App Router on Vercel | `https://automatedprogram.app` | UI, session-aware routing, API proxy, role-aware dashboards |
+| Backend API | Express + Prisma on GCP VM | `https://api.automatedprogram.app/api` | Auth, report workflow, lab orchestration, audit/remediation/job APIs |
 | Document Editing | ONLYOFFICE Document Server | `https://docs.automatedprogram.app` | Browser-based `.docx` editing and save callbacks |
 | Data | Supabase Postgres + Storage | Managed service | App data, report files, archived evidence |
 | Lab Automation | GitHub Actions + Terraform + GCP Compute Engine | Manual and app-triggered workflows | Create or destroy audit VMs and report status back to the app |
@@ -154,7 +154,7 @@ The repository now covers two closely related tracks:
 | --- | --- | --- |
 | `ci.yml` | Push and pull request on `main` / `develop` | Install, lint, and build both frontend and backend |
 | `security.yml` | Push, pull request, weekly schedule | Dependency audit, TruffleHog secret scan, CodeQL analysis |
-| `deploy.yml` | Push to `main` when backend, infra, or `project.answers.yaml` changes | Build backend, deploy to GCP VM, restart ONLYOFFICE stack, verify `/api/health` |
+| `deploy.yml` | Push to `main` when backend, infra, project metadata, or canonical scripts/manifests/remediation change | Build backend, apply tracked Prisma migrations, import M1 runtime assets, deploy to GCP VM, restart ONLYOFFICE stack, verify `/api/health` |
 | `terraform.yml` | `workflow_dispatch` and `repository_dispatch` | Provision or destroy Lab VMs and callback results into ReportOps |
 | `release.yml` | Push tag matching `v*` | Publish repository source and deployment bundles for tagged versions |
 
@@ -198,8 +198,10 @@ cd backend
 cp .env.example .env
 npm ci
 npm run db:generate
-npm run db:push
+npx prisma migrate deploy
 npm run db:seed
+npm run audit:bootstrap
+npm run audit:import-m1
 npm run dev
 ```
 
@@ -219,6 +221,7 @@ Important backend variables to review in `backend/.env`:
 - `AUDIT_RUNNER_SSH_KEY` and `AUDIT_RUNNER_SSH_PUBLIC_KEY` for production audit automation
 
 If you launch the backend from outside the repository root, set `PROJECT_ANSWERS_PATH` so the server can still read `project.answers.yaml`.
+`audit:bootstrap` registers the canonical M1-M4 packs, while `audit:import-m1` uploads the live 7-control M1 runtime scripts into storage and the database.
 
 ### 3. Configure the frontend
 
@@ -250,13 +253,14 @@ This enables the embedded editor flow used by `/editor/[sectionId]` and `/editor
 - `/guide` for the mandatory writing format guide.
 - `/reports` and `/releases` for preview builds and frozen report releases.
 - `/lab`, `/audit`, and `/archive` for the lab VM and automated audit workflow.
-- `/admin` for audit packs, logs, stats, and release settings.
+- `/admin` for users, roles, sections, audit packs, logs, and release/settings governance.
 
 ## Documentation
 
 - [`WRITING_GUIDE.md`](./WRITING_GUIDE.md) - required formatting rules for stable merged report output.
 - [`AGENTS.md`](./AGENTS.md) - repository architecture, conventions, and deployment notes for collaborators and agents.
 - [`project.answers.yaml`](./project.answers.yaml) - shared metadata and environment defaults.
+- [`plan_complete.md`](./plan_complete.md) - current team scope, M1-M4 control split, and report submission structure.
 - [`database/README.md`](./database/README.md) - database-specific notes.
 - [`m1_audit_scripts_almalinux9/README.md`](./m1_audit_scripts_almalinux9/README.md) - script pack reference material.
 
