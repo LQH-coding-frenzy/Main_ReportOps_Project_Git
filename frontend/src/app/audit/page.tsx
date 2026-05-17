@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { cancelAuditJob, deleteAuditJob, getAuditJobs } from '../../lib/api';
 import type { AuditJob } from '../../lib/types';
+import { usePolling } from '../../hooks/usePolling';
 import { benchmarkLabel, projectConfig } from '../../lib/project-config';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 import { useToast } from '../../components/ui/Toast';
@@ -43,6 +44,16 @@ export default function AuditPage() {
     const data = await getAuditJobs();
     setJobs(data.jobs.filter((job) => job.jobType === 'AUDIT'));
   }
+
+  const isAnyJobRunning = jobs.some(job => job.status === 'PENDING' || job.status === 'RUNNING');
+
+  usePolling(async () => {
+    try {
+      await reloadJobs();
+    } catch (err) {
+      console.error('Failed to poll jobs:', err);
+    }
+  }, 5000, isAnyJobRunning);
 
   function handleCancel(job: AuditJob) {
     setConfirmState({

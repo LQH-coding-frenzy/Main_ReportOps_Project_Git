@@ -8,6 +8,7 @@ import type { AuditJob, AuditScriptRun, VmOpsOperationType } from '../../lib/typ
 import { getEligibleVmOpsRuns, getVmOpsEligibleStatus, getVmOpsOperationLabel } from '../../lib/vm-ops';
 import { useToast } from '../ui/Toast';
 import { Select } from '../ui/Select';
+import { usePolling } from '../../hooks/usePolling';
 
 const STATUS_COLORS: Record<string, string> = {
   PASS: '#4ade80',
@@ -62,6 +63,17 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
       })
       .finally(() => setLoading(false));
   }, [searchKey, showToast]);
+
+  const isAnyJobRunning = jobs.some(job => job.status === 'PENDING' || job.status === 'RUNNING');
+
+  usePolling(async () => {
+    try {
+      const data = await getAuditJobs();
+      setJobs(data.jobs);
+    } catch (err) {
+      console.error('Failed to poll VM Ops jobs:', err);
+    }
+  }, 5000, isAnyJobRunning);
 
   useEffect(() => {
     if (!sourceJobId) {
