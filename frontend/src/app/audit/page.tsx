@@ -85,8 +85,7 @@ export default function AuditPage() {
   }
 
   return (
-    <main className="main-content">
-      <div className="container page">
+    <div className="admin-content">
         <div className="page-header">
           <h1 className="page-title">🔒 VM Ops Audit</h1>
           <p className="page-subtitle">
@@ -239,7 +238,6 @@ export default function AuditPage() {
             </table>
           )}
         </div>
-      </div>
 
       <ConfirmModal
         isOpen={!!confirmState}
@@ -251,6 +249,6 @@ export default function AuditPage() {
         confirmLoadingText={confirmState?.confirmLoadingText || 'Đang xử lý...'}
         type={confirmState?.type || 'primary'}
       />
-    </main>
+    </div>
   );
 }

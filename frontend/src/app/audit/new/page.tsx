@@ -77,8 +77,7 @@ export default function NewAuditPage() {
   }
 
   return (
-    <main className="main-content">
-      <div className="container page">
+    <div className="admin-content">
         <div style={{ marginBottom: 'var(--space-4)' }}>
           <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
             ← Quay lại danh sách
@@ -248,7 +247,6 @@ export default function NewAuditPage() {
             {creating ? '⏳ Đang tạo...' : `🚀 Bắt đầu ${selectedSection} Audit`}
           </button>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }

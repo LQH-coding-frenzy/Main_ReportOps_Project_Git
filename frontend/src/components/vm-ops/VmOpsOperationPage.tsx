@@ -7,6 +7,7 @@ import { createVmOpsOperationJob, getAuditJob, getAuditJobs } from '../../lib/ap
 import type { AuditJob, AuditScriptRun, VmOpsOperationType } from '../../lib/types';
 import { getEligibleVmOpsRuns, getVmOpsEligibleStatus, getVmOpsOperationLabel } from '../../lib/vm-ops';
 import { useToast } from '../ui/Toast';
+import { Select } from '../ui/Select';
 
 const STATUS_COLORS: Record<string, string> = {
   PASS: '#4ade80',
@@ -174,8 +175,7 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
   }
 
   return (
-    <main className="main-content">
-      <div className="container page">
+    <div className="admin-content">
         <div className="page-header">
           <h1 className="page-title">{title}</h1>
           <p className="page-subtitle">{description}</p>
@@ -202,11 +202,10 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
             ) : (
               <label style={{ display: 'grid', gap: 8 }}>
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Source Audit Job</span>
-                <select
-                  className="admin-input"
-                  value={sourceJobId || ''}
-                  onChange={(event) => {
-                    const nextSourceJobId = Number(event.target.value) || null;
+                <Select
+                  value={sourceJobId?.toString() || ''}
+                  onChange={(val) => {
+                    const nextSourceJobId = Number(val) || null;
                     setLoadingSourceJob(!!nextSourceJobId);
                     setSourceJobId(nextSourceJobId);
                     if (!nextSourceJobId) {
@@ -214,13 +213,12 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
                       setSelectedControlIds([]);
                     }
                   }}
-                >
-                  {sourceAuditJobs.map((job) => (
-                    <option key={job.id} value={job.id}>
-                      #{job.id} - {job.vm.name} - {new Date(job.createdAt).toLocaleString('vi-VN')}
-                    </option>
-                  ))}
-                </select>
+                  options={sourceAuditJobs.map(job => ({
+                    value: job.id.toString(),
+                    label: `#${job.id} - ${job.vm.name} - ${new Date(job.createdAt).toLocaleString('vi-VN')}`
+                  }))}
+                  placeholder="Chọn Source Audit Job..."
+                />
               </label>
             )}
           </div>
@@ -335,7 +333,6 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
             </table>
           )}
         </div>
-      </div>
-    </main>
+    </div>
   );
 }

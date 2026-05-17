@@ -175,24 +175,24 @@ export default function AuditJobDetailPage() {
 
   if (loading) {
     return (
-      <main className="main-content">
+      <div className="admin-content">
         <div className="admin-loading">
           <div className="spinner" />
           <span>Đang tải kết quả audit...</span>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (!job) {
     return (
-      <main className="main-content">
+      <div className="admin-content">
         <div className="empty-state">
           <div className="empty-state-icon">❌</div>
           <div className="empty-state-title">Không tìm thấy audit job</div>
           <Link href="/audit" className="btn btn-secondary" style={{ marginTop: 16 }}>← Quay lại</Link>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -205,8 +205,7 @@ export default function AuditJobDetailPage() {
   const backHref = getVmOpsJobListHref(job.jobType);
 
   return (
-    <main className="main-content">
-      <div className="container page">
+    <div className="admin-content">
         <div style={{ marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Link href={backHref} style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
             ← Quay lại danh sách
@@ -426,7 +425,6 @@ export default function AuditJobDetailPage() {
             <span>{totalDurationMs ? `${(totalDurationMs / 1000).toFixed(1)}s` : '—'}</span>
           </div>
         </div>
-      </div>
 
       <Modal
         isOpen={showLogs}
@@ -484,6 +482,6 @@ export default function AuditJobDetailPage() {
           box-shadow: var(--shadow-md);
         }
       `}</style>
-    </main>
+    </div>
   );
 }
