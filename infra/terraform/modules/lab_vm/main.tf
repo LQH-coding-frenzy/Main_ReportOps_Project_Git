@@ -114,65 +114,93 @@ SSHD
     dnf --disablerepo='google-cloud*' install -y nginx curl || true
     
     # 10. Configure Welcome Page early so HTTP is available even if later packages fail
-    echo "Configuring Nginx with live observability..."
+    echo "Configuring Nginx with live observability (systemd timer approach)..."
     mkdir -p /usr/share/nginx/html
 
-    # Set up a /stats endpoint served by a simple bash script via fcgiwrap
-    dnf --disablerepo='google-cloud*' install -y fcgi fcgiwrap || true
-    mkdir -p /var/www/cgi-bin
-
-    cat > /var/www/cgi-bin/stats.sh << 'STATS_EOF'
+    # Create the stats writer script (runs every ~5 seconds via systemd timer)
+    cat > /usr/local/bin/reportops-stats.sh << 'STATS_EOF'
 #!/bin/bash
-echo "Content-Type: application/json"
-echo "Access-Control-Allow-Origin: *"
-echo ""
+OUTFILE="/usr/share/nginx/html/stats.json"
+TMP="$OUTFILE.tmp"
 
 CPU_COUNT=$(nproc 2>/dev/null || echo 0)
-CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//' || echo "Unknown")
-LOAD=$(cat /proc/loadavg 2>/dev/null | awk '{print $1, $2, $3}')
-LOAD1=$(echo $LOAD | awk '{print $1}')
-LOAD5=$(echo $LOAD | awk '{print $2}')
-LOAD15=$(echo $LOAD | awk '{print $3}')
+CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//' | sed 's/"/\\"/g' || echo "Unknown")
+read LOAD1 LOAD5 LOAD15 REST < /proc/loadavg
 
-MEM=$(awk '/MemTotal:/ {t=int($2/1024)} /MemAvailable:/ {a=int($2/1024)} END {print t, a}' /proc/meminfo 2>/dev/null)
-MEM_TOTAL=$(echo $MEM | awk '{print $1}')
-MEM_AVAIL=$(echo $MEM | awk '{print $2}')
-MEM_USED=$((MEM_TOTAL - MEM_AVAIL))
+MEM_TOTAL=$(awk '/MemTotal:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+MEM_AVAIL=$(awk '/MemAvailable:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+MEM_USED=$(( MEM_TOTAL - MEM_AVAIL ))
 MEM_PCT=$(( MEM_TOTAL > 0 ? MEM_USED * 100 / MEM_TOTAL : 0 ))
 
-DISK=$(df -BM / 2>/dev/null | awk 'NR==2 {gsub(/M/,"",$2); gsub(/M/,"",$3); gsub(/%/,"",$5); print $2, $3, $5}')
-DISK_TOTAL=$(echo $DISK | awk '{print $1}')
-DISK_USED=$(echo $DISK | awk '{print $2}')
-DISK_PCT=$(echo $DISK | awk '{print $3}')
+DISK_INFO=$(df -BM / 2>/dev/null | awk 'NR==2 {gsub(/M/,"",$2); gsub(/M/,"",$3); gsub(/%/,"",$5); print $2, $3, $5}')
+DISK_TOTAL=$(echo $DISK_INFO | awk '{print $1}')
+DISK_USED=$(echo $DISK_INFO | awk '{print $2}')
+DISK_PCT=$(echo $DISK_INFO | awk '{print $3}')
 
-UPTIME=$(uptime -p 2>/dev/null || echo "unknown")
-NGINX=$(systemctl is-active nginx 2>/dev/null || echo "unknown")
-SSHD=$(systemctl is-active sshd 2>/dev/null || echo "unknown")
+UPTIME_H=$(uptime -p 2>/dev/null | sed "s/'/\\\\'/" || echo "unknown")
+NGINX_STATUS=$(systemctl is-active nginx 2>/dev/null || echo "unknown")
+SSHD_STATUS=$(systemctl is-active sshd 2>/dev/null || echo "unknown")
 
-CPU_PCT=$(( CPU_COUNT > 0 ? $(echo "$LOAD1 $CPU_COUNT" | awk '{printf "%d", ($1/$2)*100}') : 0 ))
+if [ "$CPU_COUNT" -gt 0 ] 2>/dev/null; then
+  CPU_PCT=$(awk "BEGIN{v=$LOAD1/$CPU_COUNT*100; if(v>100) v=100; printf \"%d\", v}")
+else
+  CPU_PCT=0
+fi
 
-echo "{\"cpuCount\":$CPU_COUNT,\"cpuModel\":\"$CPU_MODEL\",\"load1\":$LOAD1,\"load5\":$LOAD5,\"load15\":$LOAD15,\"cpuPressurePercent\":$CPU_PCT,\"memoryTotalMb\":$MEM_TOTAL,\"memoryUsedMb\":$MEM_USED,\"memoryUsagePercent\":$MEM_PCT,\"rootDiskTotalMb\":$DISK_TOTAL,\"rootDiskUsedMb\":$DISK_USED,\"rootDiskUsagePercent\":$DISK_PCT,\"uptimeHuman\":\"$UPTIME\",\"nginxStatus\":\"$NGINX\",\"sshdStatus\":\"$SSHD\"}"
+cat > "$TMP" << JSON
+{"cpuCount":$CPU_COUNT,"cpuModel":"$CPU_MODEL","load1":$LOAD1,"load5":$LOAD5,"load15":$LOAD15,"cpuPressurePercent":$CPU_PCT,"memoryTotalMb":$MEM_TOTAL,"memoryUsedMb":$MEM_USED,"memoryUsagePercent":$MEM_PCT,"rootDiskTotalMb":${DISK_TOTAL:-0},"rootDiskUsedMb":${DISK_USED:-0},"rootDiskUsagePercent":${DISK_PCT:-0},"uptimeHuman":"$UPTIME_H","nginxStatus":"$NGINX_STATUS","sshdStatus":"$SSHD_STATUS"}
+JSON
+mv "$TMP" "$OUTFILE"
 STATS_EOF
+    chmod +x /usr/local/bin/reportops-stats.sh
 
-    chmod +x /var/www/cgi-bin/stats.sh
+    # Run once immediately to create the file before nginx starts
+    /usr/local/bin/reportops-stats.sh || true
 
-    # Configure nginx with CGI support
+    # Create systemd service
+    cat > /etc/systemd/system/reportops-stats.service << 'SVC_EOF'
+[Unit]
+Description=ReportOps VM Stats Writer
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/reportops-stats.sh
+SVC_EOF
+
+    # Create systemd timer (every 5 seconds)
+    cat > /etc/systemd/system/reportops-stats.timer << 'TIMER_EOF'
+[Unit]
+Description=ReportOps VM Stats Timer
+Requires=reportops-stats.service
+
+[Timer]
+OnActiveSec=5
+OnUnitActiveSec=5
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target
+TIMER_EOF
+
+    systemctl daemon-reload
+    systemctl enable --now reportops-stats.timer || true
+
+    # Configure nginx - simple static file serving with CORS header for /stats.json
     cat > /etc/nginx/conf.d/reportops.conf << 'NGINX_CONF'
 server {
     listen 80 default_server;
     root /usr/share/nginx/html;
     index index.html;
 
-    location /stats {
-        include fastcgi_params;
-        fastcgi_pass unix:/var/run/fcgiwrap.socket;
-        fastcgi_param SCRIPT_FILENAME /var/www/cgi-bin/stats.sh;
+    location = /stats.json {
+        add_header Content-Type "application/json";
+        add_header Access-Control-Allow-Origin "*";
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 }
 NGINX_CONF
 
-    # Enable and start fcgiwrap
-    systemctl enable --now fcgiwrap 2>/dev/null || true
 
     cat > /usr/share/nginx/html/index.html << 'HTML'
 <!DOCTYPE html>
@@ -366,7 +394,7 @@ async function fetchStats() {
     if (dot) dot.classList.add('refreshing');
 
     try {
-        const r = await fetch('/stats', { cache: 'no-cache' });
+        const r = await fetch('/stats.json', { cache: 'no-cache' });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const d = await r.json();
         if (content) content.innerHTML = renderObs(d);

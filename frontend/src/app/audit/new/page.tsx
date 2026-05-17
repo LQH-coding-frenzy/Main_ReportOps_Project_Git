@@ -53,7 +53,7 @@ export default function NewAuditPage() {
     [packs, selectedSection]
   );
   const selectedDefinition = FRONTEND_SECTION_DEFINITION_MAP[selectedSection];
-  const packReady = selectedPack ? !selectedPack.isPlaceholder : selectedSection === 'M1';
+  const packReady = selectedPack ? !selectedPack.isPlaceholder : false;
 
   async function handleCreate() {
     if (!selectedVm) {
@@ -100,7 +100,7 @@ export default function NewAuditPage() {
             {(['M1', 'M2', 'M3', 'M4'] as const).map((sectionCode) => {
               const definition = FRONTEND_SECTION_DEFINITION_MAP[sectionCode];
               const pack = packs.find((item) => item.ownerSection === sectionCode);
-              const ready = pack ? !pack.isPlaceholder : sectionCode === 'M1';
+              const ready = pack ? !pack.isPlaceholder : false;
 
               return (
                 <div
@@ -230,8 +230,8 @@ export default function NewAuditPage() {
           </div>
           {!packReady && (
             <div className="admin-note" style={{ marginTop: 'var(--space-4)' }}>
-              <span>⏳</span>
-              <span>M2-M4 hiện mới có placeholder metadata. Khi nhóm bạn hoàn thiện script/runtime thật, pack này sẽ được bật chạy trực tiếp.</span>
+              <span>⚠️</span>
+              <span>Pack {selectedSection} chưa có scripts. Hãy chạy <code>npm run audit:import-all</code> trên server để upload scripts.</span>
             </div>
           )}
         </div>
