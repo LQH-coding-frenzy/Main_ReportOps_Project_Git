@@ -148,7 +148,7 @@ else
 fi
 
 cat > "$TMP" << JSON
-{"cpuCount":$CPU_COUNT,"cpuModel":"$CPU_MODEL","load1":$LOAD1,"load5":$LOAD5,"load15":$LOAD15,"cpuPressurePercent":$CPU_PCT,"memoryTotalMb":$MEM_TOTAL,"memoryUsedMb":$MEM_USED,"memoryUsagePercent":$MEM_PCT,"rootDiskTotalMb":${DISK_TOTAL:-0},"rootDiskUsedMb":${DISK_USED:-0},"rootDiskUsagePercent":${DISK_PCT:-0},"uptimeHuman":"$UPTIME_H","nginxStatus":"$NGINX_STATUS","sshdStatus":"$SSHD_STATUS"}
+{"cpuCount":$CPU_COUNT,"cpuModel":"$CPU_MODEL","load1":$LOAD1,"load5":$LOAD5,"load15":$LOAD15,"cpuPressurePercent":$CPU_PCT,"memoryTotalMb":$MEM_TOTAL,"memoryUsedMb":$MEM_USED,"memoryUsagePercent":$MEM_PCT,"rootDiskTotalMb":$${DISK_TOTAL:-0},"rootDiskUsedMb":$${DISK_USED:-0},"rootDiskUsagePercent":$${DISK_PCT:-0},"uptimeHuman":"$UPTIME_H","nginxStatus":"$NGINX_STATUS","sshdStatus":"$SSHD_STATUS"}
 JSON
 mv "$TMP" "$OUTFILE"
 STATS_EOF
