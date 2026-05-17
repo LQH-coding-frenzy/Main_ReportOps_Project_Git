@@ -173,8 +173,9 @@ async function createVmOpsOperationJob(input: {
     return { error: 'Wait for the source audit job to complete before running VM Ops operations', status: 400 as const };
   }
 
-  if (sourceJob.ownerSection !== 'M1') {
-    return { error: 'Only M1 VM Ops runtime is available right now', status: 400 as const };
+  const allowedSectionsForVmOps = ['M1', 'M2', 'M3', 'M4'];
+  if (!allowedSectionsForVmOps.includes(sourceJob.ownerSection)) {
+    return { error: `VM Ops runtime is not available for section ${sourceJob.ownerSection}`, status: 400 as const };
   }
 
   const vm = await prisma.labVm.findUnique({ where: { id: sourceJob.vmId } });

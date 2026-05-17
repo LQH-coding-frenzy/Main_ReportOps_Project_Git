@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -u
 
-# CIS AlmaLinux OS 9 Benchmark v2.0.0 - Automated Audit Script
-# Part M3: Admin Access Control (SSH + Sudo)
-# Assignee: Duy
-# NOTE: Original script by Duy already uses CIS-style output format.
-#       Only added should_run_control() per-control gating for targeted
-#       execution compatibility with the ReportOps TARGET_CONTROL_ID env var.
+# ============================================
+# CIS AlmaLinux 9 Benchmark v2.0.0
+# Section M3: Admin Access Control
+# Owner: Duy
+# ============================================
 
 PASS_COUNT=0
 FAIL_COUNT=0
 ERROR_COUNT=0
 NA_COUNT=0
 
+# Helper functions
 print_pass() {
   local id="$1"
   local title="$2"
@@ -53,61 +53,45 @@ print_na() {
   NA_COUNT=$((NA_COUNT + 1))
 }
 
-section_summary() {
-  echo
-  echo "=============================="
-  echo "Audit Summary"
-  echo "PASS: $PASS_COUNT"
-  echo "FAIL: $FAIL_COUNT"
-  echo "ERROR: $ERROR_COUNT"
-  echo "NOT_APPLICABLE: $NA_COUNT"
-  echo "=============================="
-}
-
-should_run_control() {
-  [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]
-}
-
 # ============================================
 # 5.1.1 - Ensure permissions on /etc/ssh/sshd_config are configured
-# Original by Duy
 # ============================================
 check_5_1_1() {
   local id="5.1.1"
   local title="Ensure permissions on /etc/ssh/sshd_config are configured"
-
+  
   if [ ! -f /etc/ssh/sshd_config ]; then
     print_error "$id" "$title" " - /etc/ssh/sshd_config not found"
     return
   fi
-
+  
   local perm_mask='0177'
   local maxperm=$(printf '%o' $((0777 & ~$perm_mask)))
   local failures=""
-
+  
   # Check main config file
   local stat_output=$(stat -Lc '%#a:%U:%G' /etc/ssh/sshd_config 2>/dev/null)
   IFS=: read -r l_mode l_user l_group <<< "$stat_output"
-
+  
   if [ $((l_mode & perm_mask)) -gt 0 ]; then
     failures="${failures} - /etc/ssh/sshd_config mode is $l_mode, should be $maxperm or more restrictive\n"
   fi
-
+  
   if [ "$l_user" != "root" ]; then
     failures="${failures} - /etc/ssh/sshd_config is owned by $l_user, should be root\n"
   fi
-
+  
   if [ "$l_group" != "root" ]; then
     failures="${failures} - /etc/ssh/sshd_config is group-owned by $l_group, should be root\n"
   fi
-
+  
   # Check files in sshd_config.d if exists
   if [ -d /etc/ssh/sshd_config.d ]; then
     while IFS= read -r -d $'\0' conf_file; do
       if [ -f "$conf_file" ]; then
         local conf_stat=$(stat -Lc '%#a:%U:%G' "$conf_file" 2>/dev/null)
         IFS=: read -r c_mode c_user c_group <<< "$conf_stat"
-
+        
         if [ $((c_mode & perm_mask)) -gt 0 ]; then
           failures="${failures} - $conf_file mode is $c_mode, should be $maxperm or more restrictive\n"
         fi
@@ -120,7 +104,7 @@ check_5_1_1() {
       fi
     done < <(find /etc/ssh/sshd_config.d -type f -name "*.conf" -print0 2>/dev/null)
   fi
-
+  
   if [ -n "$failures" ]; then
     print_fail "$id" "$title" "$(echo -e "$failures")"
   else
@@ -130,19 +114,18 @@ check_5_1_1() {
 
 # ============================================
 # 5.1.15 - Ensure sshd LogLevel is configured
-# Original by Duy
 # ============================================
 check_5_1_15() {
   local id="5.1.15"
   local title="Ensure sshd LogLevel is configured"
-
+  
   if ! command -v sshd &>/dev/null; then
     print_error "$id" "$title" " - sshd command not found"
     return
   fi
-
+  
   local loglevel=$(sshd -T 2>/dev/null | grep -i "^loglevel" | awk '{print $2}')
-
+  
   if [[ "$loglevel" =~ ^(VERBOSE|INFO)$ ]]; then
     print_pass "$id" "$title" " - LogLevel is set to: $loglevel"
   else
@@ -152,19 +135,18 @@ check_5_1_15() {
 
 # ============================================
 # 5.1.19 - Ensure sshd PermitEmptyPasswords is disabled
-# Original by Duy
 # ============================================
 check_5_1_19() {
   local id="5.1.19"
   local title="Ensure sshd PermitEmptyPasswords is disabled"
-
+  
   if ! command -v sshd &>/dev/null; then
     print_error "$id" "$title" " - sshd command not found"
     return
   fi
-
+  
   local permit_empty=$(sshd -T 2>/dev/null | grep -i "^permitemptypasswords" | awk '{print $2}')
-
+  
   if [ "$permit_empty" = "no" ]; then
     print_pass "$id" "$title" " - PermitEmptyPasswords is set to: no"
   else
@@ -174,19 +156,18 @@ check_5_1_19() {
 
 # ============================================
 # 5.1.20 - Ensure sshd PermitRootLogin is disabled
-# Original by Duy
 # ============================================
 check_5_1_20() {
   local id="5.1.20"
   local title="Ensure sshd PermitRootLogin is disabled"
-
+  
   if ! command -v sshd &>/dev/null; then
     print_error "$id" "$title" " - sshd command not found"
     return
   fi
-
+  
   local permit_root=$(sshd -T 2>/dev/null | grep -i "^permitrootlogin" | awk '{print $2}')
-
+  
   if [ "$permit_root" = "no" ]; then
     print_pass "$id" "$title" " - PermitRootLogin is set to: no"
   else
@@ -196,19 +177,18 @@ check_5_1_20() {
 
 # ============================================
 # 5.1.22 - Ensure sshd UsePAM is enabled
-# Original by Duy
 # ============================================
 check_5_1_22() {
   local id="5.1.22"
   local title="Ensure sshd UsePAM is enabled"
-
+  
   if ! command -v sshd &>/dev/null; then
     print_error "$id" "$title" " - sshd command not found"
     return
   fi
-
+  
   local use_pam=$(sshd -T 2>/dev/null | grep -i "^usepam" | awk '{print $2}')
-
+  
   if [ "$use_pam" = "yes" ]; then
     print_pass "$id" "$title" " - UsePAM is enabled"
   else
@@ -218,15 +198,14 @@ check_5_1_22() {
 
 # ============================================
 # 5.2.2 - Ensure sudo commands use pty
-# Original by Duy
 # ============================================
 check_5_2_2() {
   local id="5.2.2"
   local title="Ensure sudo commands use pty"
-
+  
   local use_pty_set=$(grep -rPi '^\h*Defaults\h+([^#\n\r]+,\h*)?use_pty\b' /etc/sudoers /etc/sudoers.d/* 2>/dev/null)
   local use_pty_negated=$(grep -rPi '^\h*Defaults\h+([^#\n\r]+,\h*)?!use_pty\b' /etc/sudoers /etc/sudoers.d/* 2>/dev/null)
-
+  
   if [ -n "$use_pty_set" ] && [ -z "$use_pty_negated" ]; then
     print_pass "$id" "$title" " - use_pty is configured" " - Found in: $(echo "$use_pty_set" | head -1)"
   else
@@ -239,41 +218,55 @@ check_5_2_2() {
 
 # ============================================
 # 5.2.6 - Ensure sudo authentication timeout is configured correctly
-# Original by Duy
 # ============================================
 check_5_2_6() {
   local id="5.2.6"
   local title="Ensure sudo authentication timeout is configured correctly"
-
+  
   local timeout_values=$(grep -roP "timestamp_timeout=\K[0-9]*" /etc/sudoers /etc/sudoers.d/* 2>/dev/null)
-
+  
   if [ -z "$timeout_values" ]; then
     # No explicit timeout set, check default
     local default_timeout=$(sudo -V 2>/dev/null | grep -i "timestamp timeout" | grep -oP '\d+')
     if [ -n "$default_timeout" ] && [ "$default_timeout" -le 15 ]; then
-      print_pass "$id" "$title" " - Using default timeout: ${default_timeout} minutes (<=15)"
+      print_pass "$id" "$title" " - Using default timeout: ${default_timeout} minutes (≤15)"
     else
       print_fail "$id" "$title" " - No timeout configured, or default > 15 minutes"
     fi
   else
     local max_timeout=$(echo "$timeout_values" | sort -nr | head -1)
     if [ "$max_timeout" -le 15 ] && [ "$max_timeout" -ge 0 ]; then
-      print_pass "$id" "$title" " - Timeout is set to $max_timeout minutes (<=15)"
+      print_pass "$id" "$title" " - Timeout is set to $max_timeout minutes (≤15)"
     else
-      print_fail "$id" "$title" " - Timeout is $max_timeout minutes, should be <=15"
+      print_fail "$id" "$title" " - Timeout is $max_timeout minutes, should be ≤15"
     fi
   fi
 }
 
-echo "## M3 Admin Access Control Audit"
+# ============================================
+# Main execution
+# ============================================
+echo "========================================"
+echo "CIS AlmaLinux 9 - M3: Admin Access Control"
+echo "Audit started: $(date)"
+echo "========================================"
 
-should_run_control "5.1.1"  && check_5_1_1
-should_run_control "5.1.15" && check_5_1_15
-should_run_control "5.1.19" && check_5_1_19
-should_run_control "5.1.20" && check_5_1_20
-should_run_control "5.1.22" && check_5_1_22
-should_run_control "5.2.2"  && check_5_2_2
-should_run_control "5.2.6"  && check_5_2_6
+check_5_1_1
+check_5_1_15
+check_5_1_19
+check_5_1_20
+check_5_1_22
+check_5_2_2
+check_5_2_6
 
-section_summary
+echo
+echo "========================================"
+echo "Audit Summary"
+echo "PASS: $PASS_COUNT"
+echo "FAIL: $FAIL_COUNT"
+echo "ERROR: $ERROR_COUNT"
+echo "NOT_APPLICABLE: $NA_COUNT"
+echo "========================================"
+echo "Audit completed: $(date)"
+
 exit 0

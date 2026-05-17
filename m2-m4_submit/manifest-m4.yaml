@@ -1,0 +1,32 @@
+module: M4
+owner: Phuoc
+title: Identity, Logging and Audit Trail
+
+controls:
+  - id: 5.3.2.2
+    name: Ensure pam_faillock module is enabled
+    status: PASS
+
+  - id: 5.3.2.3
+    name: Ensure pam_pwquality module is enabled
+    status: PASS
+
+  - id: 5.3.2.4
+    name: Ensure pam_pwhistory module is enabled
+    status: PASS
+
+  - id: 5.4.1.1
+    name: Ensure password expiration is configured
+    status: PASS
+
+  - id: 5.4.2.1
+    name: Ensure root is the only UID 0 account
+    status: PASS
+
+  - id: 6.2.1.1
+    name: Ensure journald service is enabled and active
+    status: PASS
+
+  - id: 6.2.3.2
+    name: Ensure rsyslog service is enabled and active
+    status: PASS

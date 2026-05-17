@@ -56,18 +56,21 @@ function resolveOpenScapProfileId(profileLabel: string): string {
   return 'xccdf_org.ssgproject.content_profile_cis_server_l1';
 }
 
-function resolveOperationScriptPath(ownerSection: string, operationType: VmOpsOperationType): string | null {
-  if (ownerSection !== 'M1') {
-    return null;
-  }
+const REMEDIATION_SCRIPT_MAP: Record<string, string> = {
+  M1: 'remediation/m1_remediate.sh',
+  M2: 'remediation/m2_remediate.sh',
+  M3: 'remediation/m3_remediate.sh',
+  M4: 'remediation/m4_remediate.sh',
+};
 
+function resolveOperationScriptPath(ownerSection: string, operationType: VmOpsOperationType): string | null {
   switch (operationType) {
     case 'REMEDIATION':
-      return 'remediation/m1_remediate.sh';
+      return REMEDIATION_SCRIPT_MAP[ownerSection] || null;
     case 'NOT_APPLICABLE_FIX':
-      return 'remediation/m1_not_applicable_fix.sh';
+      return ownerSection === 'M1' ? 'remediation/m1_not_applicable_fix.sh' : null;
     case 'REVERSE_REMEDIATE':
-      return 'remediation/m1_reverse_remediate.sh';
+      return ownerSection === 'M1' ? 'remediation/m1_reverse_remediate.sh' : null;
     default:
       return null;
   }

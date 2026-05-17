@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { SECTION_DEFINITION_MAP, SECTION_DEFINITIONS } from '../../config/section-definitions';
 
-const REAL_PACK_CODES = new Set(['M1']);
+const REAL_PACK_CODES = new Set(['M1', 'M2', 'M3', 'M4']);
 
 export const MANAGED_PACK_IDS = SECTION_DEFINITIONS.map((definition) => buildManagedPackId(definition.code, definition.title));
 

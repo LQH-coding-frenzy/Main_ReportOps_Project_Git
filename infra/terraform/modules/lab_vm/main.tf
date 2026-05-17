@@ -114,56 +114,280 @@ SSHD
     dnf --disablerepo='google-cloud*' install -y nginx curl || true
     
     # 10. Configure Welcome Page early so HTTP is available even if later packages fail
-    echo "Configuring Nginx..."
+    echo "Configuring Nginx with live observability..."
     mkdir -p /usr/share/nginx/html
-    cat > /usr/share/nginx/html/index.html <<HTML
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>ReportOps Lab VM - Active</title>
-        <style>
-            :root { --primary: #3b82f6; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; }
-            body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
-            .container { background-color: var(--card); padding: 40px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 1px solid #334155; max-width: 500px; width: 100%; text-align: center; position: relative; overflow: hidden; }
-            .container::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
-            h1 { margin-top: 0; color: #60a5fa; font-size: 1.75rem; margin-bottom: 8px; }
-            .status-badge { display: inline-flex; align-items: center; background: rgba(34, 197, 94, 0.1); color: #22c55e; padding: 4px 12px; border-radius: 99px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 24px; border: 1px solid rgba(34, 197, 94, 0.2); }
-            .status-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 8px #22c55e; }
-            .info-card { background: rgba(15, 23, 42, 0.5); border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: left; }
-            .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
-            .info-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-            .info-label { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
-            .info-value { font-weight: 600; color: #e2e8f0; font-size: 0.9rem; }
-            .token { font-family: 'JetBrains Mono', monospace; background: rgba(59,130,246,0.1); color: #60a5fa; padding: 2px 6px; border-radius: 4px; }
-            .btn { display: inline-block; background: var(--primary); color: white; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; transition: all 0.2s; border: none; cursor: pointer; width: 100%; box-sizing: border-box; }
-            .btn:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
-            .footer { margin-top: 24px; font-size: 0.75rem; color: var(--muted); }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="status-badge"><span class="status-dot"></span>Active & Protected</div>
-            <h1>${var.vm_name}</h1>
-            <p style="color: var(--muted); margin-bottom: 24px; font-size: 0.9rem;">This virtual machine is managed by ReportOps platform for CIS Benchmark auditing.</p>
-            
-            <div class="info-card">
-                <div class="info-row"><span class="info-label">VM ID</span><span class="info-value">${var.vm_id}</span></div>
-                <div class="info-row"><span class="info-label">Owner</span><span class="info-value">${var.owner_name}</span></div>
-                <div class="info-row"><span class="info-label">Section</span><span class="info-value">${var.section_label}</span></div>
-                <div class="info-row"><span class="info-label">Benchmark</span><span class="info-value">${var.benchmark_name} v${var.benchmark_version}</span></div>
-                <div class="info-row"><span class="info-label">Profile</span><span class="info-value">${var.benchmark_profile}</span></div>
-                <div class="info-row"><span class="info-label">Token</span><span class="info-value token">${var.verification_token}</span></div>
-            </div>
 
-            <a href="${var.frontend_url}/dashboard" class="btn">Back to Dashboard</a>
-            
-            <div class="footer">Created by ReportOps Web App</div>
+    # Set up a /stats endpoint served by a simple bash script via fcgiwrap
+    dnf --disablerepo='google-cloud*' install -y fcgi fcgiwrap || true
+    mkdir -p /var/www/cgi-bin
+
+    cat > /var/www/cgi-bin/stats.sh << 'STATS_EOF'
+#!/bin/bash
+echo "Content-Type: application/json"
+echo "Access-Control-Allow-Origin: *"
+echo ""
+
+CPU_COUNT=$(nproc 2>/dev/null || echo 0)
+CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//' || echo "Unknown")
+LOAD=$(cat /proc/loadavg 2>/dev/null | awk '{print $1, $2, $3}')
+LOAD1=$(echo $LOAD | awk '{print $1}')
+LOAD5=$(echo $LOAD | awk '{print $2}')
+LOAD15=$(echo $LOAD | awk '{print $3}')
+
+MEM=$(awk '/MemTotal:/ {t=int($2/1024)} /MemAvailable:/ {a=int($2/1024)} END {print t, a}' /proc/meminfo 2>/dev/null)
+MEM_TOTAL=$(echo $MEM | awk '{print $1}')
+MEM_AVAIL=$(echo $MEM | awk '{print $2}')
+MEM_USED=$((MEM_TOTAL - MEM_AVAIL))
+MEM_PCT=$(( MEM_TOTAL > 0 ? MEM_USED * 100 / MEM_TOTAL : 0 ))
+
+DISK=$(df -BM / 2>/dev/null | awk 'NR==2 {gsub(/M/,"",$2); gsub(/M/,"",$3); gsub(/%/,"",$5); print $2, $3, $5}')
+DISK_TOTAL=$(echo $DISK | awk '{print $1}')
+DISK_USED=$(echo $DISK | awk '{print $2}')
+DISK_PCT=$(echo $DISK | awk '{print $3}')
+
+UPTIME=$(uptime -p 2>/dev/null || echo "unknown")
+NGINX=$(systemctl is-active nginx 2>/dev/null || echo "unknown")
+SSHD=$(systemctl is-active sshd 2>/dev/null || echo "unknown")
+
+CPU_PCT=$(( CPU_COUNT > 0 ? $(echo "$LOAD1 $CPU_COUNT" | awk '{printf "%d", ($1/$2)*100}') : 0 ))
+
+echo "{\"cpuCount\":$CPU_COUNT,\"cpuModel\":\"$CPU_MODEL\",\"load1\":$LOAD1,\"load5\":$LOAD5,\"load15\":$LOAD15,\"cpuPressurePercent\":$CPU_PCT,\"memoryTotalMb\":$MEM_TOTAL,\"memoryUsedMb\":$MEM_USED,\"memoryUsagePercent\":$MEM_PCT,\"rootDiskTotalMb\":$DISK_TOTAL,\"rootDiskUsedMb\":$DISK_USED,\"rootDiskUsagePercent\":$DISK_PCT,\"uptimeHuman\":\"$UPTIME\",\"nginxStatus\":\"$NGINX\",\"sshdStatus\":\"$SSHD\"}"
+STATS_EOF
+
+    chmod +x /var/www/cgi-bin/stats.sh
+
+    # Configure nginx with CGI support
+    cat > /etc/nginx/conf.d/reportops.conf << 'NGINX_CONF'
+server {
+    listen 80 default_server;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location /stats {
+        include fastcgi_params;
+        fastcgi_pass unix:/var/run/fcgiwrap.socket;
+        fastcgi_param SCRIPT_FILENAME /var/www/cgi-bin/stats.sh;
+    }
+}
+NGINX_CONF
+
+    # Enable and start fcgiwrap
+    systemctl enable --now fcgiwrap 2>/dev/null || true
+
+    cat > /usr/share/nginx/html/index.html << 'HTML'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReportOps Lab VM — ${var.vm_name}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-glow: rgba(59,130,246,0.25);
+            --bg: #0a0f1e;
+            --surface: #111827;
+            --card: #1a2236;
+            --border: #1e2d45;
+            --text: #f1f5f9;
+            --muted: #64748b;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .page { max-width: 700px; width: 100%; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        .card-top-bar {
+            position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, var(--primary), #8b5cf6, #06b6d4);
+        }
+        .header { text-align: center; margin-bottom: 8px; }
+        .vm-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(59,130,246,0.1);
+            border: 1px solid rgba(59,130,246,0.25);
+            padding: 6px 16px; border-radius: 99px;
+            font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em;
+            color: var(--primary); text-transform: uppercase; margin-bottom: 16px;
+        }
+        .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.2); } }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 4px; background: linear-gradient(135deg, #60a5fa, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .subtitle { color: var(--muted); font-size: 0.875rem; margin-bottom: 24px; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .info-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 8px; }
+        .info-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .info-value { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+        .token { font-family: 'JetBrains Mono', monospace; color: var(--primary); font-size: 0.7rem; }
+        .section-badge { background: linear-gradient(135deg, var(--primary), #8b5cf6); color: white; padding: 2px 10px; border-radius: 99px; font-weight: 700; font-size: 0.8rem; }
+        .obs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .obs-title { font-size: 0.95rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+        .refresh-dot.refreshing { animation: spin 1s linear infinite; background: var(--warning); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .last-update { font-size: 0.7rem; color: var(--muted); }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .metric { background: rgba(0,0,0,0.2); border-radius: 10px; padding: 12px; }
+        .metric-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+        .metric-value { font-size: 1.2rem; font-weight: 700; }
+        .metric-sub { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+        .bar-track { background: rgba(255,255,255,0.05); border-radius: 99px; height: 4px; margin-top: 6px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease, background 0.3s; }
+        .services { display: flex; gap: 10px; flex-wrap: wrap; }
+        .svc-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; border: 1px solid; }
+        .svc-active { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: var(--success); }
+        .svc-inactive { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: var(--danger); }
+        .svc-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        .error-msg { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 20px; }
+        .btn {
+            display: block; background: var(--primary); color: white;
+            text-decoration: none; padding: 14px; border-radius: 10px;
+            font-weight: 600; text-align: center; font-size: 0.9rem;
+            transition: all 0.2s; border: none; cursor: pointer; width: 100%;
+        }
+        .btn:hover { background: #2563eb; transform: translateY(-1px); box-shadow: 0 8px 20px var(--primary-glow); }
+        .footer { text-align: center; margin-top: 12px; font-size: 0.7rem; color: var(--muted); }
+        #loading { text-align: center; padding: 20px; color: var(--muted); font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="card">
+        <div class="card-top-bar"></div>
+        <div class="header">
+            <div class="vm-badge"><span class="pulse"></span>Active &amp; Protected</div>
+            <h1>${var.vm_name}</h1>
+            <p class="subtitle">ReportOps Lab VM — CIS Benchmark Auditing Platform</p>
         </div>
-    </body>
-    </html>
+        <div class="info-grid">
+            <div class="info-row"><span class="info-label">VM ID</span><span class="info-value">${var.vm_id}</span></div>
+            <div class="info-row"><span class="info-label">Section</span><span class="info-value"><span class="section-badge">${var.section_label}</span></span></div>
+            <div class="info-row"><span class="info-label">Owner</span><span class="info-value">${var.owner_name}</span></div>
+            <div class="info-row"><span class="info-label">Profile</span><span class="info-value">${var.benchmark_profile}</span></div>
+            <div class="info-row" style="grid-column: span 2"><span class="info-label">Benchmark</span><span class="info-value">${var.benchmark_name} v${var.benchmark_version}</span></div>
+            <div class="info-row" style="grid-column: span 2"><span class="info-label">Token</span><span class="info-value token">${var.verification_token}</span></div>
+        </div>
+    </div>
+
+    <div class="card" id="obs-card">
+        <div class="card-top-bar" style="background: linear-gradient(90deg, #22c55e, #06b6d4);"></div>
+        <div class="obs-header">
+            <div class="obs-title">
+                <span id="refresh-dot" class="refresh-dot"></span>
+                📈 Live Observability
+            </div>
+            <span id="last-update" class="last-update">Loading...</span>
+        </div>
+        <div id="obs-content">
+            <div id="loading">Collecting metrics...</div>
+        </div>
+    </div>
+
+    <a href="${var.frontend_url}/dashboard" class="btn">← Back to Dashboard</a>
+    <div class="footer">Managed by ReportOps · ${var.benchmark_name}</div>
+</div>
+
+<script>
+function barColor(pct) {
+    if (pct < 60) return '#22c55e';
+    if (pct < 85) return '#f59e0b';
+    return '#ef4444';
+}
+
+function renderObs(d) {
+    const cpuPct = Math.min(100, d.cpuPressurePercent || 0);
+    const memPct = d.memoryUsagePercent || 0;
+    const diskPct = d.rootDiskUsagePercent || 0;
+
+    return `
+    <div class="metrics-grid">
+        <div class="metric">
+            <div class="metric-label">CPU Pressure</div>
+            <div class="metric-value" style="color:${barColor(cpuPct)}">${cpuPct}%</div>
+            <div class="metric-sub">Load: ${(d.load1||0).toFixed(2)} / ${(d.load5||0).toFixed(2)} / ${(d.load15||0).toFixed(2)}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${cpuPct}%;background:${barColor(cpuPct)}"></div></div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Memory</div>
+            <div class="metric-value" style="color:${barColor(memPct)}">${memPct}%</div>
+            <div class="metric-sub">${d.memoryUsedMb||0} / ${d.memoryTotalMb||0} MB</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${memPct}%;background:${barColor(memPct)}"></div></div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Root Disk</div>
+            <div class="metric-value" style="color:${barColor(diskPct)}">${diskPct}%</div>
+            <div class="metric-sub">${d.rootDiskUsedMb||0} / ${d.rootDiskTotalMb||0} MB</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${diskPct}%;background:${barColor(diskPct)}"></div></div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Uptime</div>
+            <div class="metric-value" style="font-size:0.9rem;color:#60a5fa">${d.uptimeHuman||'—'}</div>
+            <div class="metric-sub">${d.cpuCount||0} vCPU · ${d.cpuModel||'—'}</div>
+        </div>
+    </div>
+    <div class="services">
+        <div class="svc-badge ${d.nginxStatus==='active'?'svc-active':'svc-inactive'}">
+            <span class="svc-dot"></span>nginx: ${d.nginxStatus||'unknown'}
+        </div>
+        <div class="svc-badge ${d.sshdStatus==='active'?'svc-active':'svc-inactive'}">
+            <span class="svc-dot"></span>sshd: ${d.sshdStatus||'unknown'}
+        </div>
+    </div>`;
+}
+
+let firstLoad = true;
+
+async function fetchStats() {
+    const dot = document.getElementById('refresh-dot');
+    const lastUpdate = document.getElementById('last-update');
+    const content = document.getElementById('obs-content');
+
+    if (dot) dot.classList.add('refreshing');
+
+    try {
+        const r = await fetch('/stats', { cache: 'no-cache' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        if (content) content.innerHTML = renderObs(d);
+        if (lastUpdate) lastUpdate.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        firstLoad = false;
+    } catch (e) {
+        if (firstLoad && content) {
+            content.innerHTML = '<div class="error-msg">⚡ Stats endpoint loading... retry in 10s</div>';
+        }
+    } finally {
+        if (dot) dot.classList.remove('refreshing');
+    }
+}
+
+fetchStats();
+setInterval(fetchStats, 5000);
+</script>
+</body>
+</html>
 HTML
+
 
     restorecon -Rv /usr/share/nginx/html || true
     setsebool -P httpd_can_network_connect 1 || true

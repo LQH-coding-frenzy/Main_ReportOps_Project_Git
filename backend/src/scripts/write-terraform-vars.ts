@@ -26,7 +26,7 @@ const out = {
   enable_oslogin: false,
   vm_id: resolvedVmId,
   owner_name: 'Admin',
-  section_label: 'M1',
+  section_label: process.env.SECTION_LABEL || 'M1',
   benchmark_name: answers.benchmark?.name || 'CIS AlmaLinux OS 9 Benchmark',
   benchmark_version: answers.benchmark?.version || '2.0.0',
   benchmark_profile: answers.benchmark?.profile || 'Level 1 - Server',

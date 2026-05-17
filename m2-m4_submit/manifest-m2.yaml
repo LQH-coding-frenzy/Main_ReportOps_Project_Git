@@ -1,0 +1,32 @@
+# manifests/manifest-m2.yaml
+# CIS AlmaLinux OS 9 Benchmark v2.0.0
+# Chủ đề: M2 - Giảm bề mặt tấn công (Attack Surface Reduction)
+# Người phụ trách: Bảo
+
+name: "M2_Attack_Surface"
+description: "Kịch bản kiểm tra tự động 7 tiêu chí CIS giảm bề mặt tấn công trên AlmaLinux 9."
+author: "Bảo"
+script_path: "scripts/m2_attack_surface.sh"
+type: "automated"
+controls:
+  - id: "1.3.1.1"
+    title: "Ensure SELinux is installed"
+    category: "SELinux"
+  - id: "1.3.1.4"
+    title: "Ensure the SELinux mode is not disabled"
+    category: "SELinux"
+  - id: "1.3.1.7"
+    title: "Ensure mcstrans is not installed"
+    category: "SELinux"
+  - id: "1.3.1.8"
+    title: "Ensure SETroubleshoot is not installed"
+    category: "SELinux"
+  - id: "3.3.1"
+    title: "Ensure ip forwarding is disabled"
+    category: "Network"
+  - id: "3.3.7"
+    title: "Ensure reverse path filtering is enabled"
+    category: "Network"
+  - id: "4.1.1"
+    title: "Ensure nftables is installed"
+    category: "Firewall"

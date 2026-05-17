@@ -20,7 +20,7 @@ async function bootstrap() {
     console.log(`Pack ready: ${pack.packId} (${pack.ownerSection}) placeholder=${pack.isPlaceholder}`);
   }
 
-  console.log('Audit pack bootstrap complete. Run audit:import-m1 to register M1 control scripts.');
+  console.log('Audit pack bootstrap complete. Run audit:import-all to register all control scripts (M1-M4).');
 }
 
 bootstrap()
