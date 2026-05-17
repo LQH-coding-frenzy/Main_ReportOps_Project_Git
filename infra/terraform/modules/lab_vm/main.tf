@@ -324,34 +324,34 @@ function renderObs(d) {
     <div class="metrics-grid">
         <div class="metric">
             <div class="metric-label">CPU Pressure</div>
-            <div class="metric-value" style="color:${barColor(cpuPct)}">${cpuPct}%</div>
-            <div class="metric-sub">Load: ${(d.load1||0).toFixed(2)} / ${(d.load5||0).toFixed(2)} / ${(d.load15||0).toFixed(2)}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${cpuPct}%;background:${barColor(cpuPct)}"></div></div>
+            <div class="metric-value" style="color:$${barColor(cpuPct)}">$${cpuPct}%</div>
+            <div class="metric-sub">Load: $${(d.load1||0).toFixed(2)} / $${(d.load5||0).toFixed(2)} / $${(d.load15||0).toFixed(2)}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:$${cpuPct}%;background:$${barColor(cpuPct)}"></div></div>
         </div>
         <div class="metric">
             <div class="metric-label">Memory</div>
-            <div class="metric-value" style="color:${barColor(memPct)}">${memPct}%</div>
-            <div class="metric-sub">${d.memoryUsedMb||0} / ${d.memoryTotalMb||0} MB</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${memPct}%;background:${barColor(memPct)}"></div></div>
+            <div class="metric-value" style="color:$${barColor(memPct)}">$${memPct}%</div>
+            <div class="metric-sub">$${d.memoryUsedMb||0} / $${d.memoryTotalMb||0} MB</div>
+            <div class="bar-track"><div class="bar-fill" style="width:$${memPct}%;background:$${barColor(memPct)}"></div></div>
         </div>
         <div class="metric">
             <div class="metric-label">Root Disk</div>
-            <div class="metric-value" style="color:${barColor(diskPct)}">${diskPct}%</div>
-            <div class="metric-sub">${d.rootDiskUsedMb||0} / ${d.rootDiskTotalMb||0} MB</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${diskPct}%;background:${barColor(diskPct)}"></div></div>
+            <div class="metric-value" style="color:$${barColor(diskPct)}">$${diskPct}%</div>
+            <div class="metric-sub">$${d.rootDiskUsedMb||0} / $${d.rootDiskTotalMb||0} MB</div>
+            <div class="bar-track"><div class="bar-fill" style="width:$${diskPct}%;background:$${barColor(diskPct)}"></div></div>
         </div>
         <div class="metric">
             <div class="metric-label">Uptime</div>
-            <div class="metric-value" style="font-size:0.9rem;color:#60a5fa">${d.uptimeHuman||'—'}</div>
-            <div class="metric-sub">${d.cpuCount||0} vCPU · ${d.cpuModel||'—'}</div>
+            <div class="metric-value" style="font-size:0.9rem;color:#60a5fa">$${d.uptimeHuman||'—'}</div>
+            <div class="metric-sub">$${d.cpuCount||0} vCPU · $${d.cpuModel||'—'}</div>
         </div>
     </div>
     <div class="services">
-        <div class="svc-badge ${d.nginxStatus==='active'?'svc-active':'svc-inactive'}">
-            <span class="svc-dot"></span>nginx: ${d.nginxStatus||'unknown'}
+        <div class="svc-badge $${d.nginxStatus==='active'?'svc-active':'svc-inactive'}">
+            <span class="svc-dot"></span>nginx: $${d.nginxStatus||'unknown'}
         </div>
-        <div class="svc-badge ${d.sshdStatus==='active'?'svc-active':'svc-inactive'}">
-            <span class="svc-dot"></span>sshd: ${d.sshdStatus||'unknown'}
+        <div class="svc-badge $${d.sshdStatus==='active'?'svc-active':'svc-inactive'}">
+            <span class="svc-dot"></span>sshd: $${d.sshdStatus||'unknown'}
         </div>
     </div>`;
 }
