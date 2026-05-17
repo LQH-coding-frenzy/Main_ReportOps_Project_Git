@@ -61,166 +61,177 @@ should_run_control() {
   [ -z "${TARGET_CONTROL_ID:-}" ] || [ "$TARGET_CONTROL_ID" = "$1" ]
 }
 
-sysctl_candidate_files() {
-  [ -f /etc/sysctl.conf ] && printf '%s\n' /etc/sysctl.conf
-  find /etc/sysctl.d /run/sysctl.d /usr/local/lib/sysctl.d /usr/lib/sysctl.d -maxdepth 1 -type f -name '*.conf' 2>/dev/null | sort -u
-}
-
-grep_sysctl_assignments() {
-  local key="$1"
-  local expected_pattern="$2"
-
-  sysctl_candidate_files | xargs -r grep -HP "^\s*${key//./\\.}\s*=\s*${expected_pattern}\s*$" 2>/dev/null || true
-}
-
-mount_option_present() {
-  local options="$1"
-  local expected="$2"
-  printf '%s\n' "$options" | tr ',' '\n' | grep -qx "$expected"
-}
-
-first_active_time_sync_service() {
-  local service
-
-  for service in chronyd systemd-timesyncd ntpd; do
-    if systemctl is-active "$service" >/dev/null 2>&1; then
-      printf '%s\n' "$service"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
 check_gpgcheck() {
   local id="1.2.1.2"
   local title="Ensure gpgcheck is globally activated"
-  local main_line
-  local repo_disabled
-  local repo_enabled
+  local global_output
+  local repo_output
 
-  main_line="$(awk '
-    BEGIN { IGNORECASE=1; in_main=0 }
-    /^[[:space:]]*\[/ {
-      in_main = ($0 ~ /^[[:space:]]*\[main\][[:space:]]*$/)
-    }
-    in_main && /^[[:space:]]*gpgcheck[[:space:]]*=/ {
-      print
-      exit
-    }
-  ' /etc/dnf/dnf.conf 2>/dev/null || true)"
+  global_output="$(grep -Pi -- '^\h*gpgcheck\h*=\h*(1|true|yes)\b' /etc/dnf/dnf.conf 2>/dev/null || true)"
+  repo_output="$(grep -Pris -- '^\h*gpgcheck\h*=\h*(0|[2-9]|[1-9][0-9]+|false|no)\b' /etc/yum.repos.d/ 2>/dev/null || true)"
 
-  repo_disabled="$(grep -RsHP '^[[:space:]]*gpgcheck[[:space:]]*=[[:space:]]*(0|false|no)\b' /etc/yum.repos.d 2>/dev/null || true)"
-  repo_enabled="$(grep -RsHP '^[[:space:]]*gpgcheck[[:space:]]*=[[:space:]]*(1|true|yes)\b' /etc/yum.repos.d 2>/dev/null || true)"
-
-  if [ -z "$main_line" ]; then
-    print_fail "$id" "$title" " - no gpgcheck assignment was found in the [main] section of /etc/dnf/dnf.conf"
+  if [ -z "$global_output" ] && [ -z "$repo_output" ]; then
+    print_fail "$id" "$title" \
+      " - grep -Pi -- '^\\h*gpgcheck\\h*=\\h*(1|true|yes)\\b' /etc/dnf/dnf.conf returned no output"
     return
   fi
 
-  if ! grep -Piq '^[[:space:]]*gpgcheck[[:space:]]*=[[:space:]]*(1|true|yes)\b' <<< "$main_line"; then
-    print_fail "$id" "$title" " - [main] in /etc/dnf/dnf.conf does not set gpgcheck=1" " - found: $main_line"
+  if [ -z "$global_output" ]; then
+    print_fail "$id" "$title" \
+      " - global configuration for gpgcheck is not enabled in /etc/dnf/dnf.conf"
     return
   fi
 
-  if [ -n "$repo_disabled" ]; then
-    print_fail "$id" "$title" " - one or more repository files explicitly disable gpgcheck" " - disabled entries:" "${repo_disabled}"
+  if [ -n "$repo_output" ]; then
+    print_fail "$id" "$title" \
+      " - configuration in /etc/yum.repos.d/ takes precedence and contains failing gpgcheck entries" \
+      " - grep -Pris -- '^\\h*gpgcheck\\h*=\\h*(0|[2-9]|[1-9][0-9]+|false|no)\\b' /etc/yum.repos.d/ returned:" \
+      "$repo_output"
     return
   fi
 
-  if [ -n "$repo_enabled" ]; then
-    print_pass "$id" "$title" " - [main] in /etc/dnf/dnf.conf sets gpgcheck=1" " - repository files with explicit gpgcheck=1:" "${repo_enabled}"
-  else
-    print_pass "$id" "$title" " - [main] in /etc/dnf/dnf.conf sets gpgcheck=1" " - no repository file overrides gpgcheck to a non-compliant value"
-  fi
+  print_pass "$id" "$title" \
+    " - grep -Pi -- '^\\h*gpgcheck\\h*=\\h*(1|true|yes)\\b' /etc/dnf/dnf.conf returned:" \
+    "$global_output" \
+    " - grep -Pris -- '^\\h*gpgcheck\\h*=\\h*(0|[2-9]|[1-9][0-9]+|false|no)\\b' /etc/yum.repos.d/ returned no output"
 }
 
 check_tmp_option() {
   local id="$1"
   local title="$2"
   local option="$3"
-  local runtime_line
-  local runtime_opts
-  local fstab_line
-  local fstab_opts
+  local findmnt_output
+  local audit_output
 
-  runtime_line="$(findmnt --kernel --target /tmp -no SOURCE,FSTYPE,OPTIONS 2>/dev/null | head -n 1 || true)"
-  runtime_opts="$(findmnt --kernel --target /tmp -no OPTIONS 2>/dev/null | head -n 1 || true)"
-  fstab_line="$(findmnt --fstab --target /tmp -no SOURCE,FSTYPE,OPTIONS 2>/dev/null | head -n 1 || true)"
-  fstab_opts="$(findmnt --fstab --target /tmp -no OPTIONS 2>/dev/null | head -n 1 || true)"
-
-  if [ -z "$runtime_line" ] && [ -z "$fstab_line" ]; then
-    print_na "$id" "$title" " - /tmp is not a separate mount; option check is not applicable in this audit context"
+  findmnt_output="$(findmnt -kn /tmp 2>/dev/null || true)"
+  if [ -z "$findmnt_output" ]; then
+    print_na "$id" "$title" \
+      " - a separate partition for /tmp does not exist, so this option check is not applicable by itself"
     return
   fi
 
-  if [ -z "$runtime_line" ]; then
-    print_fail "$id" "$title" " - /tmp is declared but is not currently mounted as a separate filesystem"
-    return
-  fi
-
-  if [ -z "$fstab_line" ]; then
-    print_fail "$id" "$title" " - /tmp is mounted separately but no /etc/fstab entry was found" " - runtime findmnt: $runtime_line"
-    return
-  fi
-
-  if mount_option_present "$runtime_opts" "$option" && mount_option_present "$fstab_opts" "$option"; then
-    print_pass "$id" "$title" " - /tmp has $option set at runtime and in /etc/fstab" " - runtime findmnt: $runtime_line" " - fstab findmnt: $fstab_line"
-  elif mount_option_present "$runtime_opts" "$option"; then
-    print_fail "$id" "$title" " - /tmp has $option at runtime but the /etc/fstab entry is missing it" " - runtime findmnt: $runtime_line" " - fstab findmnt: $fstab_line"
-  elif mount_option_present "$fstab_opts" "$option"; then
-    print_fail "$id" "$title" " - /etc/fstab has $option but the live /tmp mount does not" " - runtime findmnt: $runtime_line" " - fstab findmnt: $fstab_line"
+  audit_output="$(findmnt -kn /tmp 2>/dev/null | grep -v -- "$option" || true)"
+  if [ -z "$audit_output" ]; then
+    print_pass "$id" "$title" \
+      " - findmnt -kn /tmp | grep -v $option returned no output"
   else
-    print_fail "$id" "$title" " - /tmp does not have $option set at runtime or in /etc/fstab" " - runtime findmnt: $runtime_line" " - fstab findmnt: $fstab_line"
+    print_fail "$id" "$title" \
+      " - findmnt -kn /tmp | grep -v $option returned:" \
+      "$audit_output"
   fi
 }
 
-check_sysctl_value() {
+check_kernel_parameter_pdf() {
   local id="$1"
   local title="$2"
-  local key="$3"
-  local expected="$4"
-  local runtime
-  local correct_configs
-  local wrong_configs
+  local l_output=""
+  local l_output2=""
+  local l_ipv6_disabled=""
+  local l_ufwscf="$([ -f /etc/default/ufw ] && awk -F= '/^\s*IPT_SYSCTL=/ {print $2}' /etc/default/ufw)"
+  local l_kpname
+  local l_kpvalue
+  local -a a_parlist=("$3=$4")
 
-  runtime="$(sysctl -n "$key" 2>/dev/null || true)"
-  correct_configs="$(grep_sysctl_assignments "$key" "$expected")"
-  wrong_configs="$(sysctl_candidate_files | xargs -r grep -HP "^\s*${key//./\\.}\s*=\s*(?!${expected}\b).+$" 2>/dev/null || true)"
+  f_ipv6_chk() {
+    l_ipv6_disabled=""
+    ! grep -Pqs -- '^\h*0\b' /sys/module/ipv6/parameters/disable && l_ipv6_disabled="yes"
+    if sysctl net.ipv6.conf.all.disable_ipv6 2>/dev/null | grep -Pqs -- '^\h*net\.ipv6\.conf\.all\.disable_ipv6\h*=\h*1\b' && \
+      sysctl net.ipv6.conf.default.disable_ipv6 2>/dev/null | grep -Pqs -- '^\h*net\.ipv6\.conf\.default\.disable_ipv6\h*=\h*1\b'; then
+      l_ipv6_disabled="yes"
+    fi
+    [ -z "$l_ipv6_disabled" ] && l_ipv6_disabled="no"
+  }
 
-  if [ -z "$runtime" ]; then
-    print_error "$id" "$title" " - sysctl did not return a value for $key"
-  elif [ "$runtime" = "$expected" ] && [ -n "$correct_configs" ] && [ -z "$wrong_configs" ]; then
-    print_pass "$id" "$title" " - $key is $runtime at runtime" " - persistent config entries:" "${correct_configs}"
-  elif [ "$runtime" = "$expected" ] && [ -n "$wrong_configs" ]; then
-    print_fail "$id" "$title" " - $key is correct at runtime but conflicting persistent settings exist" " - conflicting entries:" "${wrong_configs}"
-  elif [ "$runtime" = "$expected" ]; then
-    print_fail "$id" "$title" " - $key is correct at runtime but no matching persistent config was found"
+  kernel_parameter_chk() {
+    local l_krp
+    local l_file=""
+    local l_out=""
+    local l_kpar=""
+    local l_fkpname=""
+    local l_fkpvalue=""
+
+    l_krp="$(sysctl "$l_kpname" 2>/dev/null | awk -F= '{print $2}' | xargs)"
+    if [ "$l_krp" = "$l_kpvalue" ]; then
+      l_output="$l_output\n - \"$l_kpname\" is correctly set to \"$l_krp\" in the running configuration"
+    else
+      l_output2="$l_output2\n - \"$l_kpname\" is incorrectly set to \"$l_krp\" in the running configuration and should have a value of: \"$l_kpvalue\""
+    fi
+
+    unset A_out
+    declare -A A_out
+    while read -r l_out; do
+      if [ -n "$l_out" ]; then
+        if [[ $l_out =~ ^[[:space:]]*# ]]; then
+          l_file="${l_out//# /}"
+        else
+          l_kpar="$(awk -F= '{print $1}' <<< "$l_out" | xargs)"
+          [ "$l_kpar" = "$l_kpname" ] && A_out+=( ["$l_kpar"]="$l_file" )
+        fi
+      fi
+    done < <(/usr/lib/systemd/systemd-sysctl --cat-config 2>/dev/null | grep -Po '^\h*([^#\n\r]+|#\h*\/[^#\n\r\h]+\.conf\b)')
+
+    if [ -n "$l_ufwscf" ]; then
+      l_kpar="$(grep -Po "^\h*$l_kpname\b" "$l_ufwscf" 2>/dev/null | xargs)"
+      l_kpar="${l_kpar//\//.}"
+      [ "$l_kpar" = "$l_kpname" ] && A_out+=( ["$l_kpar"]="$l_ufwscf" )
+    fi
+
+    if (( ${#A_out[@]} > 0 )); then
+      while IFS="=" read -r l_fkpname l_fkpvalue; do
+        l_fkpname="${l_fkpname// /}"
+        l_fkpvalue="${l_fkpvalue// /}"
+        if [ "$l_fkpvalue" = "$l_kpvalue" ]; then
+          l_output="$l_output\n - \"$l_kpname\" is correctly set to \"$l_fkpvalue\" in \"$(printf '%s' "${A_out[@]}")\"\n"
+        else
+          l_output2="$l_output2\n - \"$l_kpname\" is incorrectly set to \"$l_fkpvalue\" in \"$(printf '%s' "${A_out[@]}")\" and should have a value of: \"$l_kpvalue\"\n"
+        fi
+      done < <(grep -Po -- "^\h*$l_kpname\h*=\h*\H+" "${A_out[@]}" 2>/dev/null)
+    else
+      l_output2="$l_output2\n - \"$l_kpname\" is not set in an included file\n ** Note: \"$l_kpname\" may be set in a file that's ignored by load procedure **\n"
+    fi
+  }
+
+  while IFS="=" read -r l_kpname l_kpvalue; do
+    l_kpname="${l_kpname// /}"
+    l_kpvalue="${l_kpvalue// /}"
+    if grep -q '^net.ipv6\.' <<< "$l_kpname"; then
+      [ -z "$l_ipv6_disabled" ] && f_ipv6_chk
+      if [ "$l_ipv6_disabled" = "yes" ]; then
+        l_output="$l_output\n - IPv6 is disabled on the system, \"$l_kpname\" is not applicable"
+      else
+        kernel_parameter_chk
+      fi
+    else
+      kernel_parameter_chk
+    fi
+  done < <(printf '%s\n' "${a_parlist[@]}")
+
+  if [ -z "$l_output2" ]; then
+    print_pass "$id" "$title" "$l_output"
   else
-    print_fail "$id" "$title" " - $key is '$runtime', expected '$expected'"
+    print_fail "$id" "$title" "$l_output2"
+    [ -n "$l_output" ] && printf '%s\n' "- Correctly set:" "$l_output"
   fi
 }
 
 check_time_sync() {
   local id="2.3.1"
   local title="Ensure time synchronization is in use"
-  local active_service=""
+  local rpm_output
 
-  if ! command -v systemctl >/dev/null 2>&1; then
-    print_error "$id" "$title" " - systemctl command not found"
+  if ! command -v rpm >/dev/null 2>&1; then
+    print_error "$id" "$title" " - rpm command not found"
     return
   fi
 
-  if active_service="$(first_active_time_sync_service)"; then
-    if [ "$active_service" = "chronyd" ] && rpm -q chrony >/dev/null 2>&1 && systemctl is-enabled chronyd >/dev/null 2>&1; then
-      print_pass "$id" "$title" " - chrony package is installed" " - chronyd is enabled and active"
-    else
-      print_pass "$id" "$title" " - a time synchronization service is active" " - active service: $active_service"
-    fi
-  elif rpm -q chrony >/dev/null 2>&1; then
-    print_fail "$id" "$title" " - chrony package is installed but no active time synchronization service was detected"
+  rpm_output="$(rpm -q chrony 2>/dev/null || true)"
+  if [ -n "$rpm_output" ] && ! grep -qi 'not installed' <<< "$rpm_output"; then
+    print_pass "$id" "$title" \
+      " - rpm -q chrony returned:" \
+      "$rpm_output"
   else
-    print_fail "$id" "$title" " - neither chrony nor another active time synchronization service was detected"
+    print_fail "$id" "$title" \
+      " - rpm -q chrony did not show the chrony package as installed"
   fi
 }
 
@@ -230,8 +241,8 @@ should_run_control "1.2.1.2" && check_gpgcheck
 should_run_control "1.1.2.1.2" && check_tmp_option "1.1.2.1.2" "Ensure nodev option set on /tmp partition" "nodev"
 should_run_control "1.1.2.1.3" && check_tmp_option "1.1.2.1.3" "Ensure nosuid option set on /tmp partition" "nosuid"
 should_run_control "1.1.2.1.4" && check_tmp_option "1.1.2.1.4" "Ensure noexec option set on /tmp partition" "noexec"
-should_run_control "1.5.1" && check_sysctl_value "1.5.1" "Ensure address space layout randomization is enabled" "kernel.randomize_va_space" "2"
-should_run_control "1.5.2" && check_sysctl_value "1.5.2" "Ensure ptrace_scope is restricted" "kernel.yama.ptrace_scope" "1"
+should_run_control "1.5.1" && check_kernel_parameter_pdf "1.5.1" "Ensure address space layout randomization is enabled" "kernel.randomize_va_space" "2"
+should_run_control "1.5.2" && check_kernel_parameter_pdf "1.5.2" "Ensure ptrace_scope is restricted" "kernel.yama.ptrace_scope" "1"
 should_run_control "2.3.1" && check_time_sync
 
 section_summary

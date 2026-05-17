@@ -37,83 +37,18 @@ section_summary() {
   echo "=============================="
 }
 
-sysctl_candidate_files() {
-  [ -f /etc/sysctl.conf ] && printf '%s\n' /etc/sysctl.conf
-  find /etc/sysctl.d /run/sysctl.d /usr/local/lib/sysctl.d /usr/lib/sysctl.d -maxdepth 1 -type f -name '*.conf' 2>/dev/null | sort -u
-}
+sysctl_target_file() {
+  local ufw_file
+  ufw_file="$([ -f /etc/default/ufw ] && awk -F= '/^\s*IPT_SYSCTL=/ {print $2}' /etc/default/ufw)"
 
-comment_out_conflicting_sysctl_assignments() {
-  local key="$1"
-  local target="$2"
-  local file
-
-  while IFS= read -r file; do
-    [ -n "$file" ] || continue
-    [ "$file" = "$target" ] && continue
-    sed -i "/^[[:space:]]*${key//./\\.}[[:space:]]*=/ s/^/# ReportOps disabled duplicate setting: /" "$file"
-  done < <(sysctl_candidate_files)
-}
-
-ensure_tmp_mount_exists() {
-  local current
-  current="$(findmnt -kn /tmp 2>/dev/null | head -n 1 || true)"
-
-  if [ -n "$current" ]; then
-    return 0
-  fi
-
-  if ! grep -Pq '^\s*[^#\n\r]+\s+/tmp\s+' /etc/fstab 2>/dev/null; then
-    printf '%s\n' 'tmpfs /tmp tmpfs defaults,rw,nosuid,nodev,noexec,relatime,size=2G 0 0' >> /etc/fstab
-  fi
-
-  systemctl unmask tmp.mount >/dev/null 2>&1 || true
-  mount /tmp >/dev/null 2>&1 || true
-}
-
-ensure_tmp_option_config() {
-  local option="$1"
-
-  if grep -Pq '^\s*[^#\n\r]+\s+/tmp\s+' /etc/fstab 2>/dev/null; then
-    sed -i "/\\s\\/tmp\\s/ {
-      /${option}/! s/\([^[:space:]]\+\s\+\/tmp\s\+[^[:space:]]\+\s\+[^[:space:]]*\)/\1,${option}/
-    }" /etc/fstab
+  if [ -n "$ufw_file" ] && [ -e "$ufw_file" ]; then
+    printf '%s\n' "$ufw_file"
   else
-    printf '%s\n' 'tmpfs /tmp tmpfs defaults,rw,nosuid,nodev,noexec,relatime,size=2G 0 0' >> /etc/fstab
+    printf '%s\n' /etc/sysctl.d/99-reportops-kernel_sysctl.conf
   fi
 }
 
-ensure_tmp_runtime_options() {
-  mount -o remount,nodev,nosuid,noexec /tmp >/dev/null 2>&1 || true
-}
-
-verify_tmp_option() {
-  local id="$1"
-  local title="$2"
-  local option="$3"
-  local line
-
-  line="$(findmnt -kn /tmp 2>/dev/null | head -n 1 || true)"
-  if [ -n "$line" ] && awk '{print $4}' <<< "$line" | tr ',' '\n' | grep -qx "$option"; then
-    print_pass "$id" "$title" " - remediation applied successfully" " - findmnt: $line"
-  else
-    print_fail "$id" "$title" " - expected /tmp to include ${option} after remediation" " - findmnt: ${line:-/tmp is not mounted}"
-  fi
-}
-
-remediate_tmp_option() {
-  local id="$1"
-  local title="$2"
-  local option="$3"
-
-  ensure_tmp_mount_exists
-  ensure_tmp_option_config "$option"
-  ensure_tmp_runtime_options
-  verify_tmp_option "$id" "$title" "$option"
-}
-
-remediate_gpgcheck() {
-  local id='1.2.1.2'
-  local title='Ensure gpgcheck is globally activated'
+ensure_main_gpgcheck() {
   local temp_file
 
   temp_file="$(mktemp)"
@@ -146,16 +81,109 @@ remediate_gpgcheck() {
     }
   ' /etc/dnf/dnf.conf > "$temp_file" && cat "$temp_file" > /etc/dnf/dnf.conf
   rm -f "$temp_file"
+}
 
-  if [ -d /etc/yum.repos.d ]; then
-    find /etc/yum.repos.d -name '*.repo' -exec sed -i 's/^\s*gpgcheck\s*=\s*.*/gpgcheck=1/' {} \;
+ensure_mount_option_in_fstab() {
+  local mount_point="$1"
+  local option="$2"
+  local tmpfile
+
+  if ! grep -Pq "^\s*[^#\n\r]+\s+${mount_point//\//\/}\s+" /etc/fstab 2>/dev/null; then
+    return 1
   fi
 
-  if grep -Piq '^\s*gpgcheck\s*=\s*(1|true|yes)\b' /etc/dnf/dnf.conf 2>/dev/null \
-    && ! grep -Prisq '^\s*gpgcheck\s*=\s*(0|[2-9]|[1-9][0-9]+|false|no)\b' /etc/yum.repos.d/ 2>/dev/null; then
-    print_pass "$id" "$title" ' - gpgcheck is enabled globally and repo overrides no longer disable it'
+  tmpfile="$(mktemp)"
+  awk -v mount_point="$mount_point" -v option="$option" '
+    BEGIN { OFS="\t" }
+    /^[[:space:]]*#/ { print; next }
+    $2 != mount_point { print; next }
+    {
+      count = split($4, parts, ",")
+      found = 0
+      out = ""
+      for (i = 1; i <= count; i++) {
+        if (parts[i] == option) {
+          found = 1
+        }
+        if (parts[i] != "") {
+          out = out ? out "," parts[i] : parts[i]
+        }
+      }
+      if (!found) {
+        out = out ? out "," option : option
+      }
+      $4 = out
+      print
+    }
+  ' /etc/fstab > "$tmpfile" && cat "$tmpfile" > /etc/fstab
+  rm -f "$tmpfile"
+
+  return 0
+}
+
+set_sysctl_value() {
+  local key="$1"
+  local value="$2"
+  local target
+
+  target="$(sysctl_target_file)"
+  mkdir -p "$(dirname "$target")"
+  touch "$target"
+
+  if grep -Pq "^\s*${key//./\\.}\s*=" "$target"; then
+    sed -i "s/^\s*${key//./\\.}\s*=\s*.*/${key} = ${value}/" "$target"
   else
-    print_fail "$id" "$title" ' - gpgcheck remediation did not converge to the expected state'
+    printf '%s = %s\n' "$key" "$value" >> "$target"
+  fi
+
+  sysctl -w "${key}=${value}" >/dev/null 2>&1 || true
+  printf '%s\n' "$target"
+}
+
+remediate_gpgcheck() {
+  local id='1.2.1.2'
+  local title='Ensure gpgcheck is globally activated'
+  local global_output
+  local repo_output
+
+  ensure_main_gpgcheck
+
+  if [ -d /etc/yum.repos.d ]; then
+    find /etc/yum.repos.d/ -name '*.repo' -exec sed -i 's/^gpgcheck\s*=\s*.*/gpgcheck=1/' {} \;
+  fi
+
+  global_output="$(grep -Pi -- '^\h*gpgcheck\h*=\h*(1|true|yes)\b' /etc/dnf/dnf.conf 2>/dev/null || true)"
+  repo_output="$(grep -Pris -- '^\h*gpgcheck\h*=\h*(0|[2-9]|[1-9][0-9]+|false|no)\b' /etc/yum.repos.d/ 2>/dev/null || true)"
+
+  if [ -n "$global_output" ] && [ -z "$repo_output" ]; then
+    print_pass "$id" "$title" ' - /etc/dnf/dnf.conf has gpgcheck enabled and no repo override disables it'
+  else
+    print_fail "$id" "$title" ' - remediation did not converge to the expected gpgcheck state'
+  fi
+}
+
+remediate_tmp_option() {
+  local id="$1"
+  local title="$2"
+  local option="$3"
+  local audit_output
+
+  if [ -z "$(findmnt -kn /tmp 2>/dev/null || true)" ]; then
+    print_fail "$id" "$title" ' - PDF remediation for this control applies only when /tmp is already a separate partition'
+    return
+  fi
+
+  if ! ensure_mount_option_in_fstab /tmp "$option"; then
+    print_fail "$id" "$title" ' - no /etc/fstab entry was found for /tmp, so the benchmark remediation cannot be applied directly'
+    return
+  fi
+
+  mount -o remount /tmp >/dev/null 2>&1 || true
+  audit_output="$(findmnt -kn /tmp 2>/dev/null | grep -v -- "$option" || true)"
+  if [ -z "$audit_output" ]; then
+    print_pass "$id" "$title" " - mount -o remount /tmp completed and the $option option is now present"
+  else
+    print_fail "$id" "$title" " - findmnt -kn /tmp | grep -v $option still returned output after remediation" "$audit_output"
   fi
 }
 
@@ -164,41 +192,31 @@ remediate_sysctl_control() {
   local title="$2"
   local key="$3"
   local expected="$4"
-  local target='/etc/sysctl.d/60-kernel_sysctl.conf'
+  local target
   local runtime
-  local config
 
-  comment_out_conflicting_sysctl_assignments "$key" "$target"
-  touch "$target"
-  if grep -Pq "^\s*${key//./\\.}\s*=" "$target"; then
-    sed -i "s/^\s*${key//./\\.}\s*=\s*.*/${key} = ${expected}/" "$target"
-  else
-    printf '%s = %s\n' "$key" "$expected" >> "$target"
-  fi
-
-  sysctl -w "${key}=${expected}" >/dev/null 2>&1 || true
-
+  target="$(set_sysctl_value "$key" "$expected")"
   runtime="$(sysctl -n "$key" 2>/dev/null || true)"
-  config="$(grep -RhsP "^\s*${key//./\\.}\s*=\s*${expected}\b" /etc/sysctl.conf /etc/sysctl.d/*.conf /usr/lib/sysctl.d/*.conf /run/sysctl.d/*.conf 2>/dev/null | head -n 1 || true)"
-  if [ "$runtime" = "$expected" ] && [ -n "$config" ]; then
-    print_pass "$id" "$title" " - ${key} is ${runtime} at runtime" " - persistent config found: $config"
+
+  if [ "$runtime" = "$expected" ] && grep -Pq "^\s*${key//./\\.}\s*=\s*${expected}\b" "$target" 2>/dev/null; then
+    print_pass "$id" "$title" " - ${key}=${expected} was written to ${target} and set at runtime"
   else
-    print_fail "$id" "$title" " - expected ${key}=${expected}, got runtime='${runtime:-unset}'"
+    print_fail "$id" "$title" " - remediation did not converge to ${key}=${expected}"
   fi
 }
 
 remediate_chrony() {
   local id='2.3.1'
   local title='Ensure time synchronization is in use'
+  local rpm_output
 
   dnf install -y chrony >/dev/null 2>&1 || true
-  systemctl unmask chronyd >/dev/null 2>&1 || true
-  systemctl enable --now chronyd >/dev/null 2>&1 || true
+  rpm_output="$(rpm -q chrony 2>/dev/null || true)"
 
-  if systemctl is-enabled chronyd >/dev/null 2>&1 && systemctl is-active chronyd >/dev/null 2>&1; then
-    print_pass "$id" "$title" ' - chronyd is enabled and active after remediation'
+  if [ -n "$rpm_output" ] && ! grep -qi 'not installed' <<< "$rpm_output"; then
+    print_pass "$id" "$title" ' - chrony package is installed'
   else
-    print_fail "$id" "$title" ' - chronyd is still not both enabled and active after remediation'
+    print_fail "$id" "$title" ' - chrony package is still not installed after remediation'
   fi
 }
 

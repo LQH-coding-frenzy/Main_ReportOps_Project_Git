@@ -55,11 +55,34 @@ ensure_tmp_mount_exists() {
 
 ensure_tmp_option_config() {
   local option="$1"
+  local tmpfile
 
   if grep -Pq '^\s*[^#\n\r]+\s+/tmp\s+' /etc/fstab 2>/dev/null; then
-    sed -i "/\\s\\/tmp\\s/ {
-      /${option}/! s/\([^[:space:]]\+\s\+\/tmp\s\+[^[:space:]]\+\s\+[^[:space:]]*\)/\1,${option}/
-    }" /etc/fstab
+    tmpfile="$(mktemp)"
+    awk -v option="$option" '
+      BEGIN { OFS="\t" }
+      /^[[:space:]]*#/ { print; next }
+      $2 != "/tmp" { print; next }
+      {
+        count = split($4, parts, ",")
+        found = 0
+        out = ""
+        for (i = 1; i <= count; i++) {
+          if (parts[i] == option) {
+            found = 1
+          }
+          if (parts[i] != "") {
+            out = out ? out "," parts[i] : parts[i]
+          }
+        }
+        if (!found) {
+          out = out ? out "," option : option
+        }
+        $4 = out
+        print
+      }
+    ' /etc/fstab > "$tmpfile" && cat "$tmpfile" > /etc/fstab
+    rm -f "$tmpfile"
   else
     printf '%s\n' 'tmpfs /tmp tmpfs defaults,rw,nosuid,nodev,noexec,relatime,size=2G 0 0' >> /etc/fstab
   fi

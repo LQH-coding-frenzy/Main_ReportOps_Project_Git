@@ -37,6 +37,17 @@ section_summary() {
   echo "=============================="
 }
 
+sysctl_target_file() {
+  local ufw_file
+  ufw_file="$([ -f /etc/default/ufw ] && awk -F= '/^\s*IPT_SYSCTL=/ {print $2}' /etc/default/ufw)"
+
+  if [ -n "$ufw_file" ] && [ -e "$ufw_file" ]; then
+    printf '%s\n' "$ufw_file"
+  else
+    printf '%s\n' /etc/sysctl.d/99-reportops-kernel_sysctl.conf
+  fi
+}
+
 rewrite_tmp_fstab_without_option() {
   local option="$1"
   local tmpfile
@@ -114,9 +125,11 @@ reverse_sysctl_control() {
   local title="$2"
   local key="$3"
   local reversed="$4"
-  local target='/etc/sysctl.d/60-kernel_sysctl.conf'
+  local target
   local runtime
 
+  target="$(sysctl_target_file)"
+  mkdir -p "$(dirname "$target")"
   touch "$target"
   if grep -Pq "^\s*${key//./\\.}\s*=" "$target"; then
     sed -i "s/^\s*${key//./\\.}\s*=\s*.*/${key} = ${reversed}/" "$target"
@@ -136,13 +149,16 @@ reverse_sysctl_control() {
 reverse_chrony() {
   local id='2.3.1'
   local title='Ensure time synchronization is in use'
+  local rpm_output
 
   systemctl disable --now chronyd >/dev/null 2>&1 || true
+  dnf remove -y chrony >/dev/null 2>&1 || true
+  rpm_output="$(rpm -q chrony 2>/dev/null || true)"
 
-  if ! systemctl is-enabled chronyd >/dev/null 2>&1 || ! systemctl is-active chronyd >/dev/null 2>&1; then
-    print_pass "$id" "$title" ' - chronyd is intentionally no longer both enabled and active'
+  if grep -qi 'not installed' <<< "$rpm_output" || [ -z "$rpm_output" ]; then
+    print_pass "$id" "$title" ' - chrony package was removed so the audit should fail on the next run'
   else
-    print_fail "$id" "$title" ' - chronyd is still enabled and active after reverse remediation'
+    print_fail "$id" "$title" ' - chrony package is still installed after reverse remediation'
   fi
 }
 
