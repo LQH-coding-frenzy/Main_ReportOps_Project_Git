@@ -232,7 +232,7 @@ export default function AdminAuditPacksPage() {
           </div>
 
           {pack.scripts && pack.scripts.length > 0 ? (
-            <div style={{ overflow: 'hidden', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+            <div className="table-responsive" style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
               <table className="admin-table">
                 <thead>
                   <tr>

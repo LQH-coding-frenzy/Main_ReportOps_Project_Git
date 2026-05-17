@@ -293,7 +293,8 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
               <div className="empty-state-desc">Các job {getVmOpsOperationLabel(operationType)} bạn tạo sẽ xuất hiện ở đây.</div>
             </div>
           ) : (
-            <table className="admin-table">
+            <div className="table-responsive">
+              <table className="admin-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -330,7 +331,8 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </div>
     </div>

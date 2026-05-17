@@ -107,7 +107,8 @@ export default function AdminAuditLogsPage() {
       ) : (
         <>
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <table className="admin-table">
+            <div className="table-responsive">
+              <table className="admin-table">
               <thead>
                 <tr>
                   <th style={{ width: '36px' }}></th>
@@ -177,7 +178,8 @@ export default function AdminAuditLogsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
 
           {/* Pagination */}

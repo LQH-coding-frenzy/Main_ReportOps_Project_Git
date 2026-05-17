@@ -166,8 +166,8 @@ function GuidePageContent() {
           </div>
 
           <h3 style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-3)' }}>Danh sách 7 control</h3>
-          <div className="table-container" style={{ marginBottom: 'var(--space-6)' }}>
-            <table style={{ width: '100%' }}>
+          <div className="table-responsive" style={{ marginBottom: 'var(--space-6)' }}>
+            <table className="admin-table" style={{ width: '100%' }}>
               <thead>
                 <tr>
                   <th>Control ID</th>

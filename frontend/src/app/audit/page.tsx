@@ -154,7 +154,8 @@ export default function AuditPage() {
               </Link>
             </div>
           ) : (
-            <table className="admin-table">
+            <div className="table-responsive">
+              <table className="admin-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -235,7 +236,8 @@ export default function AuditPage() {
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </div>
 

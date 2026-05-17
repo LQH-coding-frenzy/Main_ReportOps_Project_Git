@@ -387,7 +387,8 @@ export default function LabVmDetailPage() {
             <div style={{ padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>📊 Recent Audit Jobs</h3>
             </div>
-            <table className="admin-table">
+            <div className="table-responsive">
+              <table className="admin-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -412,7 +413,8 @@ export default function LabVmDetailPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         )}
 

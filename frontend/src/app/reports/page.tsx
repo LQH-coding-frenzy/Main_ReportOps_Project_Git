@@ -162,8 +162,8 @@ export default function ReportsPage() {
       </div>
 
       {reports.length > 0 ? (
-        <div className="table-container">
-          <table>
+        <div className="table-responsive">
+          <table className="admin-table">
             <thead>
               <tr>
                 <th>ID</th>

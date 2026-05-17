@@ -324,7 +324,8 @@ export default function AuditJobDetailPage() {
                 📋 Control Results ({job.scriptRuns.length})
               </h3>
             </div>
-            <table className="admin-table">
+            <div className="table-responsive">
+              <table className="admin-table">
               <thead>
                 <tr>
                   <th>Control ID</th>
@@ -362,7 +363,8 @@ export default function AuditJobDetailPage() {
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         )}
 

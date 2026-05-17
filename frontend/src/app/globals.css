@@ -2079,3 +2079,10 @@ tr:hover td {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* -- Responsive Table -- */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

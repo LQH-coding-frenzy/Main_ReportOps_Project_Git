@@ -113,7 +113,8 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <table className="admin-table">
+        <div className="table-responsive">
+          <table className="admin-table">
           <thead>
             <tr>
               <th>Người dùng</th>
@@ -242,7 +243,8 @@ export default function AdminUsersPage() {
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       {filteredUsers.length === 0 && !loading && (
