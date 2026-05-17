@@ -111,6 +111,148 @@ function automatedScriptFilter(ownerSection: string) {
   };
 }
 
+type VmOpsOperationType = 'REMEDIATION' | 'NOT_APPLICABLE_FIX' | 'REVERSE_REMEDIATE';
+
+const VM_OPS_OPERATION_TYPES: VmOpsOperationType[] = ['REMEDIATION', 'NOT_APPLICABLE_FIX', 'REVERSE_REMEDIATE'];
+
+function isVmOpsOperationType(value: string): value is VmOpsOperationType {
+  return VM_OPS_OPERATION_TYPES.includes(value as VmOpsOperationType);
+}
+
+function getEligibleStatuses(operationType: VmOpsOperationType): string[] {
+  switch (operationType) {
+    case 'REMEDIATION':
+      return ['FAIL'];
+    case 'NOT_APPLICABLE_FIX':
+      return ['NOT_APPLICABLE'];
+    case 'REVERSE_REMEDIATE':
+      return ['PASS'];
+    default:
+      return [];
+  }
+}
+
+function getOperationAction(operationType: VmOpsOperationType): string {
+  switch (operationType) {
+    case 'REMEDIATION':
+      return 'create_remediation_job';
+    case 'NOT_APPLICABLE_FIX':
+      return 'create_not_applicable_fix_job';
+    case 'REVERSE_REMEDIATE':
+      return 'create_reverse_remediate_job';
+    default:
+      return 'create_vm_ops_job';
+  }
+}
+
+async function createVmOpsOperationJob(input: {
+  sourceJobId: number;
+  userId: number;
+  ipAddress: string | undefined;
+  operationType: VmOpsOperationType;
+  selectedControlIds?: string[];
+}) {
+  const sourceJob = await prisma.auditJob.findUnique({
+    where: { id: input.sourceJobId },
+    include: {
+      scriptRuns: {
+        orderBy: { controlId: 'asc' },
+      },
+    },
+  });
+
+  if (!sourceJob) {
+    return { error: 'Audit job not found', status: 404 as const };
+  }
+
+  if (sourceJob.jobType !== 'AUDIT') {
+    return { error: 'Only audit jobs can trigger VM Ops operations', status: 400 as const };
+  }
+
+  if (sourceJob.status !== 'COMPLETED') {
+    return { error: 'Wait for the source audit job to complete before running VM Ops operations', status: 400 as const };
+  }
+
+  if (sourceJob.ownerSection !== 'M1') {
+    return { error: 'Only M1 VM Ops runtime is available right now', status: 400 as const };
+  }
+
+  const vm = await prisma.labVm.findUnique({ where: { id: sourceJob.vmId } });
+  if (!vm || vm.status !== 'RUNNING') {
+    return { error: 'Lab VM is not running', status: 400 as const };
+  }
+
+  const eligibleStatuses = getEligibleStatuses(input.operationType);
+  const eligibleControlIds = sourceJob.scriptRuns
+    .filter((run) => eligibleStatuses.includes(run.status))
+    .map((run) => run.controlId);
+
+  if (eligibleControlIds.length === 0) {
+    return {
+      error: `Source audit job does not contain any controls eligible for ${input.operationType}`,
+      status: 400 as const,
+    };
+  }
+
+  const requestedControlIds = (input.selectedControlIds || []).filter((value, index, list) => value && list.indexOf(value) === index);
+  const selectedControlIds = requestedControlIds.length > 0 ? requestedControlIds : eligibleControlIds;
+  const invalidControlIds = selectedControlIds.filter((controlId) => !eligibleControlIds.includes(controlId));
+
+  if (invalidControlIds.length > 0) {
+    return {
+      error: `Selected controls are not eligible for ${input.operationType}: ${invalidControlIds.join(', ')}`,
+      status: 400 as const,
+    };
+  }
+
+  const operationJob = await prisma.auditJob.create({
+    data: {
+      vmId: sourceJob.vmId,
+      jobType: input.operationType,
+      mode: 'SCRIPTS_ONLY',
+      ownerSection: sourceJob.ownerSection,
+      totalControls: selectedControlIds.length,
+      triggeredById: input.userId,
+      status: 'PENDING',
+      summaryJson: {
+        operationContext: {
+          sourceJobId: sourceJob.id,
+          operationType: input.operationType,
+          selectedControlIds,
+          requestedById: input.userId,
+          requestedAt: new Date().toISOString(),
+        },
+      },
+    },
+    include: {
+      vm: { select: { id: true, name: true, publicIp: true } },
+      triggeredBy: { select: { id: true, displayName: true, githubUsername: true } },
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: input.userId,
+      action: getOperationAction(input.operationType),
+      details: {
+        sourceJobId: sourceJob.id,
+        vmOpsJobId: operationJob.id,
+        ownerSection: sourceJob.ownerSection,
+        operationType: input.operationType,
+        selectedControlIds,
+      },
+      ipAddress: input.ipAddress,
+    },
+  });
+
+  const executor = new AuditJobExecutor(operationJob.id);
+  executor.execute().catch((err) => {
+    console.error(`Background VM Ops executor failed for Job ${operationJob.id}:`, err);
+  });
+
+  return { job: operationJob, status: 201 as const };
+}
+
 /**
  * GET /api/audit-jobs
  * List audit jobs with pagination.
@@ -219,6 +361,10 @@ router.post('/', requireAuth, requireCapabilityAccess('run_audits'), async (req:
     const { vmId, mode, ownerSection, jobType } = req.body;
     const userId = (req as unknown as { user: { id: number } }).user.id;
 
+    if (jobType && jobType !== 'AUDIT') {
+      return res.status(400).json({ error: 'Use the VM Ops operation endpoints for non-audit jobs', status: 400 });
+    }
+
     await syncSectionPacks(prisma);
 
     const targetPackMetadata = buildPackMetadata(ownerSection || 'M1');
@@ -250,14 +396,14 @@ router.post('/', requireAuth, requireCapabilityAccess('run_audits'), async (req:
       },
     });
 
-    if ((jobType || 'AUDIT') === 'AUDIT' && targetPack.isPlaceholder) {
+    if (targetPack.isPlaceholder) {
       return res.status(400).json({
         error: `Audit pack ${ownerSection || 'M1'} hiện mới là placeholder và chưa sẵn sàng để chạy`,
         status: 400,
       });
     }
 
-    if ((jobType || 'AUDIT') === 'AUDIT' && mode !== 'OPENSCAP_ONLY' && scriptCount === 0) {
+    if (mode !== 'OPENSCAP_ONLY' && scriptCount === 0) {
       return res.status(400).json({
         error: `Audit pack ${ownerSection || 'M1'} chưa có script automated sẵn sàng`,
         status: 400,
@@ -267,7 +413,7 @@ router.post('/', requireAuth, requireCapabilityAccess('run_audits'), async (req:
     const job = await prisma.auditJob.create({
       data: {
         vmId,
-        jobType: jobType || 'AUDIT',
+        jobType: 'AUDIT',
         mode: mode || 'SCRIPTS_ONLY',
         ownerSection: ownerSection || 'M1',
         totalControls: scriptCount,
@@ -284,9 +430,9 @@ router.post('/', requireAuth, requireCapabilityAccess('run_audits'), async (req:
     await prisma.auditLog.create({
       data: {
         userId,
-          action: 'create_audit_job',
-          details: { jobId: job.id, vmId, mode: mode || 'SCRIPTS_ONLY', ownerSection: ownerSection || 'M1', jobType: jobType || 'AUDIT' },
-          ipAddress: req.ip,
+        action: 'create_audit_job',
+        details: { jobId: job.id, vmId, mode: mode || 'SCRIPTS_ONLY', ownerSection: ownerSection || 'M1', jobType: 'AUDIT' },
+        ipAddress: req.ip,
         },
       });
 
@@ -304,67 +450,61 @@ router.post('/', requireAuth, requireCapabilityAccess('run_audits'), async (req:
 });
 
 /**
- * POST /api/audit-jobs/:id/cancel
- * Cancel a pending or running audit job.
+ * POST /api/audit-jobs/:id/operations
+ * Create a VM Ops operation job from a completed audit job.
  */
+router.post('/:id/operations', requireAuth, requireCapabilityAccess('run_remediation'), async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const userId = (req as unknown as { user: { id: number } }).user.id;
+    const { operationType, selectedControlIds } = req.body;
+
+    if (!isVmOpsOperationType(String(operationType || ''))) {
+      return res.status(400).json({ error: 'Invalid VM Ops operation type', status: 400 });
+    }
+
+    const result = await createVmOpsOperationJob({
+      sourceJobId: id,
+      userId,
+      ipAddress: req.ip,
+      operationType,
+      selectedControlIds: Array.isArray(selectedControlIds)
+        ? selectedControlIds.filter((value): value is string => typeof value === 'string')
+        : undefined,
+    });
+
+    if ('error' in result) {
+      return res.status(result.status).json({ error: result.error, status: result.status });
+    }
+
+    res.status(201).json({ data: result.job, status: result.status });
+  } catch (error) {
+    console.error('Create VM Ops job error:', error);
+    res.status(500).json({ error: 'Internal server error', status: 500 });
+  }
+});
+
 router.post('/:id/remediate', requireAuth, requireCapabilityAccess('run_remediation'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id, 10);
     const userId = (req as unknown as { user: { id: number } }).user.id;
-    const sourceJob = await prisma.auditJob.findUnique({ where: { id } });
+    const selectedControlIds = Array.isArray(req.body?.selectedControlIds)
+      ? req.body.selectedControlIds.filter((value: unknown): value is string => typeof value === 'string')
+      : undefined;
 
-    if (!sourceJob) {
-      return res.status(404).json({ error: 'Audit job not found', status: 404 });
-    }
-
-    if (sourceJob.jobType !== 'AUDIT') {
-      return res.status(400).json({ error: 'Only audit jobs can trigger remediation', status: 400 });
-    }
-
-    if (sourceJob.status === 'PENDING' || sourceJob.status === 'RUNNING') {
-      return res.status(400).json({ error: 'Wait for the source audit job to finish before remediation', status: 400 });
-    }
-
-    if (sourceJob.ownerSection !== 'M1') {
-      return res.status(400).json({ error: 'Only M1 remediation is available right now', status: 400 });
-    }
-
-    const vm = await prisma.labVm.findUnique({ where: { id: sourceJob.vmId } });
-    if (!vm || vm.status !== 'RUNNING') {
-      return res.status(400).json({ error: 'Lab VM is not running', status: 400 });
-    }
-
-    const remediationJob = await prisma.auditJob.create({
-      data: {
-        vmId: sourceJob.vmId,
-        jobType: 'REMEDIATION',
-        mode: 'SCRIPTS_ONLY',
-        ownerSection: sourceJob.ownerSection,
-        totalControls: 1,
-        triggeredById: userId,
-        status: 'PENDING',
-      },
-      include: {
-        vm: { select: { id: true, name: true, publicIp: true } },
-        triggeredBy: { select: { id: true, displayName: true, githubUsername: true } },
-      },
+    const result = await createVmOpsOperationJob({
+      sourceJobId: id,
+      userId,
+      ipAddress: req.ip,
+      operationType: 'REMEDIATION',
+      selectedControlIds,
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'create_remediation_job',
-        details: { sourceJobId: sourceJob.id, remediationJobId: remediationJob.id, ownerSection: sourceJob.ownerSection },
-        ipAddress: req.ip,
-      },
-    });
+    if ('error' in result) {
+      return res.status(result.status).json({ error: result.error, status: result.status });
+    }
 
-    const executor = new AuditJobExecutor(remediationJob.id);
-    executor.execute().catch((err) => {
-      console.error(`Background remediation executor failed for Job ${remediationJob.id}:`, err);
-    });
-
-    res.status(201).json({ data: remediationJob, status: 201 });
+    res.status(201).json({ data: result.job, status: result.status });
   } catch (error) {
     console.error('Create remediation job error:', error);
     res.status(500).json({ error: 'Internal server error', status: 500 });

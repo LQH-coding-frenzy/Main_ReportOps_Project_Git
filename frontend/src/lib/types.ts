@@ -235,6 +235,15 @@ export type VmStatus = 'PROVISIONING' | 'RUNNING' | 'STOPPED' | 'DESTROYING' | '
 export type AuditJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 export type AuditResultStatus = 'PASS' | 'FAIL' | 'NOT_APPLICABLE' | 'ERROR' | 'UNKNOWN';
 export type AuditMode = 'OPENSCAP_ONLY' | 'SCRIPTS_ONLY' | 'OPENSCAP_AND_SCRIPTS';
+export type VmOpsOperationType = 'REMEDIATION' | 'NOT_APPLICABLE_FIX' | 'REVERSE_REMEDIATE';
+
+export interface VmOpsOperationContext {
+  sourceJobId: number;
+  operationType: VmOpsOperationType;
+  selectedControlIds: string[];
+  requestedById?: number;
+  requestedAt?: string;
+}
 
 export interface LabVm {
   id: number;
@@ -335,6 +344,10 @@ export interface AuditJob {
   unknownCount: number;
   score: number | null;
   riskLevel: string | null;
+  summaryJson?: {
+    operationContext?: VmOpsOperationContext;
+    [key: string]: unknown;
+  } | null;
   executionLog: string | null;
   errorMessage: string | null;
   startedAt: string | null;

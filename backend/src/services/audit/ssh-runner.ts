@@ -16,6 +16,8 @@ export interface SSHCommandResult {
   exitCode: number;
 }
 
+const DEFAULT_REMOTE_CWD = '/home/audituser';
+
 export class SSHRunner {
   private ssh: NodeSSH;
   private config: SSHRunnerConfig;
@@ -53,7 +55,7 @@ export class SSHRunner {
   async execCommand(command: string, options: { cwd?: string } = {}): Promise<SSHCommandResult> {
     await this.connect();
     const result = await this.ssh.execCommand(command, {
-      cwd: options.cwd || '/tmp',
+      cwd: options.cwd || DEFAULT_REMOTE_CWD,
     });
 
     return {

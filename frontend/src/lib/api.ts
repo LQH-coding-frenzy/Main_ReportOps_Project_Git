@@ -260,19 +260,28 @@ export async function getAuditJobEvidenceFile(jobId: number, evidenceId: number)
   return res.blob();
 }
 
-export async function createAuditJob(vmId: number, mode: string, ownerSection: string = 'M1', jobType: string = 'AUDIT'): Promise<AuditJob> {
+export async function createAuditJob(vmId: number, mode: string, ownerSection: string = 'M1'): Promise<AuditJob> {
   const res = await apiFetch<ApiResponse<AuditJob>>('/api/audit-jobs', {
     method: 'POST',
-    body: JSON.stringify({ vmId, mode, ownerSection, jobType }),
+    body: JSON.stringify({ vmId, mode, ownerSection, jobType: 'AUDIT' }),
   });
   return res.data;
 }
 
-export async function createRemediationJob(sourceAuditJobId: number): Promise<AuditJob> {
-  const res = await apiFetch<ApiResponse<AuditJob>>(`/api/audit-jobs/${sourceAuditJobId}/remediate`, {
+export async function createVmOpsOperationJob(
+  sourceAuditJobId: number,
+  operationType: 'REMEDIATION' | 'NOT_APPLICABLE_FIX' | 'REVERSE_REMEDIATE',
+  selectedControlIds: string[]
+): Promise<AuditJob> {
+  const res = await apiFetch<ApiResponse<AuditJob>>(`/api/audit-jobs/${sourceAuditJobId}/operations`, {
     method: 'POST',
+    body: JSON.stringify({ operationType, selectedControlIds }),
   });
   return res.data;
+}
+
+export async function createRemediationJob(sourceAuditJobId: number, selectedControlIds: string[] = []): Promise<AuditJob> {
+  return createVmOpsOperationJob(sourceAuditJobId, 'REMEDIATION', selectedControlIds);
 }
 
 export async function cancelAuditJob(id: number): Promise<AuditJob> {

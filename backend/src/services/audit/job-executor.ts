@@ -1,5 +1,5 @@
 import { PrismaClient, AuditJob, LabVm, AuditScript } from '@prisma/client';
-import { SSHRunner } from './ssh-runner';
+import { SSHRunner, type SSHCommandResult } from './ssh-runner';
 import { parseCisStdout, NormalizedAuditResult } from './cis-stdout-parser';
 import { renderTerminalEvidenceHtml, renderDashboardEvidenceHtml } from './evidence-renderer';
 import { MANUAL_M1_CONTROL_IDS } from './m1-manual-controls';
@@ -20,6 +20,123 @@ const benchmarkName = projectAnswers.benchmark?.name || 'CIS AlmaLinux OS 9 Benc
 const benchmarkVersion = projectAnswers.benchmark?.version || '2.0.0';
 const benchmarkProfile = projectAnswers.benchmark?.profile || 'Level 1 - Server';
 const benchmarkLabel = `${benchmarkName} v${benchmarkVersion}`;
+const runnerUsername = 'audituser';
+const remoteRuntimeRoot = `/home/${runnerUsername}/.reportops-runtime`;
+const auditRunnerPublicKey = process.env.AUDIT_RUNNER_SSH_PUBLIC_KEY?.trim() || '';
+
+type VmOpsOperationType = 'REMEDIATION' | 'NOT_APPLICABLE_FIX' | 'REVERSE_REMEDIATE';
+
+type VmOpsOperationContext = {
+  sourceJobId: number;
+  operationType: VmOpsOperationType;
+  selectedControlIds: string[];
+};
+
+const VM_OPS_OPERATION_TYPES: VmOpsOperationType[] = ['REMEDIATION', 'NOT_APPLICABLE_FIX', 'REVERSE_REMEDIATE'];
+
+function isVmOpsOperationType(value: string): value is VmOpsOperationType {
+  return VM_OPS_OPERATION_TYPES.includes(value as VmOpsOperationType);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function resolveOpenScapProfileId(profileLabel: string): string {
+  const normalized = profileLabel.trim().toLowerCase();
+
+  if (normalized.includes('level 1') || normalized.includes('l1')) {
+    return 'xccdf_org.ssgproject.content_profile_cis_server_l1';
+  }
+
+  if (normalized.includes('level 2') || normalized.includes('l2')) {
+    return 'xccdf_org.ssgproject.content_profile_cis';
+  }
+
+  return 'xccdf_org.ssgproject.content_profile_cis_server_l1';
+}
+
+function resolveOperationScriptPath(ownerSection: string, operationType: VmOpsOperationType): string | null {
+  if (ownerSection !== 'M1') {
+    return null;
+  }
+
+  switch (operationType) {
+    case 'REMEDIATION':
+      return 'remediation/m1_remediate.sh';
+    case 'NOT_APPLICABLE_FIX':
+      return 'remediation/m1_not_applicable_fix.sh';
+    case 'REVERSE_REMEDIATE':
+      return 'remediation/m1_reverse_remediate.sh';
+    default:
+      return null;
+  }
+}
+
+function extractVmOpsOperationContext(summaryJson: unknown): VmOpsOperationContext | null {
+  if (!summaryJson || typeof summaryJson !== 'object' || Array.isArray(summaryJson)) {
+    return null;
+  }
+
+  const summary = summaryJson as Record<string, unknown>;
+  const rawContext = summary.operationContext;
+  if (!rawContext || typeof rawContext !== 'object' || Array.isArray(rawContext)) {
+    return null;
+  }
+
+  const context = rawContext as Record<string, unknown>;
+  const sourceJobId = typeof context.sourceJobId === 'number' ? context.sourceJobId : Number(context.sourceJobId);
+  const operationType = typeof context.operationType === 'string' ? context.operationType : '';
+  const selectedControlIds = Array.isArray(context.selectedControlIds)
+    ? context.selectedControlIds.filter((value): value is string => typeof value === 'string' && value.length > 0)
+    : [];
+
+  if (!Number.isInteger(sourceJobId) || !isVmOpsOperationType(operationType) || selectedControlIds.length === 0) {
+    return null;
+  }
+
+  return {
+    sourceJobId,
+    operationType,
+    selectedControlIds,
+  };
+}
+
+function buildRunnerGuardScript(): string {
+  const keyRestore = auditRunnerPublicKey
+    ? [
+        "cat <<'EOF' > /home/audituser/.ssh/authorized_keys",
+        auditRunnerPublicKey,
+        'EOF',
+      ].join('\n')
+    : 'touch /home/audituser/.ssh/authorized_keys';
+
+  return [
+    '#!/usr/bin/env bash',
+    'set -u',
+    '',
+    'if ! id audituser >/dev/null 2>&1; then',
+    '  useradd -m -s /bin/bash audituser',
+    'fi',
+    '',
+    'mkdir -p /home/audituser/.ssh',
+    keyRestore,
+    'chown -R audituser:audituser /home/audituser/.ssh',
+    'chmod 700 /home/audituser/.ssh',
+    'chmod 600 /home/audituser/.ssh/authorized_keys',
+    'if command -v restorecon >/dev/null 2>&1; then',
+    '  restorecon -Rv /home/audituser/.ssh >/dev/null 2>&1 || true',
+    'fi',
+    '',
+    "cat <<'EOF' > /etc/sudoers.d/audituser",
+    'audituser ALL=(ALL) NOPASSWD:ALL',
+    'EOF',
+    'chmod 0440 /etc/sudoers.d/audituser',
+    '',
+    "mkdir -p /home/audituser/.reportops-runtime",
+    'chown -R audituser:audituser /home/audituser/.reportops-runtime',
+  ].join('\n');
+}
 
 type OpenScapResultRow = {
   idref: string;
@@ -145,7 +262,64 @@ export class AuditJobExecutor {
     }
   }
 
-  private async runRemediationJob(job: AuditJob & { vm: LabVm }, remoteDir: string): Promise<{
+  private async ensureRunnerAccess(): Promise<void> {
+    if (!this.runner) {
+      throw new Error('SSH runner is not initialized');
+    }
+
+    const guardPath = `${remoteRuntimeRoot}/runner-guard-preflight.sh`;
+    await this.runner.execCommand(`mkdir -p ${shellQuote(remoteRuntimeRoot)}`, { cwd: `/home/${runnerUsername}` });
+    await this.runner.uploadFile(buildRunnerGuardScript(), guardPath);
+
+    const guardResult = await this.runner.execCommand(`sudo bash ${shellQuote(guardPath)}`, { cwd: remoteRuntimeRoot });
+    if (guardResult.exitCode !== 0) {
+      throw new Error(`Runner guard failed: ${guardResult.stderr || guardResult.stdout || 'unknown error'}`);
+    }
+
+    const sudoCheck = await this.runner.execCommand('sudo -n true', { cwd: remoteRuntimeRoot });
+    if (sudoCheck.exitCode !== 0) {
+      throw new Error(`audituser lost passwordless sudo access: ${sudoCheck.stderr || sudoCheck.stdout || 'sudo -n true failed'}`);
+    }
+  }
+
+  private async runManagedRootScript(input: {
+    remoteDir: string;
+    remoteBaseName: string;
+    scriptContent: Buffer | string;
+    envVars?: Record<string, string>;
+  }): Promise<SSHCommandResult> {
+    if (!this.runner) {
+      throw new Error('SSH runner is not initialized for managed execution');
+    }
+
+    await this.ensureRunnerAccess();
+
+    const remoteScriptPath = `${input.remoteDir}/${input.remoteBaseName}.sh`;
+    const remoteGuardPath = `${input.remoteDir}/runner-guard.sh`;
+    const remoteWrapperPath = `${input.remoteDir}/${input.remoteBaseName}.wrapper.sh`;
+    const exports = Object.entries(input.envVars || {})
+      .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
+      .join('\n');
+
+    const wrapperScript = [
+      '#!/usr/bin/env bash',
+      'set +e',
+      exports,
+      `bash ${shellQuote(remoteScriptPath)}`,
+      'rc=$?',
+      `bash ${shellQuote(remoteGuardPath)}`,
+      'exit "$rc"',
+    ].filter(Boolean).join('\n');
+
+    await this.runner.execCommand(`mkdir -p ${shellQuote(input.remoteDir)}`, { cwd: remoteRuntimeRoot });
+    await this.runner.uploadFile(input.scriptContent, remoteScriptPath);
+    await this.runner.uploadFile(buildRunnerGuardScript(), remoteGuardPath);
+    await this.runner.uploadFile(wrapperScript, remoteWrapperPath);
+
+    return this.runner.execCommand(`sudo bash ${shellQuote(remoteWrapperPath)}`, { cwd: remoteRuntimeRoot });
+  }
+
+  private async runVmOpsOperationJob(job: AuditJob & { vm: LabVm }, remoteDir: string): Promise<{
     results: NormalizedAuditResult[];
     passCount: number;
     failCount: number;
@@ -153,53 +327,135 @@ export class AuditJobExecutor {
     unknownCount: number;
   }> {
     if (!this.runner) {
-      throw new Error('SSH runner is not initialized for remediation');
+      throw new Error('SSH runner is not initialized for VM Ops operations');
+    }
+
+    const operationContext = extractVmOpsOperationContext(job.summaryJson);
+    if (!operationContext) {
+      throw new Error('VM Ops job is missing a valid operation context');
     }
 
     const definition = getSectionDefinition(job.ownerSection);
     if (!definition) {
-      throw new Error(`Unknown remediation section: ${job.ownerSection}`);
+      throw new Error(`Unknown VM Ops section: ${job.ownerSection}`);
     }
 
-    const remediationBuffer = readLocalProjectFile(definition.remediationPath);
-    const remoteScriptPath = `${remoteDir}/${job.ownerSection.toLowerCase()}_remediate.sh`;
+    const localScriptPath = resolveOperationScriptPath(job.ownerSection, operationContext.operationType);
+    if (!localScriptPath) {
+      throw new Error(`Operation ${operationContext.operationType} is not available for ${job.ownerSection}`);
+    }
 
-    await this.addLog(`Running remediation for ${job.ownerSection}: ${definition.remediationPath}`);
-    await this.runner.uploadFile(remediationBuffer, remoteScriptPath);
-    await this.runner.execCommand(`chmod +x ${remoteScriptPath}`);
+    const sourceJob = await prisma.auditJob.findUnique({
+      where: { id: operationContext.sourceJobId },
+      include: {
+        scriptRuns: {
+          where: {
+            controlId: { in: operationContext.selectedControlIds },
+          },
+          include: {
+            script: {
+              select: {
+                id: true,
+                controlId: true,
+                title: true,
+                section: true,
+                assessmentType: true,
+                risk: true,
+              },
+            },
+          },
+          orderBy: { controlId: 'asc' },
+        },
+      },
+    });
+
+    if (!sourceJob) {
+      throw new Error(`Source audit job #${operationContext.sourceJobId} was not found`);
+    }
+
+    const operationBuffer = readLocalProjectFile(localScriptPath);
+    const remoteBaseName = `${job.ownerSection.toLowerCase()}-${operationContext.operationType.toLowerCase()}`;
+
+    await this.addLog(
+      `Running ${operationContext.operationType} for ${job.ownerSection} on controls: ${operationContext.selectedControlIds.join(', ')}`
+    );
 
     const startedAt = new Date().toISOString();
-    const cmdResult = await this.runner.execCommand(`sudo ${remoteScriptPath}`);
+    const cmdResult = await this.runManagedRootScript({
+      remoteDir,
+      remoteBaseName,
+      scriptContent: operationBuffer,
+      envVars: {
+        REPORTOPS_OPERATION: operationContext.operationType,
+        TARGET_CONTROL_IDS: operationContext.selectedControlIds.join(','),
+      },
+    });
     const finishedAt = new Date().toISOString();
 
-    await this.addLog(`Remediation ${job.ownerSection} finished with exit code ${cmdResult.exitCode}`);
+    await this.addLog(`${operationContext.operationType} ${job.ownerSection} finished with exit code ${cmdResult.exitCode}`);
     if (cmdResult.stderr) {
-      await this.addLog(`Remediation stderr: ${cmdResult.stderr}`);
+      await this.addLog(`Operation stderr: ${cmdResult.stderr}`);
     }
 
-    const status = cmdResult.exitCode === 0 ? 'PASS' : 'ERROR';
-    const pseudoResult: NormalizedAuditResult = {
-      controlId: `${job.ownerSection}-REMEDIATE`,
-      title: `${definition.title} remediation`,
-      section: job.ownerSection,
-      ownerSection: job.ownerSection,
-      status,
-      assessmentType: 'Automated',
-      info: cmdResult.stdout ? [`Remediation script: ${definition.remediationPath}`] : [],
-      failReasons: cmdResult.exitCode === 0 ? [] : [cmdResult.stderr || 'Remediation script returned a non-zero exit code'],
-      correctlySet: cmdResult.exitCode === 0 ? ['Remediation script completed successfully'] : [],
-      evidence: [cmdResult.stdout || cmdResult.stderr || 'No remediation output captured'],
-      rawStdout: cmdResult.stdout,
-      rawStderr: cmdResult.stderr,
-      exitCode: cmdResult.exitCode,
-      parser: 'cis_stdout',
-      parserWarnings: ['Synthetic remediation result generated by ReportOps runtime'],
-      startedAt,
-      finishedAt,
-    };
+    const sourceRunMap = new Map(sourceJob.scriptRuns.map((run) => [run.controlId, run]));
+    const results: NormalizedAuditResult[] = [];
+    let passCount = 0;
+    let failCount = 0;
+    let errorCount = 0;
+    let unknownCount = 0;
+
+    for (const controlId of operationContext.selectedControlIds) {
+      const referenceRun = sourceRunMap.get(controlId);
+      const controlDefinition = definition.controls.find((control) => control.id === controlId);
+      const parsed = parseCisStdout({
+        controlId,
+        title: referenceRun?.script.title || controlDefinition?.title || controlId,
+        section: referenceRun?.script.section || controlDefinition?.section || job.ownerSection,
+        ownerSection: job.ownerSection,
+        assessmentType: 'Automated',
+        stdout: cmdResult.stdout,
+        stderr: cmdResult.stderr,
+        exitCode: cmdResult.exitCode,
+        startedAt,
+        finishedAt,
+      });
+
+      results.push(parsed);
+
+      switch (parsed.status) {
+        case 'PASS':
+          passCount++;
+          break;
+        case 'FAIL':
+          failCount++;
+          break;
+        case 'ERROR':
+          errorCount++;
+          break;
+        default:
+          unknownCount++;
+          break;
+      }
+
+      if (referenceRun?.scriptId) {
+        await prisma.auditScriptRun.create({
+          data: {
+            auditJobId: this.jobId,
+            scriptId: referenceRun.scriptId,
+            controlId,
+            status: parsed.status,
+            exitCode: parsed.exitCode,
+            normalizedResultJson: JSON.parse(JSON.stringify(parsed)),
+            startedAt: new Date(startedAt),
+            finishedAt: new Date(finishedAt),
+            durationMs: Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime()),
+          },
+        });
+      }
+    }
 
     const bucket = archiveBucket;
-    const evidencePrefix = `archives/audits/${this.jobId}/remediation`;
+    const evidencePrefix = `archives/audits/${this.jobId}/vm-ops/${operationContext.operationType.toLowerCase()}`;
 
     if (cmdResult.stdout) {
       const stdoutPath = `${evidencePrefix}/stdout.txt`;
@@ -207,8 +463,8 @@ export class AuditJobExecutor {
       await prisma.auditEvidence.create({
         data: {
           auditJobId: this.jobId,
-          artifactType: 'REMEDIATION_STDOUT',
-          artifactName: `${job.ownerSection} remediation stdout`,
+          artifactType: 'VM_OPS_STDOUT',
+          artifactName: `${operationContext.operationType} stdout`,
           storagePath: stdoutPath,
           mimeType: 'text/plain',
           sizeBytes: Buffer.byteLength(cmdResult.stdout, 'utf-8'),
@@ -222,8 +478,8 @@ export class AuditJobExecutor {
       await prisma.auditEvidence.create({
         data: {
           auditJobId: this.jobId,
-          artifactType: 'REMEDIATION_STDERR',
-          artifactName: `${job.ownerSection} remediation stderr`,
+          artifactType: 'VM_OPS_STDERR',
+          artifactName: `${operationContext.operationType} stderr`,
           storagePath: stderrPath,
           mimeType: 'text/plain',
           sizeBytes: Buffer.byteLength(cmdResult.stderr, 'utf-8'),
@@ -232,11 +488,11 @@ export class AuditJobExecutor {
     }
 
     return {
-      results: [pseudoResult],
-      passCount: cmdResult.exitCode === 0 ? 1 : 0,
-      failCount: 0,
-      errorCount: cmdResult.exitCode === 0 ? 0 : 1,
-      unknownCount: 0,
+      results,
+      passCount,
+      failCount,
+      errorCount,
+      unknownCount,
     };
   }
 
@@ -266,9 +522,14 @@ export class AuditJobExecutor {
 
       await this.ensureNotCancelled();
 
-      const isRemediation = job.jobType === 'REMEDIATION';
-      const isOpenscap = !isRemediation && (job.mode === 'OPENSCAP_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS');
-      const isScripts = !isRemediation && (job.mode === 'SCRIPTS_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS');
+      const isVmOpsOperation = isVmOpsOperationType(job.jobType);
+      const isAuditJob = job.jobType === 'AUDIT';
+      if (!isAuditJob && !isVmOpsOperation) {
+        throw new Error(`Unsupported job type: ${job.jobType}`);
+      }
+
+      const isOpenscap = isAuditJob && (job.mode === 'OPENSCAP_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS');
+      const isScripts = isAuditJob && (job.mode === 'SCRIPTS_ONLY' || job.mode === 'OPENSCAP_AND_SCRIPTS');
 
       // 2. Fetch active scripts if needed
       let scripts: AuditScript[] = [];
@@ -324,10 +585,10 @@ export class AuditJobExecutor {
         privateKeyBuffer = rawPrivateKey.replace(/\\n/g, '\n').trim();
       }
       
-      await this.addLog(`Connecting to VM at ${job.vm.publicIp} as audituser...`);
+      await this.addLog(`Connecting to VM at ${job.vm.publicIp} as ${runnerUsername}...`);
       this.runner = new SSHRunner({
         host: job.vm.publicIp,
-        username: 'audituser',
+        username: runnerUsername,
         privateKey: privateKeyBuffer,
       });
 
@@ -361,8 +622,9 @@ export class AuditJobExecutor {
       }
 
       // Create remote directory
-      const remoteDir = `/tmp/audit-run-${this.jobId}`;
-      await this.runner.execCommand(`mkdir -p ${remoteDir}`);
+      const remoteDir = `${remoteRuntimeRoot}/job-${this.jobId}`;
+      await this.runner.execCommand(`mkdir -p ${shellQuote(remoteDir)}`, { cwd: `/home/${runnerUsername}` });
+      await this.ensureRunnerAccess();
 
       const results: NormalizedAuditResult[] = [];
       let passCount = 0;
@@ -370,13 +632,13 @@ export class AuditJobExecutor {
       let errorCount = 0;
       let unknownCount = 0;
 
-      if (isRemediation) {
-        const remediationResult = await this.runRemediationJob(job, remoteDir);
-        results.push(...remediationResult.results);
-        passCount = remediationResult.passCount;
-        failCount = remediationResult.failCount;
-        errorCount = remediationResult.errorCount;
-        unknownCount = remediationResult.unknownCount;
+      if (isVmOpsOperation) {
+        const operationResult = await this.runVmOpsOperationJob(job, remoteDir);
+        results.push(...operationResult.results);
+        passCount = operationResult.passCount;
+        failCount = operationResult.failCount;
+        errorCount = operationResult.errorCount;
+        unknownCount = operationResult.unknownCount;
       }
 
       // 4. Execute Scripts
@@ -398,16 +660,12 @@ export class AuditJobExecutor {
           }
 
           const scriptContent = Buffer.from(await fileData.arrayBuffer());
-          const remoteScriptPath = `${remoteDir}/${script.controlId}.sh`;
-
-          // Upload to VM
-          await this.runner.uploadFile(scriptContent, remoteScriptPath);
-
-          // Make executable
-          await this.runner.execCommand(`chmod +x ${remoteScriptPath}`);
-
-          // Run the script
-          const cmdResult = await this.runner.execCommand(`sudo ${remoteScriptPath}`);
+          // Run the script with a guard that restores audit runner access before returning.
+          const cmdResult = await this.runManagedRootScript({
+            remoteDir,
+            remoteBaseName: script.controlId,
+            scriptContent,
+          });
           await this.ensureNotCancelled();
           await this.addLog(`Script ${script.controlId} finished with exit code ${cmdResult.exitCode}`);
           if (cmdResult.stderr) await this.addLog(`Stderr: ${cmdResult.stderr}`);
@@ -459,7 +717,7 @@ export class AuditJobExecutor {
       if (isOpenscap) {
         await this.ensureNotCancelled();
         console.log(`Executing OpenSCAP baseline scan for job ${this.jobId} (${job.ownerSection})...`);
-        const profile = 'xccdf_org.ssgproject.content_profile_cis';
+        const profile = resolveOpenScapProfileId(benchmarkProfile);
         const dsPath = '/usr/share/xml/scap/ssg/content/ssg-almalinux9-ds.xml';
         const openScapPrefix = `archives/audits/${this.jobId}/${job.ownerSection.toLowerCase()}/openscap`;
         const oscapResultsXmlPath = `${remoteDir}/oscap-results.xml`;
@@ -468,6 +726,7 @@ export class AuditJobExecutor {
         
         // Ensure oscap is installed (should be done by Terraform, but just in case)
         await this.runner.execCommand(`sudo dnf install -y openscap-scanner scap-security-guide`);
+        await this.addLog(`OpenSCAP profile resolved to ${profile} from benchmark profile "${benchmarkProfile}"`);
         
         const oscapCmd = `sudo oscap xccdf eval --profile ${profile} --results ${oscapResultsXmlPath} --results-arf ${oscapArfXmlPath} --report ${oscapReportHtmlPath} ${dsPath}`;
         
@@ -584,7 +843,7 @@ export class AuditJobExecutor {
       }
 
       // Cleanup VM temp dir
-      await this.runner.execCommand(`sudo rm -rf ${remoteDir}`);
+      await this.runner.execCommand(`sudo rm -rf ${shellQuote(remoteDir)}`, { cwd: remoteRuntimeRoot });
       await this.ensureNotCancelled();
 
       // 5. Generate Evidence Artifacts
@@ -605,7 +864,7 @@ export class AuditJobExecutor {
       const score = totalScorable > 0 ? (passCount / totalScorable) * 100 : null;
       
       let riskLevel = null;
-      if (score !== null) {
+      if (job.jobType === 'AUDIT' && score !== null) {
         riskLevel = score >= 80 ? 'Low' : score >= 60 ? 'Medium' : score >= 40 ? 'High' : 'Critical';
       }
 
@@ -614,7 +873,7 @@ export class AuditJobExecutor {
         scope: job.ownerSection,
         score: score || 0,
         passCount, failCount, errorCount, unknownCount,
-        riskLevel: riskLevel || 'Unknown',
+        riskLevel: riskLevel || (job.jobType === 'AUDIT' ? 'Unknown' : 'Operation'),
         auditJobId: this.jobId,
         timestamp,
         results,
@@ -728,18 +987,18 @@ export class AuditJobExecutor {
       const finishedAt = new Date();
       const jobStartedAt = startedAt;
       const durationMs = finishedAt.getTime() - jobStartedAt.getTime();
-      const isFailedRemediation = job.jobType === 'REMEDIATION' && errorCount > 0;
+      const isFailedOperation = isVmOpsOperation && errorCount > 0;
 
       await prisma.auditJob.update({
         where: { id: this.jobId },
         data: {
-          status: isFailedRemediation ? 'FAILED' : 'COMPLETED',
+          status: isFailedOperation ? 'FAILED' : 'COMPLETED',
           score,
           riskLevel,
           passCount, failCount, errorCount, unknownCount,
           finishedAt,
           durationMs,
-          errorMessage: isFailedRemediation ? 'Remediation script returned a non-zero exit code' : null,
+          errorMessage: isFailedOperation ? 'VM Ops operation returned a non-zero exit code' : null,
         }
       });
 

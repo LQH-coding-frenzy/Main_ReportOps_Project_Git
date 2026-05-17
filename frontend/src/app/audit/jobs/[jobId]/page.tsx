@@ -3,12 +3,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { cancelAuditJob, createRemediationJob, deleteAuditJob, getAuditJob, getAuditJobLogs } from '../../../../lib/api';
+import { cancelAuditJob, deleteAuditJob, getAuditJob, getAuditJobLogs } from '../../../../lib/api';
 import type { AuditEvidence, AuditJob, AuditResultStatus } from '../../../../lib/types';
 import { ArtifactPreviewModal } from '../../../../components/ui/ArtifactPreviewModal';
 import { ConfirmModal } from '../../../../components/ui/ConfirmModal';
 import { Modal } from '../../../../components/ui/Modal';
 import { useToast } from '../../../../components/ui/Toast';
+import { extractVmOpsOperationContext, getVmOpsJobListHref, getVmOpsJobTitle } from '../../../../lib/vm-ops';
 
 const RESULT_STYLE: Record<AuditResultStatus, { bg: string; color: string; icon: string }> = {
   PASS: { bg: 'rgba(34,197,94,0.12)', color: '#4ade80', icon: '✅' },
@@ -159,26 +160,13 @@ export default function AuditJobDetailPage() {
       onConfirm: async () => {
         try {
           await deleteAuditJob(job.id);
-          window.location.href = '/audit';
+          window.location.href = getVmOpsJobListHref(job.jobType);
         } catch (err) {
           console.error(err);
           showToast('Không thể xóa audit job', 'error');
         }
       },
     });
-  }
-
-  async function handleRunRemediation() {
-    if (!job) return;
-
-    try {
-      const remediationJob = await createRemediationJob(job.id);
-      showToast(`Đã tạo remediation job #${remediationJob.id}`, 'success');
-      window.location.href = `/audit/jobs/${remediationJob.id}`;
-    } catch (error) {
-      console.error(error);
-      showToast('Không thể tạo remediation job cho audit này', 'error');
-    }
   }
 
   const handleEvidenceClick = (ev: AuditEvidence) => {
@@ -210,12 +198,17 @@ export default function AuditJobDetailPage() {
 
   const scoreColor = job.score != null ? (job.score >= 80 ? '#4ade80' : job.score >= 60 ? '#fbbf24' : '#f87171') : '#64748b';
   const totalDurationMs = resolveDurationMs(job.startedAt, job.finishedAt, job.durationMs);
+  const operationContext = extractVmOpsOperationContext(job);
+  const hasFailRuns = !!job.scriptRuns?.some((run) => run.status === 'FAIL');
+  const hasNotApplicableRuns = !!job.scriptRuns?.some((run) => run.status === 'NOT_APPLICABLE');
+  const hasPassRuns = !!job.scriptRuns?.some((run) => run.status === 'PASS');
+  const backHref = getVmOpsJobListHref(job.jobType);
 
   return (
     <main className="main-content">
       <div className="container page">
         <div style={{ marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Link href="/audit" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
+          <Link href={backHref} style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', textDecoration: 'none' }}>
             ← Quay lại danh sách
           </Link>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -226,10 +219,20 @@ export default function AuditJobDetailPage() {
             >
               {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
             </button>
-            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && (job.failCount > 0 || job.errorCount > 0) && (
-              <button className="btn btn-primary btn-sm" onClick={handleRunRemediation}>
-                🛠️ Run M1 Remediation
-              </button>
+            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && hasFailRuns && (
+              <Link href={`/audit/remediate?sourceJobId=${job.id}`} className="btn btn-primary btn-sm">
+                🛠️ Open Remediate
+              </Link>
+            )}
+            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && hasNotApplicableRuns && (
+              <Link href={`/audit/not-applicable-fix?sourceJobId=${job.id}`} className="btn btn-secondary btn-sm">
+                🧩 Fix Not Applicable
+              </Link>
+            )}
+            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && hasPassRuns && (
+              <Link href={`/audit/reverse-remediate?sourceJobId=${job.id}`} className="btn btn-secondary btn-sm">
+                ↩️ Reverse Remediate
+              </Link>
             )}
             {(job.status === 'PENDING' || job.status === 'RUNNING') && (
               <button className="btn btn-secondary btn-sm" onClick={handleCancelJob}>
@@ -245,11 +248,32 @@ export default function AuditJobDetailPage() {
         </div>
 
         <div className="page-header">
-          <h1 className="page-title">Audit Job #{job.id}</h1>
+          <h1 className="page-title">{getVmOpsJobTitle(job.jobType)} Job #{job.id}</h1>
           <p className="page-subtitle">
             VM: {job.vm.name} • Type: {job.jobType} • Mode: {job.mode.replace(/_/g, ' ')} • {job.ownerSection}
           </p>
         </div>
+
+        {operationContext && (
+          <div className="card" style={{ marginBottom: 'var(--space-6)' }}>
+            <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-3)' }}>VM Ops Context</h3>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', fontSize: 'var(--text-sm)' }}>
+              <span><strong>Source Audit:</strong> #{operationContext.sourceJobId}</span>
+              <span><strong>Operation:</strong> {getVmOpsJobTitle(operationContext.operationType)}</span>
+              <span><strong>Selected Controls:</strong> {operationContext.selectedControlIds.length}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'var(--space-3)' }}>
+              {operationContext.selectedControlIds.map((controlId) => (
+                <span key={controlId} className="admin-chip">{controlId}</span>
+              ))}
+            </div>
+            <div style={{ marginTop: 'var(--space-3)' }}>
+              <Link href={`/audit/jobs/${operationContext.sourceJobId}`} className="btn btn-secondary btn-sm">
+                Xem source audit job
+              </Link>
+            </div>
+          </div>
+        )}
 
         {job.status === 'FAILED' && (
           <div className="alert alert-danger" style={{ marginBottom: 'var(--space-6)', borderRadius: 'var(--radius-lg)' }}>
@@ -265,7 +289,7 @@ export default function AuditJobDetailPage() {
               {job.score != null ? `${job.score.toFixed(1)}%` : '—'}
             </div>
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-              Compliance Score
+              {job.jobType === 'AUDIT' ? 'Compliance Score' : 'Operation Success Rate'}
             </div>
             {job.riskLevel && (
               <div style={{ marginTop: 8 }}>

@@ -31,17 +31,17 @@ export default function AuditPage() {
 
   useEffect(() => {
     getAuditJobs()
-      .then((data) => setJobs(data.jobs))
+      .then((data) => setJobs(data.jobs.filter((job) => job.jobType === 'AUDIT')))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  const completedJobs = jobs.filter((j) => j.status === 'COMPLETED');
+  const completedJobs = jobs.filter((j) => j.status === 'COMPLETED' && j.jobType === 'AUDIT');
   const latestScore = completedJobs[0]?.score;
 
   async function reloadJobs() {
     const data = await getAuditJobs();
-    setJobs(data.jobs);
+    setJobs(data.jobs.filter((job) => job.jobType === 'AUDIT'));
   }
 
   function handleCancel(job: AuditJob) {
@@ -88,7 +88,7 @@ export default function AuditPage() {
     <main className="main-content">
       <div className="container page">
         <div className="page-header">
-          <h1 className="page-title">🔒 Auto-Audit</h1>
+          <h1 className="page-title">🔒 VM Ops Audit</h1>
           <p className="page-subtitle">
             {benchmarkLabel} — {projectConfig.benchmarkProfile}
           </p>

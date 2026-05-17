@@ -49,7 +49,7 @@ ReportOps is a private collaborative platform built for CIS Benchmark delivery w
 The repository now covers two closely related tracks:
 
 - Collaborative report editing with section-based ownership, ONLYOFFICE integration, preview builds, and final release freeze.
-- Operational audit workflows with Lab VM provisioning, OpenSCAP plus shell-script execution, evidence archiving, audit-pack management, remediation runtime, and admin/auditor observability dashboards.
+- Operational VM Ops workflows with Lab VM provisioning, OpenSCAP plus shell-script execution, selective remediation, not-applicable fixes, reverse remediation, evidence archiving, audit-pack management, and admin/auditor observability dashboards.
 
 `project.answers.yaml` is the current source of truth for shared project metadata such as public URLs, benchmark labels, and infrastructure defaults.
 
@@ -60,7 +60,7 @@ The repository now covers two closely related tracks:
 - 🧩 Writing-guide aware report workflow to keep merged `.docx` output stable.
 - 🚀 Preview builds and final report freeze flow with GitHub Releases integration.
 - 🖥️ Lab VM lifecycle management driven by GitHub Actions and Terraform.
-- 🛡️ Automated audits with OpenSCAP, uploaded shell scripts, remediation runtime, and per-job evidence tracking.
+- 🛡️ VM Ops with OpenSCAP, uploaded shell scripts, selective remediation operations, and per-job evidence tracking.
 - 🗃️ Archive views for artifacts, screenshots, raw logs, and execution evidence.
 - 📊 Admin dashboards for audit packs, release settings, platform stats, and performance analytics.
 - 🔍 Security automation with dependency audit, secret scanning, and CodeQL.
@@ -70,7 +70,7 @@ The repository now covers two closely related tracks:
 | Layer | Runtime / Service | Endpoint / Scope | Responsibility |
 | --- | --- | --- | --- |
 | Frontend | Next.js 16 App Router on Vercel | `https://automatedprogram.app` | UI, session-aware routing, API proxy, role-aware dashboards |
-| Backend API | Express + Prisma on GCP VM | `https://api.automatedprogram.app/api` | Auth, report workflow, lab orchestration, audit/remediation/job APIs |
+| Backend API | Express + Prisma on GCP VM | `https://api.automatedprogram.app/api` | Auth, report workflow, lab orchestration, audit/VM Ops/job APIs |
 | Document Editing | ONLYOFFICE Document Server | `https://docs.automatedprogram.app` | Browser-based `.docx` editing and save callbacks |
 | Data | Supabase Postgres + Storage | Managed service | App data, report files, archived evidence |
 | Lab Automation | GitHub Actions + Terraform + GCP Compute Engine | Manual and app-triggered workflows | Create or destroy audit VMs and report status back to the app |
@@ -138,10 +138,9 @@ The repository now covers two closely related tracks:
 ├── database/                    # Database notes and supporting docs
 ├── scripts/                     # Team submission audit scripts (M1 real, M2-M4 placeholder)
 ├── manifests/                   # YAML manifests matching the M1-M4 packs
-├── remediation/                 # Remediation scripts kept separate from audit-only entrypoints
+├── remediation/                 # VM Ops operation scripts kept separate from audit-only entrypoints
 ├── logs/                        # before/after command output captured for report evidence
 ├── screenshots/                 # M1-M4 screenshot buckets for final report assembly
-├── m1_audit_scripts_almalinux9/ # M1 shell script reference set
 ├── project.answers.yaml         # Shared project metadata and defaults
 ├── WRITING_GUIDE.md             # Mandatory formatting guide for report authors
 ├── AGENTS.md                    # Repo-specific engineering context
@@ -252,7 +251,7 @@ This enables the embedded editor flow used by `/editor/[sectionId]` and `/editor
 - `/dashboard` for section ownership and report progress.
 - `/guide` for the mandatory writing format guide.
 - `/reports` and `/releases` for preview builds and frozen report releases.
-- `/lab`, `/audit`, and `/archive` for the lab VM and automated audit workflow.
+- `/lab`, `/audit`, and `/archive` for the lab VM and VM Ops workflow.
 - `/admin` for users, roles, sections, audit packs, logs, and release/settings governance.
 
 ## Documentation
@@ -262,7 +261,6 @@ This enables the embedded editor flow used by `/editor/[sectionId]` and `/editor
 - [`project.answers.yaml`](./project.answers.yaml) - shared metadata and environment defaults.
 - [`plan_complete.md`](./plan_complete.md) - current team scope, M1-M4 control split, and report submission structure.
 - [`database/README.md`](./database/README.md) - database-specific notes.
-- [`m1_audit_scripts_almalinux9/README.md`](./m1_audit_scripts_almalinux9/README.md) - script pack reference material.
 
 ## Team
 

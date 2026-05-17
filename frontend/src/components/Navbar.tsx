@@ -82,7 +82,7 @@ export function Navbar({ user }: NavbarProps) {
                 href="/audit" 
                 className={`navbar-link ${pathname.startsWith('/audit') ? 'active' : ''}`}
               >
-                Auto Audit
+                VM Ops
               </Link>
             </li>
           )}

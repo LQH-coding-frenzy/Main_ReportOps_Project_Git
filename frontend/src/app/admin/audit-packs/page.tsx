@@ -112,7 +112,7 @@ export default function AdminAuditPacksPage() {
           <div>
             <strong>{currentBenchmarkLabel} — {profileLabel}</strong>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-              Script audit chính luôn là audit-only. Remediation được tách riêng theo `remediation/m*_remediate.sh` và hiện chỉ M1 có runtime remediation thật.
+              Script audit chính luôn là audit-only. VM Ops scripts được tách riêng trong `remediation/` và hiện chỉ M1 có runtime thật cho Remediate, Not Applicable Fix, và Reverse Remediate.
             </p>
           </div>
         </div>
@@ -166,7 +166,7 @@ export default function AdminAuditPacksPage() {
                   <span className="badge badge-warning">Đang chờ nội dung nhóm viên</span>
                 )}
                 {isM1 && (
-                  <span className="badge badge-info">Remediation chạy từ audit job detail</span>
+                  <span className="badge badge-info">VM Ops actions chạy từ audit job detail hoặc các sub tab VM Ops</span>
                 )}
               </div>
             </div>

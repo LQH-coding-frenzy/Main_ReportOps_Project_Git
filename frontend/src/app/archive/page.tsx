@@ -26,7 +26,7 @@ export default function ArchivePage() {
         }
 
         const data = await getAuditJobs();
-        setJobs(data.jobs.filter((job) => job.status === 'COMPLETED' || job.jobType === 'REMEDIATION'));
+        setJobs(data.jobs.filter((job) => job.status !== 'PENDING' && job.status !== 'RUNNING'));
       } catch (error) {
         console.error(error);
       } finally {
@@ -72,17 +72,17 @@ export default function ArchivePage() {
           </div>
         ) : jobs.length === 0 ? (
           <div className="card">
-            <div className="empty-state">
-              <div className="empty-state-icon">📦</div>
-              <div className="empty-state-title">Chưa có audit nào hoàn thành</div>
-              <div className="empty-state-desc">
-                Kết quả audit sẽ được tự động lưu trữ tại đây sau khi job hoàn thành.
+              <div className="empty-state">
+                <div className="empty-state-icon">📦</div>
+                <div className="empty-state-title">Chưa có VM Ops job nào hoàn tất</div>
+                <div className="empty-state-desc">
+                  Kết quả audit và operation jobs sẽ được lưu trữ tại đây sau khi job kết thúc.
+                </div>
+                <Link href="/audit" className="btn btn-primary" style={{ marginTop: 16 }}>
+                  → Xem VM Ops
+                </Link>
               </div>
-              <Link href="/audit" className="btn btn-primary" style={{ marginTop: 16 }}>
-                → Xem Audit Dashboard
-              </Link>
             </div>
-          </div>
         ) : (
           <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
             {jobs.map((job) => (
