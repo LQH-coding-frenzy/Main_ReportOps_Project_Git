@@ -20,6 +20,22 @@ export function getVmOpsOperationLabel(operationType: VmOpsOperationType): strin
   }
 }
 
+export function getSupportedVmOpsSections(operationType: VmOpsOperationType): string[] {
+  switch (operationType) {
+    case 'REMEDIATION':
+      return ['M1', 'M2', 'M3', 'M4'];
+    case 'NOT_APPLICABLE_FIX':
+    case 'REVERSE_REMEDIATE':
+      return ['M1'];
+    default:
+      return [];
+  }
+}
+
+export function isVmOpsOperationSupported(ownerSection: string, operationType: VmOpsOperationType): boolean {
+  return getSupportedVmOpsSections(operationType).includes(ownerSection);
+}
+
 export function getVmOpsJobListHref(jobType: string): string {
   switch (jobType) {
     case 'REMEDIATION':

@@ -9,7 +9,7 @@ import { ArtifactPreviewModal } from '../../../../components/ui/ArtifactPreviewM
 import { ConfirmModal } from '../../../../components/ui/ConfirmModal';
 import { Modal } from '../../../../components/ui/Modal';
 import { useToast } from '../../../../components/ui/Toast';
-import { extractVmOpsOperationContext, getVmOpsJobListHref, getVmOpsJobTitle } from '../../../../lib/vm-ops';
+import { extractVmOpsOperationContext, getVmOpsJobListHref, getVmOpsJobTitle, isVmOpsOperationSupported } from '../../../../lib/vm-ops';
 
 const RESULT_STYLE: Record<AuditResultStatus, { bg: string; color: string; icon: string }> = {
   PASS: { bg: 'rgba(34,197,94,0.12)', color: '#4ade80', icon: '✅' },
@@ -218,17 +218,17 @@ export default function AuditJobDetailPage() {
             >
               {loadingLogs ? '⌛...' : showLogs ? 'Hide Log' : '🔍 View Execution Log'}
             </button>
-            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && hasFailRuns && (
+            {job.jobType === 'AUDIT' && isVmOpsOperationSupported(job.ownerSection, 'REMEDIATION') && job.status === 'COMPLETED' && hasFailRuns && (
               <Link href={`/audit/remediate?sourceJobId=${job.id}`} className="btn btn-primary btn-sm">
                 🛠️ Open Remediate
               </Link>
             )}
-            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && hasNotApplicableRuns && (
+            {job.jobType === 'AUDIT' && isVmOpsOperationSupported(job.ownerSection, 'NOT_APPLICABLE_FIX') && job.status === 'COMPLETED' && hasNotApplicableRuns && (
               <Link href={`/audit/not-applicable-fix?sourceJobId=${job.id}`} className="btn btn-secondary btn-sm">
                 🧩 Fix Not Applicable
               </Link>
             )}
-            {job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED' && hasPassRuns && (
+            {job.jobType === 'AUDIT' && isVmOpsOperationSupported(job.ownerSection, 'REVERSE_REMEDIATE') && job.status === 'COMPLETED' && hasPassRuns && (
               <Link href={`/audit/reverse-remediate?sourceJobId=${job.id}`} className="btn btn-secondary btn-sm">
                 ↩️ Reverse Remediate
               </Link>

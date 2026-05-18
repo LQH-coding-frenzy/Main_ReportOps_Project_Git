@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createVmOpsOperationJob, getAuditJob, getAuditJobs } from '../../lib/api';
 import type { AuditJob, AuditScriptRun, VmOpsOperationType } from '../../lib/types';
-import { getEligibleVmOpsRuns, getVmOpsEligibleStatus, getVmOpsOperationLabel } from '../../lib/vm-ops';
+import { getEligibleVmOpsRuns, getSupportedVmOpsSections, getVmOpsEligibleStatus, getVmOpsOperationLabel } from '../../lib/vm-ops';
 import { useToast } from '../ui/Toast';
 import { Select } from '../ui/Select';
 import { usePolling } from '../../hooks/usePolling';
@@ -36,6 +36,9 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
   const [loadingSourceJob, setLoadingSourceJob] = useState(false);
   const [creating, setCreating] = useState(false);
   const { showToast } = useToast();
+  const supportedSections = useMemo(() => getSupportedVmOpsSections(operationType), [operationType]);
+  const sourceAuditCtaHref = supportedSections.length === 1 ? `/audit/new?section=${supportedSections[0]}` : '/audit/new';
+  const sourceAuditScopeLabel = supportedSections.join(', ');
 
   useEffect(() => {
     const requestedSourceJobId = Number(new URLSearchParams(searchKey).get('sourceJobId'));
@@ -51,7 +54,9 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
           return;
         }
 
-        const firstCandidate = nextJobs.find((job) => job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED');
+        const firstCandidate = nextJobs.find(
+          (job) => job.jobType === 'AUDIT' && supportedSections.includes(job.ownerSection) && job.status === 'COMPLETED'
+        );
         if (firstCandidate) {
           setLoadingSourceJob(true);
           setSourceJobId(firstCandidate.id);
@@ -62,7 +67,7 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
         showToast('Không thể tải VM Ops jobs', 'error');
       })
       .finally(() => setLoading(false));
-  }, [searchKey, showToast]);
+  }, [searchKey, showToast, supportedSections]);
 
   const isAnyJobRunning = jobs.some(job => job.status === 'PENDING' || job.status === 'RUNNING');
 
@@ -111,8 +116,8 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
   }, [sourceJobId, operationType, showToast]);
 
   const sourceAuditJobs = useMemo(
-    () => jobs.filter((job) => job.jobType === 'AUDIT' && job.ownerSection === 'M1' && job.status === 'COMPLETED'),
-    [jobs]
+    () => jobs.filter((job) => job.jobType === 'AUDIT' && supportedSections.includes(job.ownerSection) && job.status === 'COMPLETED'),
+    [jobs, supportedSections]
   );
 
   const operationJobs = useMemo(
@@ -195,7 +200,11 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
 
         <div className="admin-note" style={{ marginBottom: 'var(--space-6)' }}>
           <span>ℹ️</span>
-          <span>Runtime operation thật hiện chỉ bật cho M1. M2-M4 vẫn giữ placeholder cho đến khi bạn upload script sau.</span>
+          <span>
+            {operationType === 'REMEDIATION'
+              ? 'Remediate hiện hỗ trợ source audit jobs từ M1-M4.'
+              : `Thao tác ${getVmOpsOperationLabel(operationType)} hiện chỉ hỗ trợ source audit jobs từ ${sourceAuditScopeLabel}.`}
+          </span>
         </div>
 
         <div className="grid grid-2" style={{ marginBottom: 'var(--space-6)' }}>
@@ -206,9 +215,10 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
             ) : sourceAuditJobs.length === 0 ? (
               <div className="empty-state" style={{ padding: 0 }}>
                 <div className="empty-state-icon">🧪</div>
-                <div className="empty-state-title">Chưa có M1 audit job hoàn thành</div>
-                <Link href="/audit/new?section=M1" className="btn btn-primary" style={{ marginTop: 12 }}>
-                  🚀 Tạo M1 Audit
+                <div className="empty-state-title">Chưa có source audit job hoàn thành</div>
+                <div className="empty-state-desc">Phạm vi hiện tại cho tab này: {sourceAuditScopeLabel}.</div>
+                <Link href={sourceAuditCtaHref} className="btn btn-primary" style={{ marginTop: 12 }}>
+                  🚀 Tạo Audit
                 </Link>
               </div>
             ) : (
@@ -227,7 +237,7 @@ export function VmOpsOperationPage({ operationType, title, description }: VmOpsO
                   }}
                   options={sourceAuditJobs.map(job => ({
                     value: job.id.toString(),
-                    label: `#${job.id} - ${job.vm.name} - ${new Date(job.createdAt).toLocaleString('vi-VN')}`
+                    label: `#${job.id} - ${job.ownerSection} - ${job.vm.name} - ${new Date(job.createdAt).toLocaleString('vi-VN')}`
                   }))}
                   placeholder="Chọn Source Audit Job..."
                 />

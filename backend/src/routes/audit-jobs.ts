@@ -133,6 +133,18 @@ function getEligibleStatuses(operationType: VmOpsOperationType): string[] {
   }
 }
 
+function getSupportedVmOpsSections(operationType: VmOpsOperationType): string[] {
+  switch (operationType) {
+    case 'REMEDIATION':
+      return ['M1', 'M2', 'M3', 'M4'];
+    case 'NOT_APPLICABLE_FIX':
+    case 'REVERSE_REMEDIATE':
+      return ['M1'];
+    default:
+      return [];
+  }
+}
+
 function getOperationAction(operationType: VmOpsOperationType): string {
   switch (operationType) {
     case 'REMEDIATION':
@@ -174,9 +186,12 @@ async function createVmOpsOperationJob(input: {
     return { error: 'Wait for the source audit job to complete before running VM Ops operations', status: 400 as const };
   }
 
-  const allowedSectionsForVmOps = ['M1', 'M2', 'M3', 'M4'];
-  if (!allowedSectionsForVmOps.includes(sourceJob.ownerSection)) {
-    return { error: `VM Ops runtime is not available for section ${sourceJob.ownerSection}`, status: 400 as const };
+  const supportedSections = getSupportedVmOpsSections(input.operationType);
+  if (!supportedSections.includes(sourceJob.ownerSection)) {
+    return {
+      error: `${input.operationType} is not available for section ${sourceJob.ownerSection}`,
+      status: 400 as const,
+    };
   }
 
   const vm = await prisma.labVm.findUnique({ where: { id: sourceJob.vmId } });
