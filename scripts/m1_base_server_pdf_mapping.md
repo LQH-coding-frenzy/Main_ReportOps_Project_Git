@@ -2,6 +2,8 @@
 
 This note maps the current `scripts/m1_base_server.sh` implementation to the benchmark wording in `CIS_AlmaLinux_OS_9_Benchmark_v2.0.0.pdf`.
 
+For `1.5.1` and `1.5.2`, the project intentionally uses a simplified runtime-only `sysctl` check so the script stays aligned with the flatter `M2/M3/M4` team style.
+
 ## Scope
 
 - Benchmark: `CIS AlmaLinux OS 9 Benchmark v2.0.0`
@@ -38,8 +40,8 @@ findmnt -kn /tmp | grep -v nodev
 - Script function: `check_tmp_option(..., "nodev")`
 - Current script behavior:
   - if `/tmp` is not a separate mount, returns `NOT_APPLICABLE`
-  - otherwise runs the same `findmnt -kn /tmp | grep -v nodev` logic
-  - passes when grep returns no output
+  - otherwise checks whether the active `/tmp` mount includes `nodev`
+  - passes when the current mount options include `nodev`
 
 ### 1.1.2.1.3 Ensure nosuid option set on /tmp partition
 
@@ -53,8 +55,8 @@ findmnt -kn /tmp | grep -v nosuid
 - Script function: `check_tmp_option(..., "nosuid")`
 - Current script behavior:
   - if `/tmp` is not a separate mount, returns `NOT_APPLICABLE`
-  - otherwise runs the same `findmnt -kn /tmp | grep -v nosuid` logic
-  - passes when grep returns no output
+  - otherwise checks whether the active `/tmp` mount includes `nosuid`
+  - passes when the current mount options include `nosuid`
 
 ### 1.1.2.1.4 Ensure noexec option set on /tmp partition
 
@@ -68,8 +70,8 @@ findmnt -kn /tmp | grep -v noexec
 - Script function: `check_tmp_option(..., "noexec")`
 - Current script behavior:
   - if `/tmp` is not a separate mount, returns `NOT_APPLICABLE`
-  - otherwise runs the same `findmnt -kn /tmp | grep -v noexec` logic
-  - passes when grep returns no output
+  - otherwise checks whether the active `/tmp` mount includes `noexec`
+  - passes when the current mount options include `noexec`
 
 ### 1.5.1 Ensure address space layout randomization is enabled
 
@@ -80,13 +82,11 @@ findmnt -kn /tmp | grep -v noexec
   - respect precedence, including `systemd-sysctl --cat-config`
   - account for UFW override behavior when relevant
 
-- Script function: `check_kernel_parameter_pdf("1.5.1", ..., "kernel.randomize_va_space", "2")`
+- Script function: `check_sysctl_value("1.5.1", ..., "kernel.randomize_va_space", "2")`
 - Current script behavior:
-  - mirrors the benchmark script structure
-  - checks runtime via `sysctl`
-  - checks durable config via `/usr/lib/systemd/systemd-sysctl --cat-config`
-  - checks UFW override path if configured
-  - fails if runtime or effective durable configuration does not resolve to `2`
+  - simplifies the benchmark logic to a direct runtime check via `sysctl -n`
+  - passes when `kernel.randomize_va_space` currently resolves to `2`
+  - does not inspect persistent config precedence or UFW override sources
 
 ### 1.5.2 Ensure ptrace_scope is restricted
 
@@ -97,13 +97,11 @@ findmnt -kn /tmp | grep -v noexec
   - respect precedence, including `systemd-sysctl --cat-config`
   - account for UFW override behavior when relevant
 
-- Script function: `check_kernel_parameter_pdf("1.5.2", ..., "kernel.yama.ptrace_scope", "1")`
+- Script function: `check_sysctl_value("1.5.2", ..., "kernel.yama.ptrace_scope", "1")`
 - Current script behavior:
-  - mirrors the benchmark script structure
-  - checks runtime via `sysctl`
-  - checks durable config via `/usr/lib/systemd/systemd-sysctl --cat-config`
-  - checks UFW override path if configured
-  - fails if runtime or effective durable configuration does not resolve to `1`
+  - simplifies the benchmark logic to a direct runtime check via `sysctl -n`
+  - passes when `kernel.yama.ptrace_scope` currently resolves to `1`
+  - does not inspect persistent config precedence or UFW override sources
 
 ### 2.3.1 Ensure time synchronization is in use
 
