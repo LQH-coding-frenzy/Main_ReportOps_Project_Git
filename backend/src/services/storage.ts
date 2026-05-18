@@ -11,6 +11,14 @@ const JSZip: {
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const bucket = env.SUPABASE_STORAGE_BUCKET;
+const SAFE_ONLYOFFICE_PATH_RE = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/;
+const SAFE_ONLYOFFICE_QUERY_RE = /^\??[A-Za-z0-9._~!$'()*+,;=:@%&/-]*$/;
+
+type OnlyOfficeDownloadTarget = {
+  origin: string;
+  pathname: string;
+  search: string;
+};
 
 function getAllowedOnlyOfficeOrigins(): string[] {
   const values = [env.ONLYOFFICE_DOCUMENT_SERVER_INTERNAL_URL, env.ONLYOFFICE_DOCUMENT_SERVER_URL]
@@ -29,7 +37,7 @@ function getAllowedOnlyOfficeOrigins(): string[] {
   return Array.from(origins);
 }
 
-function buildValidatedOnlyOfficeDownloadUrl(inputUrl: string): string {
+function buildValidatedOnlyOfficeDownloadTarget(inputUrl: string): OnlyOfficeDownloadTarget {
   const parsed = new URL(inputUrl);
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error(`ONLYOFFICE callback URL must use HTTP(S): ${parsed.protocol}`);
@@ -44,11 +52,23 @@ function buildValidatedOnlyOfficeDownloadUrl(inputUrl: string): string {
     throw new Error(`ONLYOFFICE callback URL origin is not allowed: ${parsed.origin}`);
   }
 
-  if (!parsed.pathname.startsWith('/') || parsed.pathname.includes('..')) {
+  if (parsed.hash) {
+    throw new Error('ONLYOFFICE callback URL must not include a fragment');
+  }
+
+  if (!SAFE_ONLYOFFICE_PATH_RE.test(parsed.pathname) || parsed.pathname.includes('..') || parsed.pathname.includes('\\')) {
     throw new Error('ONLYOFFICE callback URL path is invalid');
   }
 
-  return new URL(`${parsed.pathname}${parsed.search}`, allowedOrigin).toString();
+  if (!SAFE_ONLYOFFICE_QUERY_RE.test(parsed.search) || parsed.search.includes('..')) {
+    throw new Error('ONLYOFFICE callback URL query is invalid');
+  }
+
+  return {
+    origin: allowedOrigin,
+    pathname: parsed.pathname,
+    search: parsed.search,
+  };
 }
 
 /**
@@ -160,8 +180,12 @@ export async function fileExists(storageKey: string): Promise<boolean> {
  * Used to fetch the saved document from ONLYOFFICE callback URL.
  */
 export async function downloadFromUrl(url: string): Promise<Buffer> {
-  const safeUrl = buildValidatedOnlyOfficeDownloadUrl(url);
-  const response = await fetch(safeUrl, { redirect: 'error' });
+  const target = buildValidatedOnlyOfficeDownloadTarget(url);
+  const requestUrl = new URL(target.origin);
+  requestUrl.pathname = target.pathname;
+  requestUrl.search = target.search;
+
+  const response = await fetch(requestUrl, { redirect: 'error' });
   if (!response.ok) {
     throw new Error(`Failed to download from URL: ${response.statusText}`);
   }

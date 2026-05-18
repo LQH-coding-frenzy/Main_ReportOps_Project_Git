@@ -147,8 +147,6 @@ export function validateAuditScript(
   // 8. CIS audit result pattern check (warn if missing)
   const hasCisPattern =
     /\*{2,3}\s*(PASS|FAIL)\s*\*{2,3}/.test(textContent) ||
-    /echo.*\*\*(PASS|FAIL)\*\*/.test(textContent) ||
-    /printf.*\*\*(PASS|FAIL)\*\*/.test(textContent) ||
     /NOT_APPLICABLE|ERROR/i.test(textContent);
 
   if (!hasCisPattern) {
