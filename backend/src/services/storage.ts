@@ -12,6 +12,45 @@ const JSZip: {
 
 const bucket = env.SUPABASE_STORAGE_BUCKET;
 
+function getAllowedOnlyOfficeOrigins(): string[] {
+  const values = [env.ONLYOFFICE_DOCUMENT_SERVER_INTERNAL_URL, env.ONLYOFFICE_DOCUMENT_SERVER_URL]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  const origins = new Set<string>();
+  for (const value of values) {
+    try {
+      origins.add(new URL(value).origin);
+    } catch {
+      // Ignore invalid configured URLs here; fetch-time validation will fail if nothing usable remains.
+    }
+  }
+
+  return Array.from(origins);
+}
+
+function buildValidatedOnlyOfficeDownloadUrl(inputUrl: string): string {
+  const parsed = new URL(inputUrl);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error(`ONLYOFFICE callback URL must use HTTP(S): ${parsed.protocol}`);
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new Error('ONLYOFFICE callback URL must not include credentials');
+  }
+
+  const allowedOrigin = getAllowedOnlyOfficeOrigins().find((origin) => origin === parsed.origin);
+  if (!allowedOrigin) {
+    throw new Error(`ONLYOFFICE callback URL origin is not allowed: ${parsed.origin}`);
+  }
+
+  if (!parsed.pathname.startsWith('/') || parsed.pathname.includes('..')) {
+    throw new Error('ONLYOFFICE callback URL path is invalid');
+  }
+
+  return new URL(`${parsed.pathname}${parsed.search}`, allowedOrigin).toString();
+}
+
 /**
  * Upload a file to Supabase Storage.
  * @returns The storage key (path) of the uploaded file.
@@ -121,7 +160,8 @@ export async function fileExists(storageKey: string): Promise<boolean> {
  * Used to fetch the saved document from ONLYOFFICE callback URL.
  */
 export async function downloadFromUrl(url: string): Promise<Buffer> {
-  const response = await fetch(url);
+  const safeUrl = buildValidatedOnlyOfficeDownloadUrl(url);
+  const response = await fetch(safeUrl, { redirect: 'error' });
   if (!response.ok) {
     throw new Error(`Failed to download from URL: ${response.statusText}`);
   }

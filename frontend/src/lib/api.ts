@@ -27,25 +27,76 @@ export interface ScriptValidationPreview {
   errors: string[];
 }
 
+type CsrfTokenResponse = ApiResponse<{ csrfToken: string }>;
+
 const API_BASE = projectConfig.backendUrl;
+let csrfTokenPromise: Promise<string> | null = null;
+
+function isMutatingMethod(method?: string): boolean {
+  const normalized = (method || 'GET').toUpperCase();
+  return !['GET', 'HEAD', 'OPTIONS'].includes(normalized);
+}
+
+function clearCsrfTokenCache(): void {
+  csrfTokenPromise = null;
+}
+
+async function getCsrfToken(forceRefresh: boolean = false): Promise<string> {
+  if (forceRefresh) {
+    clearCsrfTokenCache();
+  }
+
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = fetch(`${API_BASE}/api/auth/csrf-token`, {
+      credentials: 'include',
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errorBody = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(errorBody.error || `API Error: ${res.status}`);
+        }
+
+        const payload = await res.json() as CsrfTokenResponse;
+        return payload.data.csrfToken;
+      })
+      .catch((error) => {
+        clearCsrfTokenCache();
+        throw error;
+      });
+  }
+
+  return csrfTokenPromise;
+}
 
 /**
  * Base fetch wrapper with credentials (cookies) and error handling.
  */
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, options?: RequestInit, allowCsrfRetry: boolean = true): Promise<T> {
   const url = `${API_BASE}${path}`;
+  const headers = new Headers(options?.headers);
+
+  if (!headers.has('Content-Type') && !(options?.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (isMutatingMethod(options?.method)) {
+    headers.set('X-CSRF-Token', await getCsrfToken());
+  }
 
   const res = await fetch(url, {
     ...options,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({ error: res.statusText }));
+
+    if (isMutatingMethod(options?.method) && allowCsrfRetry && res.status === 403 && errorBody.error === 'Invalid CSRF token') {
+      await getCsrfToken(true);
+      return apiFetch<T>(path, options, false);
+    }
+
     throw new Error(errorBody.error || `API Error: ${res.status}`);
   }
 
@@ -69,6 +120,7 @@ export function getLoginUrl(): string {
 
 export async function logout(): Promise<void> {
   await apiFetch('/api/auth/logout', { method: 'POST' });
+  clearCsrfTokenCache();
 }
 
 // ── Sections ──
@@ -349,17 +401,31 @@ export async function toggleAuditScript(id: number): Promise<void> {
 }
 
 export async function uploadAuditScript(formData: FormData): Promise<{ script: AuditScript; validation: ScriptValidationPreview }> {
-  const res = await fetch(`${API_BASE}/api/audit-scripts/upload`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
+  async function send(allowRetry: boolean): Promise<Response> {
+    const token = await getCsrfToken(allowRetry ? false : true);
+    const res = await fetch(`${API_BASE}/api/audit-scripts/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-CSRF-Token': token,
+      },
+      body: formData,
+    });
 
-  if (!res.ok) {
-    const errorBody = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errorBody.error || `API Error: ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({ error: res.statusText }));
+      if (allowRetry && res.status === 403 && errorBody.error === 'Invalid CSRF token') {
+        await getCsrfToken(true);
+        return send(false);
+      }
+
+      throw new Error(errorBody.error || `API Error: ${res.status}`);
+    }
+
+    return res;
   }
 
+  const res = await send(true);
   const data = await res.json();
   return data.data;
 }

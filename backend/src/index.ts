@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env, validateEnv } from './config/env';
 import { initStorage } from './config/supabase';
+import { csrfProtection } from './middleware/csrf';
 import { resumeInFlightPreviewBuilds } from './services/report-generator';
 import { registerLabSshWebSocket } from './services/lab-ssh-websocket';
 
@@ -17,6 +18,7 @@ import auditRoutes from './routes/audit';
 import adminRoutes from './routes/admin';
 import auditJobRoutes from './routes/audit-jobs';
 import auditScriptRoutes from './routes/audit-scripts';
+import labCallbackRoutes from './routes/lab-callback';
 import labRoutes from './routes/lab';
 
 // Validate environment
@@ -31,12 +33,18 @@ app.use(
     origin: env.FRONTEND_URL,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
   })
 );
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Machine-to-machine callbacks do not use cookie auth and must stay outside browser CSRF protection.
+app.use('/api/onlyoffice', editorRoutes);
+app.use('/api/lab', labCallbackRoutes);
+
 app.use(cookieParser());
+app.use(csrfProtection);
 
 // ── Health Check ──
 app.get('/api/health', (_req, res) => {
@@ -52,7 +60,6 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/sections', sectionRoutes);
 app.use('/api/editor', editorRoutes);
-app.use('/api/onlyoffice', editorRoutes); // Mount callback under /api/onlyoffice too
 app.use('/api/reports', reportRoutes);
 app.use('/api/releases', releaseRoutes);
 app.use('/api/audit-logs', auditRoutes);
@@ -68,6 +75,11 @@ app.use((_req, res) => {
 
 // ── Error Handler ──
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if ((err as Error & { code?: string }).code === 'EBADCSRFTOKEN') {
+    res.status(403).json({ error: 'Invalid CSRF token', status: 403 });
+    return;
+  }
+
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error', status: 500 });
 });

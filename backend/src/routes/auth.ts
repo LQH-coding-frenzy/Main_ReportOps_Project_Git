@@ -7,6 +7,7 @@ import {
   getGitHubUser,
   getGitHubUserEmail,
 } from '../services/github-oauth';
+import { clearCsrfSecretCookie, issueCsrfToken } from '../middleware/csrf';
 import { generateToken, setAuthCookie, clearAuthCookie, requireAuth } from '../middleware/auth';
 import { env } from '../config/env';
 import { getEffectiveRoles, normalizeAssignableRoles, PRIMARY_LEADER_GITHUB_USERNAME } from '../lib/system-roles';
@@ -143,11 +144,25 @@ router.get('/github/callback', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/auth/csrf-token
+ * Issue a CSRF token for cookie-authenticated frontend requests.
+ */
+router.get('/csrf-token', (req: Request, res: Response) => {
+  res.json({
+    data: {
+      csrfToken: issueCsrfToken(req),
+    },
+    status: 200,
+  });
+});
+
+/**
  * POST /api/auth/logout
  * Clear auth cookie.
  */
 router.post('/logout', requireAuth, (req: Request, res: Response) => {
   clearAuthCookie(res);
+  clearCsrfSecretCookie(res);
   res.json({ data: null, status: 200 });
 });
 
