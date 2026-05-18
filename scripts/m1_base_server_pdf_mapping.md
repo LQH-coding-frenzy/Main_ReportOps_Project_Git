@@ -144,7 +144,8 @@ rpm -q chrony
 - Alignment:
   - writes the sysctl value to a persistent sysctl file
   - runs `sysctl -w key=value`
-  - keeps precedence-safe target selection for real runtime convergence
+  - judges remediation success by the same runtime `sysctl -n` result used by the audit script
+  - still keeps a persistent target file so the lab VM remains stable across later checks and reboot scenarios
 
 ### 2.3.1
 

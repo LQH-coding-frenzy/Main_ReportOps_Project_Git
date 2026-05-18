@@ -156,9 +156,9 @@ remediate_gpgcheck() {
   repo_output="$(grep -Pris -- '^\h*gpgcheck\h*=\h*(0|[2-9]|[1-9][0-9]+|false|no)\b' /etc/yum.repos.d/ 2>/dev/null || true)"
 
   if [ -n "$global_output" ] && [ -z "$repo_output" ]; then
-    print_pass "$id" "$title" ' - /etc/dnf/dnf.conf has gpgcheck enabled and no repo override disables it'
+    print_pass "$id" "$title" ' - gpgcheck is enabled globally and no repo override disables it.'
   else
-    print_fail "$id" "$title" ' - remediation did not converge to the expected gpgcheck state'
+    print_fail "$id" "$title" ' - remediation did not converge to the expected gpgcheck state.'
   fi
 }
 
@@ -166,7 +166,7 @@ remediate_tmp_option() {
   local id="$1"
   local title="$2"
   local option="$3"
-  local audit_output
+  local line
 
   if [ -z "$(findmnt -kn /tmp 2>/dev/null || true)" ]; then
     print_fail "$id" "$title" ' - PDF remediation for this control applies only when /tmp is already a separate partition'
@@ -179,11 +179,15 @@ remediate_tmp_option() {
   fi
 
   mount -o remount /tmp >/dev/null 2>&1 || true
-  audit_output="$(findmnt -kn /tmp 2>/dev/null | grep -v -- "$option" || true)"
-  if [ -z "$audit_output" ]; then
-    print_pass "$id" "$title" " - mount -o remount /tmp completed and the $option option is now present"
+  line="$(findmnt -kn /tmp 2>/dev/null || true)"
+  if [ -n "$line" ] && printf '%s\n' "$line" | grep -qw -- "$option"; then
+    print_pass "$id" "$title" \
+      " - /tmp is mounted with $option." \
+      " - Current mount: $line"
   else
-    print_fail "$id" "$title" " - findmnt -kn /tmp | grep -v $option still returned output after remediation" "$audit_output"
+    print_fail "$id" "$title" \
+      " - /tmp is missing $option after remediation." \
+      " - Current mount: ${line:-/tmp is not mounted}"
   fi
 }
 
@@ -198,25 +202,29 @@ remediate_sysctl_control() {
   target="$(set_sysctl_value "$key" "$expected")"
   runtime="$(sysctl -n "$key" 2>/dev/null || true)"
 
-  if [ "$runtime" = "$expected" ] && grep -Pq "^\s*${key//./\\.}\s*=\s*${expected}\b" "$target" 2>/dev/null; then
-    print_pass "$id" "$title" " - ${key}=${expected} was written to ${target} and set at runtime"
+  if [ "$runtime" = "$expected" ]; then
+    print_pass "$id" "$title" \
+      " - $key is set to $runtime." \
+      " - Persistent value written to $target."
+  elif [ -n "$runtime" ]; then
+    print_fail "$id" "$title" \
+      " - $key is set to $runtime (expected $expected)."
   else
-    print_fail "$id" "$title" " - remediation did not converge to ${key}=${expected}"
+    print_fail "$id" "$title" \
+      " - Unable to read $key after remediation."
   fi
 }
 
 remediate_chrony() {
   local id='2.3.1'
   local title='Ensure time synchronization is in use'
-  local rpm_output
 
   dnf install -y chrony >/dev/null 2>&1 || true
-  rpm_output="$(rpm -q chrony 2>/dev/null || true)"
 
-  if [ -n "$rpm_output" ] && ! grep -qi 'not installed' <<< "$rpm_output"; then
-    print_pass "$id" "$title" ' - chrony package is installed'
+  if rpm -q chrony >/dev/null 2>&1; then
+    print_pass "$id" "$title" ' - Package chrony is installed.'
   else
-    print_fail "$id" "$title" ' - chrony package is still not installed after remediation'
+    print_fail "$id" "$title" ' - Package chrony is not installed after remediation.'
   fi
 }
 

@@ -114,9 +114,9 @@ reverse_gpgcheck() {
   fi
 
   if grep -Piq '^\s*gpgcheck\s*=\s*(0|false|no)\b' /etc/dnf/dnf.conf 2>/dev/null; then
-    print_pass "$id" "$title" ' - control is intentionally set to fail on the next audit run via global gpgcheck=0'
+    print_pass "$id" "$title" ' - control is intentionally set to fail on the next audit run via global gpgcheck=0.'
   else
-    print_fail "$id" "$title" ' - failed to move gpgcheck into a non-compliant state'
+    print_fail "$id" "$title" ' - failed to move gpgcheck into a non-compliant state.'
   fi
 }
 
@@ -140,25 +140,29 @@ reverse_sysctl_control() {
   sysctl -w "${key}=${reversed}" >/dev/null 2>&1 || true
   runtime="$(sysctl -n "$key" 2>/dev/null || true)"
   if [ "$runtime" = "$reversed" ]; then
-    print_pass "$id" "$title" " - control is intentionally set to fail on the next audit run with ${key}=${reversed}"
+    print_pass "$id" "$title" \
+      " - control is intentionally set to fail on the next audit run." \
+      " - $key is set to $runtime."
+  elif [ -n "$runtime" ]; then
+    print_fail "$id" "$title" \
+      " - $key is set to $runtime (expected $reversed)."
   else
-    print_fail "$id" "$title" " - failed to move ${key} into the requested non-compliant state"
+    print_fail "$id" "$title" \
+      " - Unable to read $key after reverse remediation."
   fi
 }
 
 reverse_chrony() {
   local id='2.3.1'
   local title='Ensure time synchronization is in use'
-  local rpm_output
 
   systemctl disable --now chronyd >/dev/null 2>&1 || true
   dnf remove -y chrony >/dev/null 2>&1 || true
-  rpm_output="$(rpm -q chrony 2>/dev/null || true)"
 
-  if grep -qi 'not installed' <<< "$rpm_output" || [ -z "$rpm_output" ]; then
-    print_pass "$id" "$title" ' - chrony package was removed so the audit should fail on the next run'
+  if ! rpm -q chrony >/dev/null 2>&1; then
+    print_pass "$id" "$title" ' - chrony package was removed so the audit should fail on the next run.'
   else
-    print_fail "$id" "$title" ' - chrony package is still installed after reverse remediation'
+    print_fail "$id" "$title" ' - chrony package is still installed after reverse remediation.'
   fi
 }
 
