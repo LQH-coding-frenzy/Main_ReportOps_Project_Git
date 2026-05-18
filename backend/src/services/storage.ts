@@ -1,14 +1,6 @@
 import { supabase } from '../config/supabase';
 import { env } from '../config/env';
-
-/* eslint-disable @typescript-eslint/no-require-imports */
-const JSZip: {
-  new (): {
-    file: (path: string, content: string | Uint8Array | Buffer) => void;
-    generate: (options: { type: 'nodebuffer' }) => Buffer;
-  };
-} = require('jszip');
-/* eslint-enable @typescript-eslint/no-require-imports */
+import JSZip from 'jszip';
 
 const bucket = env.SUPABASE_STORAGE_BUCKET;
 const SAFE_ONLYOFFICE_PATH_RE = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/;
@@ -199,7 +191,7 @@ export async function downloadFromUrl(url: string): Promise<Buffer> {
  */
 let cachedEmptyDocx: Buffer | null = null;
 
-export function createEmptyDocx(): Buffer {
+export async function createEmptyDocx(): Promise<Buffer> {
   if (cachedEmptyDocx) {
     return Buffer.from(cachedEmptyDocx);
   }
@@ -279,6 +271,6 @@ export function createEmptyDocx(): Buffer {
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
   );
 
-  cachedEmptyDocx = zip.generate({ type: 'nodebuffer' });
+  cachedEmptyDocx = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   return Buffer.from(cachedEmptyDocx);
 }

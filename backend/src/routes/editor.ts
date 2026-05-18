@@ -109,7 +109,7 @@ router.get(
       // Check if file exists in storage, create empty one if not
       const exists = await fileExists(doc.currentStorageKey);
       if (!exists) {
-        const emptyDocx = createEmptyDocx();
+        const emptyDocx = await createEmptyDocx();
         await uploadFile(doc.currentStorageKey, emptyDocx);
       }
 

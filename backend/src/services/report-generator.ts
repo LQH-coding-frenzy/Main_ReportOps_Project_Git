@@ -313,7 +313,7 @@ async function processReportBuild(buildId: number): Promise<void> {
       if (timedOut) return;
 
       const { storageKey } = await ensureDocumentForSection(section);
-      const localEmptyDoc = createEmptyDocx();
+      const localEmptyDoc = await createEmptyDocx();
 
       try {
         const exists = await fileExists(storageKey);
@@ -366,7 +366,7 @@ async function processReportBuild(buildId: number): Promise<void> {
     }
     await updateLogs(`📁 Uploaded ${orderedSectionBuffers.length} sections to preview bundle metadata`);
 
-    const fallback = createEmptyDocx();
+    const fallback = await createEmptyDocx();
     await updateLogs('🧩 Merging documents (this may take a few minutes for large reports)...');
     const { buffer: mergedBuffer, recovered } = await mergeDocxBuffers(orderedSectionBuffers, fallback);
     
