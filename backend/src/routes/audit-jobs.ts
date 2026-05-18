@@ -12,6 +12,7 @@ import { MANUAL_M1_CONTROL_IDS } from '../services/audit/m1-manual-controls';
 import { env } from '../config/env';
 import { supabase } from '../config/supabase';
 import { buildPackMetadata, syncSectionPacks } from '../services/audit/pack-registry';
+import { ensureSectionRuntimeScripts } from '../services/audit/runtime-script-registry';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -367,6 +368,7 @@ router.post('/', requireAuth, requireCapabilityAccess('run_audits'), async (req:
     }
 
     await syncSectionPacks(prisma);
+    await ensureSectionRuntimeScripts(prisma, ownerSection || 'M1', userId);
 
     const targetPackMetadata = buildPackMetadata(ownerSection || 'M1');
     if (!targetPackMetadata) {

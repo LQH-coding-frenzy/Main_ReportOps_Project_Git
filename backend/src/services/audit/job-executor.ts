@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { getSectionDefinition } from './pack-registry';
+import { buildTargetedControlScript, resolveLocalMasterScriptStoragePath } from './runtime-script-registry';
 
 const prisma = new PrismaClient();
 const documentsBucket = env.SUPABASE_STORAGE_BUCKET;
@@ -190,6 +191,30 @@ function buildOpenScapFilteredJson(input: {
 function readLocalProjectFile(relativePath: string): Buffer {
   const absolutePath = path.resolve(resolveProjectRoot(), relativePath);
   return fs.readFileSync(absolutePath);
+}
+
+async function loadAuditScriptContent(script: AuditScript, ownerSection: string): Promise<Buffer> {
+  const localMasterPath = resolveLocalMasterScriptStoragePath(script.scriptStoragePath);
+  if (localMasterPath) {
+    const masterContent = readLocalProjectFile(localMasterPath).toString('utf-8');
+    return Buffer.from(buildTargetedControlScript(masterContent, script.controlId), 'utf-8');
+  }
+
+  const { data: fileData, error: downloadError } = await supabase.storage
+    .from(documentsBucket)
+    .download(script.scriptStoragePath);
+
+  if (!downloadError && fileData) {
+    return Buffer.from(await fileData.arrayBuffer());
+  }
+
+  const fallbackScriptPath = getSectionDefinition(ownerSection)?.scriptPath;
+  if (!fallbackScriptPath) {
+    throw new Error(`Failed to download script ${script.controlId}: ${downloadError?.message || 'unknown error'}`);
+  }
+
+  const masterContent = readLocalProjectFile(fallbackScriptPath).toString('utf-8');
+  return Buffer.from(buildTargetedControlScript(masterContent, script.controlId), 'utf-8');
 }
 
 async function uploadToBucketOrThrow(bucket: string, storagePath: string, body: string | Buffer, contentType: string): Promise<void> {
@@ -652,17 +677,15 @@ export class AuditJobExecutor {
           
           const scriptStartTime = Date.now();
 
-          // Download script from Supabase
-          const { data: fileData, error: downloadError } = await supabase.storage
-            .from(documentsBucket)
-            .download(script.scriptStoragePath);
-
-          if (downloadError || !fileData) {
-            await this.addLog(`ERROR: Failed to download script ${script.controlId}: ${downloadError?.message}`);
+          let scriptContent: Buffer;
+          try {
+            scriptContent = await loadAuditScriptContent(script, job.ownerSection);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            await this.addLog(`ERROR: Failed to load script ${script.controlId}: ${message}`);
             continue;
           }
 
-          const scriptContent = Buffer.from(await fileData.arrayBuffer());
           // Run the script with a guard that restores audit runner access before returning.
           const cmdResult = await this.runManagedRootScript({
             remoteDir,

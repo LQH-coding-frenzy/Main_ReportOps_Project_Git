@@ -53,7 +53,9 @@ export default function NewAuditPage() {
     [packs, selectedSection]
   );
   const selectedDefinition = FRONTEND_SECTION_DEFINITION_MAP[selectedSection];
-  const packReady = selectedPack ? !selectedPack.isPlaceholder : false;
+  const selectedPackScriptCount = selectedPack?.scripts?.length ?? selectedPack?._count?.scripts ?? 0;
+  const requiresScripts = selectedMode !== 'OPENSCAP_ONLY';
+  const packReady = selectedPack ? !selectedPack.isPlaceholder && (!requiresScripts || selectedPackScriptCount > 0) : false;
 
   async function handleCreate() {
     if (!selectedVm) {
@@ -61,7 +63,10 @@ export default function NewAuditPage() {
     }
 
     if (!packReady) {
-      showToast(`Pack ${selectedSection} hiện đang ở trạng thái placeholder`, 'error');
+      const message = selectedPack?.isPlaceholder
+        ? `Pack ${selectedSection} hiện đang ở trạng thái placeholder`
+        : `Pack ${selectedSection} chưa có runtime scripts sẵn sàng`;
+      showToast(message, 'error');
       return;
     }
 
@@ -71,7 +76,7 @@ export default function NewAuditPage() {
       router.push(`/audit/jobs/${job.id}`);
     } catch (err) {
       console.error(err);
-      showToast('Không thể tạo audit job. Vui lòng thử lại.', 'error');
+      showToast(err instanceof Error ? err.message : 'Không thể tạo audit job. Vui lòng thử lại.', 'error');
       setCreating(false);
     }
   }
@@ -100,7 +105,15 @@ export default function NewAuditPage() {
             {(['M1', 'M2', 'M3', 'M4'] as const).map((sectionCode) => {
               const definition = FRONTEND_SECTION_DEFINITION_MAP[sectionCode];
               const pack = packs.find((item) => item.ownerSection === sectionCode);
-              const ready = pack ? !pack.isPlaceholder : false;
+              const scriptCount = pack?.scripts?.length ?? pack?._count?.scripts ?? 0;
+              const ready = pack ? !pack.isPlaceholder && scriptCount > 0 : false;
+              const badgeLabel = !pack
+                ? 'Missing'
+                : pack.isPlaceholder
+                  ? 'Placeholder'
+                  : ready
+                    ? 'Ready'
+                    : 'No Scripts';
 
               return (
                 <div
@@ -123,7 +136,7 @@ export default function NewAuditPage() {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
                       <strong>{sectionCode}</strong>
                       <span className={`badge ${ready ? 'badge-success' : 'badge-warning'}`}>
-                        {ready ? 'Ready' : 'Placeholder'}
+                        {badgeLabel}
                       </span>
                     </div>
                     <div style={{ fontWeight: 600 }}>{definition.title}</div>
@@ -228,10 +241,10 @@ export default function NewAuditPage() {
               <span key={control.id} className="admin-chip">{control.id}</span>
             ))}
           </div>
-          {!packReady && (
+          {requiresScripts && !packReady && (
             <div className="admin-note" style={{ marginTop: 'var(--space-4)' }}>
               <span>⚠️</span>
-              <span>Pack {selectedSection} chưa có scripts. Hãy chạy <code>npm run audit:import-all</code> trên server để upload scripts.</span>
+              <span>Pack {selectedSection} chưa có runtime scripts sẵn sàng. Hệ thống sẽ tự nhận scripts từ thư mục <code>/scripts</code> khi file section hợp lệ tồn tại trên backend.</span>
             </div>
           )}
         </div>

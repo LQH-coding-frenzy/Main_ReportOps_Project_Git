@@ -7,6 +7,24 @@ import type { AdminUser } from '../../../lib/api';
 import type { Role } from '../../../lib/types';
 import { useToast } from '../../../components/ui/Toast';
 import { ROLE_CATALOG, ROLE_LABEL_MAP } from '../../../lib/role-catalog';
+import { hasCapability } from '../../../lib/system-roles';
+
+function getRoleAccessHint(role: Role): { label: string; badgeClass: string } {
+  switch (role) {
+    case 'LEADER':
+      return { label: 'Toan quyen he thong', badgeClass: 'badge-primary' };
+    case 'ADMIN':
+      return { label: 'Co the audit / VM Ops / Lab', badgeClass: 'badge-danger' };
+    case 'AUDITOR':
+      return { label: 'Co the audit / VM Ops / Lab', badgeClass: 'badge-warning' };
+    case 'MEMBER':
+      return { label: 'Khong duoc audit / VM Ops / Lab', badgeClass: 'badge-info' };
+    case 'VIEWER':
+      return { label: 'Chi doc, khong audit', badgeClass: 'badge-success' };
+    default:
+      return { label: 'Khong ro quyen', badgeClass: 'badge-info' };
+  }
+}
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -130,6 +148,7 @@ export default function AdminUsersPage() {
               const currentDraft = draftRoles[user.id] || [];
               const isLeaderAccount = user.githubUsername === 'LQH-coding-frenzy';
               const draftChanged = JSON.stringify([...currentDraft].sort()) !== JSON.stringify([...user.roles].sort());
+              const canRunAudit = hasCapability(user, 'run_audits');
 
               return (
                 <tr key={user.id}>
@@ -177,6 +196,11 @@ export default function AdminUsersPage() {
                         </span>
                       ))}
                     </div>
+                    <div style={{ marginTop: 8 }}>
+                      <span className={`badge ${canRunAudit ? 'badge-warning' : 'badge-info'}`}>
+                        {canRunAudit ? 'Audit / VM Ops / Lab: Co' : 'Audit / VM Ops / Lab: Khong'}
+                      </span>
+                    </div>
                   </td>
                   <td>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -219,6 +243,9 @@ export default function AdminUsersPage() {
                               <span>
                                 <strong style={{ color: 'var(--color-text-primary)' }}>{entry.label}</strong>
                                 <span style={{ display: 'block', marginTop: 2 }}>{entry.description}</span>
+                                <span className={`badge ${getRoleAccessHint(entry.role).badgeClass}`} style={{ marginTop: 6, display: 'inline-flex' }}>
+                                  {getRoleAccessHint(entry.role).label}
+                                </span>
                               </span>
                             </label>
                           );
@@ -257,7 +284,7 @@ export default function AdminUsersPage() {
 
       <div className="admin-note">
         <span>ℹ️</span>
-        <span>Role hoạt động theo phép hợp. Nếu gán nhiều role, người dùng sẽ sử dụng tất cả quyền của các role đó.</span>
+        <span>Role hoạt động theo phép hợp. `MEMBER` khong duoc audit. Neu can chay audit, VM Ops hoac Lab thi phai duoc gan `AUDITOR` hoac cao hon.</span>
       </div>
     </div>
   );

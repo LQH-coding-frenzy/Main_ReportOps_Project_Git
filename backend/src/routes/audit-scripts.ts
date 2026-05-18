@@ -4,11 +4,13 @@ import multer from 'multer';
 import crypto from 'crypto';
 import { requireAuth } from '../middleware/auth';
 import { requireCapabilityAccess } from '../middleware/rbac';
+import { hasCapability } from '../lib/system-roles';
 import { validateAuditScript } from '../services/audit/script-validator';
 import { MANUAL_M1_CONTROL_IDS } from '../services/audit/m1-manual-controls';
 import { env } from '../config/env';
 import { supabase } from '../config/supabase';
 import { buildPackMetadata, MANAGED_PACK_IDS, syncSectionPacks } from '../services/audit/pack-registry';
+import { ensureManagedSectionRuntimeScripts } from '../services/audit/runtime-script-registry';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -18,9 +20,13 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200
  * GET /api/audit-scripts/packs
  * List all audit packs.
  */
-router.get('/packs', requireAuth, async (_req: Request, res: Response) => {
+router.get('/packs', requireAuth, async (req: Request, res: Response) => {
   try {
     await syncSectionPacks(prisma);
+
+    if (req.user && (hasCapability(req.user, 'run_audits') || hasCapability(req.user, 'manage_audit_packs'))) {
+      await ensureManagedSectionRuntimeScripts(prisma, req.user.id);
+    }
 
     const packs = await prisma.auditPack.findMany({
       where: { packId: { in: MANAGED_PACK_IDS } },

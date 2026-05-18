@@ -1,5 +1,7 @@
 import type { Role, User } from './types';
 
+const PRIMARY_LEADER_GITHUB_USERNAME = 'LQH-coding-frenzy';
+
 export type AppCapability =
   | 'admin_panel'
   | 'manage_users'
@@ -45,7 +47,7 @@ function sortRoles(roles: Iterable<Role>): Role[] {
   return Array.from(new Set(roles)).sort((left, right) => ROLE_PRIORITY.indexOf(left) - ROLE_PRIORITY.indexOf(right));
 }
 
-export function getEffectiveRoles(user: Pick<User, 'role' | 'roles'> | null | undefined): Role[] {
+export function getEffectiveRoles(user: Pick<User, 'githubUsername' | 'role' | 'roles'> | null | undefined): Role[] {
   if (!user) {
     return [];
   }
@@ -60,19 +62,23 @@ export function getEffectiveRoles(user: Pick<User, 'role' | 'roles'> | null | un
     roles.add(user.role);
   }
 
+  if (user.githubUsername === PRIMARY_LEADER_GITHUB_USERNAME) {
+    roles.add('LEADER');
+  }
+
   return sortRoles(roles);
 }
 
-export function hasRole(user: Pick<User, 'role' | 'roles'> | null | undefined, role: Role): boolean {
+export function hasRole(user: Pick<User, 'githubUsername' | 'role' | 'roles'> | null | undefined, role: Role): boolean {
   return getEffectiveRoles(user).includes(role);
 }
 
-export function hasAnyRole(user: Pick<User, 'role' | 'roles'> | null | undefined, roles: Role[]): boolean {
+export function hasAnyRole(user: Pick<User, 'githubUsername' | 'role' | 'roles'> | null | undefined, roles: Role[]): boolean {
   const effective = getEffectiveRoles(user);
   return roles.some((role) => effective.includes(role));
 }
 
-export function hasCapability(user: Pick<User, 'role' | 'roles'> | null | undefined, capability: AppCapability): boolean {
+export function hasCapability(user: Pick<User, 'githubUsername' | 'role' | 'roles'> | null | undefined, capability: AppCapability): boolean {
   const effective = getEffectiveRoles(user);
 
   if (effective.includes('LEADER')) {

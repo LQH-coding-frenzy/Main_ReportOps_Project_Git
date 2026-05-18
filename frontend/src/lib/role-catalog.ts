@@ -25,14 +25,14 @@ export const ROLE_CATALOG: Array<{
     role: 'AUDITOR',
     label: 'Auditor',
     badgeClass: 'badge-warning',
-    description: 'Phụ trách Lab VMs, Audit Jobs, Archives, remediation runtime và audit-pack runtime.',
+    description: 'Được chạy Lab VMs, Audit Jobs và VM Ops. Đây là role bắt buộc nếu thành viên cần audit.',
     permissions: ['Quản lý Lab VMs', 'Chạy audit jobs', 'Chạy remediation', 'Xem archives và evidence'],
   },
   {
     role: 'MEMBER',
     label: 'Member',
     badgeClass: 'badge-info',
-    description: 'Phụ trách dashboard, guide và editor cho section được giao.',
+    description: 'Chỉ phụ trách dashboard, guide và editor cho section được giao. Không có quyền audit, VM Ops hoặc Lab.',
     permissions: ['Xem dashboard', 'Mở guide', 'Chỉnh sửa section được giao', 'Theo dõi tiến độ nội dung'],
   },
   {
